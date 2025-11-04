@@ -1,0 +1,170 @@
+/* ============================
+   1) Tablas en el esquema public
+   ============================ */
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema='public' AND table_type='BASE TABLE'
+ORDER BY table_name;
+
+/* =========================================
+   2) Extensiones clave instaladas (PostGIS,
+      pgcrypto si usás bcrypt en Postgres)
+   ========================================= */
+SELECT * FROM pg_extension
+WHERE extname IN ('postgis','pgcrypto')
+ORDER BY extname;
+
+/* ============================
+   3) Roles seed cargados
+   ============================ */
+SELECT id, nombre, descripcion, creado_en
+FROM roles
+ORDER BY id;
+
+/* ============================
+   4) Cantidad de usuarios por rol
+   ============================ */
+SELECT COALESCE(r.nombre,'sin_rol') AS rol, COUNT(*) AS cantidad
+FROM usuarios u
+LEFT JOIN roles r ON r.id = u.id_rol
+GROUP BY rol
+ORDER BY cantidad DESC;
+
+/* ============================
+   5) Usuarios NO verificados
+   ============================ */
+SELECT id, nombre, email, fecha_registro
+FROM usuarios
+WHERE verificado = FALSE
+ORDER BY fecha_registro DESC;
+
+/* ============================
+   6) Usuarios SIN rol asignado
+   ============================ */
+SELECT id, nombre, apellido, email, fecha_registro
+FROM usuarios
+WHERE id_rol IS NULL
+ORDER BY id;
+
+/* ===========================================
+   7) Profesionales SIN perfil profesional
+   =========================================== */
+SELECT u.id, u.nombre, u.email
+FROM usuarios u
+JOIN roles r ON r.id = u.id_rol AND r.nombre='profesional'
+LEFT JOIN perfiles_profesionales p ON p.usuario_id = u.id
+WHERE p.usuario_id IS NULL
+ORDER BY u.id;
+
+/* ===========================================
+   8) Usuarios SIN ninguna ubicación cargada
+   =========================================== */
+SELECT u.id, u.nombre, u.email
+FROM usuarios u
+LEFT JOIN ubicaciones ub ON ub.usuario_id = u.id
+WHERE ub.id IS NULL
+ORDER BY u.id;
+
+/* =================================================
+   9) Inconsistencia: más de una ubicación principal
+   ================================================= */
+SELECT usuario_id, COUNT(*) AS principales
+FROM ubicaciones
+WHERE principal = TRUE
+GROUP BY usuario_id
+HAVING COUNT(*) > 1;
+
+/* ======================================================
+   10) Tokens activos por usuario (válidos y no vencidos)
+   ====================================================== */
+SELECT u.id, u.email,
+       COUNT(t.id) AS tokens_activos
+FROM usuarios u
+LEFT JOIN tokens t
+  ON t.usuario_id = u.id
+ AND t.valido = TRUE
+ AND (t.fecha_expiracion IS NULL OR t.fecha_expiracion > NOW())
+GROUP BY u.id, u.email
+ORDER BY tokens_activos DESC;
+
+/* ======================================
+   11) Tokens expirados (para limpieza)
+   ====================================== */
+SELECT t.id, u.email, t.fecha_creacion, t.fecha_expiracion
+FROM tokens t
+JOIN usuarios u ON u.id = t.usuario_id
+WHERE t.fecha_expiracion IS NOT NULL AND t.fecha_expiracion <= NOW()
+ORDER BY t.fecha_expiracion;
+
+/* ======================================
+   12) Últimos logins registrados
+   ====================================== */
+SELECT id, nombre, email, ultimo_login, ip_ultimo_login
+FROM usuarios
+WHERE ultimo_login IS NOT NULL
+ORDER BY ultimo_login DESC
+LIMIT 50;
+
+/* =======================================================
+   13) Usuarios con sus ubicaciones (formato “plano”)
+   ======================================================= */
+SELECT
+  u.id AS usuario_id, u.nombre, u.apellido, u.email,
+  r.nombre AS rol,
+  ub.id AS ubicacion_id, ub.nombre_ubicacion, ub.ciudad, ub.direccion,
+  ub.tipo, ub.principal, ub.activa,
+  ST_Y(ub.coordenadas::geometry) AS lat,
+  ST_X(ub.coordenadas::geometry) AS lon
+FROM usuarios u
+LEFT JOIN roles r        ON r.id = u.id_rol
+LEFT JOIN ubicaciones ub ON ub.usuario_id = u.id
+ORDER BY u.id, ub.principal DESC, ub.id;
+
+/* ====================================================================
+   14) Usuarios + ubicaciones agregadas en JSON (ideal para una API)
+   ==================================================================== */
+SELECT
+  u.id, u.nombre, u.apellido, u.email, COALESCE(r.nombre,'sin_rol') AS rol,
+  COALESCE(
+    json_agg(
+      json_build_object(
+        'id', ub.id,
+        'nombre_ubicacion', ub.nombre_ubicacion,
+        'ciudad', ub.ciudad,
+        'direccion', ub.direccion,
+        'tipo', ub.tipo,
+        'principal', ub.principal,
+        'activa', ub.activa,
+        'lat', ST_Y(ub.coordenadas::geometry),
+        'lon', ST_X(ub.coordenadas::geometry)
+      )
+      ORDER BY ub.principal DESC, ub.id
+    ) FILTER (WHERE ub.id IS NOT NULL),
+    '[]'::json
+  ) AS ubicaciones
+FROM usuarios u
+LEFT JOIN roles r        ON r.id = u.id_rol
+LEFT JOIN ubicaciones ub ON ub.usuario_id = u.id
+GROUP BY u.id, u.nombre, u.apellido, u.email, r.nombre
+ORDER BY u.id;
+
+/* ===================================================================
+   15) Geoespacial: profesionales a ≤ 5 km de un punto (ejemplo MVD)
+       Cambiar POINT(lon lat) y radio (5000 metros) a necesidad.
+   =================================================================== */
+WITH origen AS (
+  SELECT ST_GeogFromText('SRID=4326;POINT(-56.203476 -34.906829)') AS g
+)
+SELECT 
+  u.id, u.nombre, u.email, p.especialidad,
+  ROUND(ST_Distance(ub.coordenadas, o.g)) AS distancia_m,
+  ST_Y(ub.coordenadas::geometry) AS lat,
+  ST_X(ub.coordenadas::geometry) AS lon
+FROM origen o
+JOIN usuarios u ON TRUE
+JOIN roles r ON r.id = u.id_rol AND r.nombre = 'profesional'
+JOIN perfiles_profesionales p ON p.usuario_id = u.id
+JOIN ubicaciones ub ON ub.usuario_id = u.id AND ub.activa = TRUE
+WHERE ST_DWithin(ub.coordenadas, o.g, 5000) -- radio en metros
+ORDER BY distancia_m ASC;
+
