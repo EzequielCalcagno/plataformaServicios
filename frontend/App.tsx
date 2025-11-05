@@ -6,6 +6,7 @@ import { useFonts } from 'expo-font';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 
 import Login from './src/screens/Login';
+import Register from './src/screens/Register';
 
 const Stack = createNativeStackNavigator();
 
@@ -28,8 +29,11 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView edges={['top']} style={styles.container}>
         <NavigationContainer>
-          <Stack.Navigator initialRouteName="login">
+          {/* <Stack.Navigator initialRouteName="login">
             <Stack.Screen name="login" options={{ headerShown: false }} component={Login} />
+          </Stack.Navigator> */}
+          <Stack.Navigator initialRouteName="register">
+            <Stack.Screen name="register" options={{ headerShown: false }} component={Register} />
           </Stack.Navigator>
         </NavigationContainer>
       </SafeAreaView>
@@ -39,6 +43,6 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1
+    flex: 1,
   },
 });
