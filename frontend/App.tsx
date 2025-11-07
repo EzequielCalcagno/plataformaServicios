@@ -1,9 +1,10 @@
+// App.tsx
+import 'react-native-gesture-handler';
 import React from 'react';
-import { Text, View, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useFonts } from 'expo-font';
-import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import Login from './src/screens/Login';
 import Register from './src/screens/Register';
@@ -11,29 +12,13 @@ import Register from './src/screens/Register';
 const Stack = createNativeStackNavigator();
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
-    ManropeRegular: require('./assets/fonts/Manrope/Regular.ttf'),
-    ManropeMedium: require('./assets/fonts/Manrope/Medium.ttf'),
-    ManropeBold: require('./assets/fonts/Manrope/Bold.ttf'),
-  });
-
-  if (!fontsLoaded) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text>Loading...</Text>
-      </View>
-    );
-  }
-
   return (
     <SafeAreaProvider>
-      <SafeAreaView edges={['top']} style={styles.container}>
+      <SafeAreaView style={styles.root}>
         <NavigationContainer>
-          {/* <Stack.Navigator initialRouteName="login">
-            <Stack.Screen name="login" options={{ headerShown: false }} component={Login} />
-          </Stack.Navigator> */}
-          <Stack.Navigator initialRouteName="register">
-            <Stack.Screen name="register" options={{ headerShown: false }} component={Register} />
+          <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Login" component={Login} />
+            <Stack.Screen name="Register" component={Register} />
           </Stack.Navigator>
         </NavigationContainer>
       </SafeAreaView>
@@ -42,7 +27,5 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  root: { flex: 1, backgroundColor: '#f7f9fc' },
 });
