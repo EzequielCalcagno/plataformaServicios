@@ -1,41 +1,47 @@
 // src/server.ts
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
-import authRouter from './routes/auth.route';
-import pingRouter from './routes/ping.route';
-import { pool } from './db';              // 👈 importar pool
-
-dotenv.config();
+import healthRouter from './routes/health.route.js';
+import publicRouter from './routes/public.route.js';
+// import authRouter from './routes/auth.route.js';
+import privateRouter from './routes/private.route.js';
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3000;
+const prefix = '/api';
+const version = '/v1';
+const routesPrefix = `${prefix}${version}`;
 
-app.use(cors({ origin: true, credentials: true }));
+const corsOptions = {
+  origin: '*', // Para produccion hay que dejar algo asi ['https://frontend.com', 'http://localhost:3000']
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+(async () => {
+  try {
+  } catch (error) {
+    console.error(error);
+    process.exit(1);
+  }
+})();
+
+// Middlewares
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- Ruta de diagnóstico de DB ---
-app.get('/dbcheck', async (_req, res) => {
-  try {
-    const r = await pool.query('SELECT 1 AS ok');
-    return res.json({ ok: true, db: 'connected', rowCount: r.rowCount });
-  } catch (e: any) {
-    console.error('DBCHECK ERROR', e);
-    return res.status(500).json({ ok: false, error: e?.message });
-  }
-});
+// Routes
+app.use(`${routesPrefix}`, healthRouter);
+app.use(`${routesPrefix}/`, publicRouter);
+// app.use(`${routesPrefix}/auth`, authRouter);
+app.use(`${routesPrefix}/private`, privateRouter);
 
-// Rutas normales
-app.get('/', (_req, res) => res.json({ ok: true, service: 'PDS API' }));
-app.use('/api/v1', pingRouter);
-app.use('/v1/auth', authRouter);
-
-// 404 (siempre al final)
-app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server on http://localhost:${PORT}`);
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
 
 export default app;

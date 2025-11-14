@@ -1,0 +1,100 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Plataforma de Servicios API",
+    "version": "1.0.0",
+    "description": ""
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Servidor de desarrollo"
+    },
+    {
+      "url": "",
+      "description": "Servidor de producción"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "JWTAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Provide your JWT token here. Example: 'your-jwt-token'"
+      }
+    },
+    "schemas": {
+      "Usuario": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "nombre": { "type": "string", "example": "Juan" },
+          "apellido": { "type": "string", "example": "Pérez" },
+          "email": { "type": "string", "example": "juan@example.com" },
+          "contrasena_hash": { "type": "string", "example": "$2b$10$..." },
+          "telefono": { "type": "string", "example": "+59812345678" },
+          "foto_url": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://example.com/avatar.jpg"
+          },
+          "tipo_autenticacion": {
+            "type": "string",
+            "enum": ["local", "google", "facebook"],
+            "example": "local"
+          },
+          "verificado": { "type": "boolean", "example": false },
+          "fecha_registro": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2024-01-01T12:00:00Z"
+          },
+          "id_rol": { "type": "integer", "nullable": true, "example": 2 },
+          "activo": { "type": "boolean", "example": true },
+          "ultimo_login": { "type": "string", "format": "date-time", "nullable": true },
+          "ip_ultimo_login": { "type": "string", "example": "192.168.0.1" }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "JWTAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Usuarios",
+      "description": "Operaciones relacionadas a los usuarios del sistema"
+    }
+  ],
+  "paths": {
+    "/usuarios": {
+      "get": {
+        "tags": ["Usuarios"],
+        "summary": "Obtener todos los usuarios",
+        "description": "Devuelve una lista de usuarios registrados en el sistema",
+        "operationId": "getUsuarios",
+        "responses": {
+          "200": {
+            "description": "Lista de usuarios",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Usuario"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor"
+          }
+        }
+      }
+    }
+  }
+}
