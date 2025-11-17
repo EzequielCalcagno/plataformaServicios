@@ -40,6 +40,7 @@ app.use(`${routesPrefix}/`, publicRouter);
 // app.use(`${routesPrefix}/auth`, authRouter);
 app.use(`${routesPrefix}/private`, privateRouter);
 
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

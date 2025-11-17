@@ -1,10 +1,10 @@
-// // src/routes/auth.route.ts
-// import { Router, Request, Response } from 'express';
-// import bcrypt from 'bcrypt';
-// import jwt from 'jsonwebtoken';
-// import pool from '../db/pool';
+// src/routes/auth.route.ts
+import { Router, Request, Response } from 'express';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
-// const router = Router();
+
+const router = Router();
 
 // type RolNombre = 'cliente' | 'profesional' | 'admin';
 
@@ -130,4 +130,15 @@
 //   }
 // });
 
-// export default router;
+// GET /v1/auth/me  -> datos del usuario actual
+// router.get('/me', async (req, res) => {
+//   const { id } = req.user!;
+//   const q = await pool.query(
+//     `SELECT id, nombre, apellido, email, telefono, id_rol, foto_url
+//        FROM usuarios WHERE id=$1`, [id]
+//   );
+//   if ((q.rowCount ?? 0) === 0) return res.status(404).json({ error: 'No encontrado' });
+//   res.json(q.rows[0]);
+// });
+
+export default router;
