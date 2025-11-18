@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const UsuarioSchema = z.object({
+export const UserSchema = z.object({
   id: z.number().int().optional(), // SERIAL PRIMARY KEY
 
   nombre: z.string().min(1, 'El nombre es obligatorio').max(100, 'Máximo 100 caracteres'),
@@ -31,7 +31,7 @@ export const UsuarioSchema = z.object({
 });
 
 // Esquema para crear usuario (sin campos autogenerados)
-export const CrearUsuarioSchema = UsuarioSchema.omit({
+export const CrearUsuarioSchema = UserSchema.omit({
   id: true,
   fecha_registro: true,
   ultimo_login: true,
@@ -39,6 +39,6 @@ export const CrearUsuarioSchema = UsuarioSchema.omit({
 });
 
 // Esquema para actualizar usuario (todo opcional)
-export const ActualizarUsuarioSchema = UsuarioSchema.partial();
+export const ActualizarUsuarioSchema = UserSchema.partial();
 
-export type Usuario = z.infer<typeof UsuarioSchema>;
+export type User = z.infer<typeof UserSchema>;

@@ -1,24 +1,11 @@
 // src/routes/auth.route.ts
 import { Router } from 'express';
-// import bcrypt from 'bcrypt';
-// import jwt from 'jsonwebtoken';
+import { Login, Register } from '../controllers/auth.controller';
 
 const router = Router();
 
 //Login, Register, generar token, etc.
-
-router.post('/login', (req, res) => {
-  // Lógica de login
-});
-
-router.post('/register', (req, res) => {
-  // Lógica de registro
-});
-
-router.post('/token', (req, res) => {
-//   const { userId } = req.body;
-//   const token = generateToken(userId);
-//   res.json({ token });
-});
+router.post('/login', Login);
+router.post('/register', Register);
 
 export default router;

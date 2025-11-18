@@ -2,8 +2,18 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-export interface JWTPayload { id:number; email:string; rol:number; }
-declare global { namespace Express { interface Request { user?: JWTPayload } } }
+export interface JWTPayload {
+  id: number;
+  email: string;
+  rol: number;
+}
+declare global {
+  namespace Express {
+    interface Request {
+      user?: JWTPayload;
+    }
+  }
+}
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const h = req.headers.authorization || '';
@@ -12,7 +22,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
     const secret = process.env.JWT_SECRET || 'dev_secret_change_me';
     const payload = jwt.verify(token, secret) as JWTPayload;
-    req.user = payload;
+    req.user = { id: payload.id, email: payload.email, rol: payload.rol };
     next();
   } catch {
     return res.status(401).json({ error: 'Token inválido' });
