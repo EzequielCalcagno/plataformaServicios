@@ -11,10 +11,11 @@ import authRouter from './routes/auth.route';
 import privateRouter from './routes/private.route';
 
 // Middlewares
-import { requireAuth } from './middlewares/auth';
+import { requireAuth } from './middlewares/requireAuth.middleware';
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3000;
+const prefix = '/api/v1';
 
 const corsOptions = {
   origin: '*', // Para produccion hay que dejar algo asi ['https://frontend.com', 'http://localhost:3000']
@@ -36,10 +37,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use(`/api/v1/health`, healthRouter);
-app.use(publicRouter);
-app.use(`/api/v1/auth`, authRouter);
-app.use(`/api/v1`, requireAuth, privateRouter);
+app.use(`${prefix}`, publicRouter);
+app.use(`${prefix}/auth`, authRouter);
+app.use(`${prefix}`, requireAuth, privateRouter);
+app.use(`${prefix}/health`, healthRouter);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

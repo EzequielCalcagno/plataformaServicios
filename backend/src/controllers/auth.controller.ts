@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
+// Services
 import { loginService, registerService } from '../services/auth.service';
+// Constants
+import { mapRolToRoleKey } from '../constants/roles';
 
 export const Login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
@@ -13,12 +16,25 @@ export const Login = async (req: Request, res: Response) => {
 };
 
 export const Register = async (req: Request, res: Response) => {
-  const { email, password, rol } = req.body;
+  const { email, password, rol, nombre, apellido } = req.body;
   try {
-    await registerService(email, password, rol);
+    const rolCode = mapRolToRoleKey(rol);
+
+    await registerService({
+      email,
+      password,
+      rolCode,
+      nombre,
+      apellido,
+    });
     return res.status(201).json({ message: 'Usuario registrado exitosamente' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error en controller:', error);
+
+    if (error.message === 'El email ya está registrado') {
+      return res.status(409).json({ error: error.message });
+    }
+
     return res.status(500).json({ error: 'Error al registrar usuario' });
   }
 };
