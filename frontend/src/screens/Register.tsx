@@ -24,7 +24,6 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [telefono, setTelefono] = useState('');
-  const [ciudad, setCiudad] = useState('');
   const [rol, setRol] = useState<'cliente' | 'profesional'>('cliente');
   const [termsAccepted, setTermsAccepted] = useState(false);
 
@@ -52,6 +51,11 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
       return setAlertMsg('La contraseña debe tener al menos 6 caracteres.');
     }
 
+    // Podés hacerlo obligatorio si querés
+    if (!telefono.trim()) {
+      return setAlertMsg('Ingresá un teléfono de contacto.');
+    }
+
     if (!termsAccepted) {
       return setAlertMsg('Debés aceptar Términos y Privacidad.');
     }
@@ -62,8 +66,7 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
       rol, // 'cliente' | 'profesional'
       nombre,
       apellido,
-      telefono: telefono.trim() || undefined,
-      // ciudad la dejamos solo en el front por ahora
+      telefono: telefono.trim(),
     };
 
     try {
@@ -74,7 +77,6 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
       setOk(true);
       setAlertMsg('¡Cuenta creada con éxito!');
 
-      // Opcional: podrías prellenar el login con el email
       setTimeout(() => {
         navigation?.replace?.('Login');
       }, 500);
@@ -102,11 +104,15 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
 
           {/* Títulos */}
           <Text style={styles.title}>Crea tu cuenta</Text>
-          <Text style={styles.subtitle}>Encontrá técnicos confiables cerca de vos en Uruguay.</Text>
+          <Text style={styles.subtitle}>
+            Encontrá técnicos confiables cerca de vos en Uruguay.
+          </Text>
 
           {/* Alertas */}
           {alertMsg ? (
-            <Text style={[styles.alert, ok ? styles.alertOk : styles.alertErr]}>{alertMsg}</Text>
+            <Text style={[styles.alert, ok ? styles.alertOk : styles.alertErr]}>
+              {alertMsg}
+            </Text>
           ) : null}
 
           {/* Nombre y apellido */}
@@ -146,7 +152,7 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
           <Text style={styles.label}>Teléfono</Text>
           <TextInput
             style={styles.input}
-            placeholder="+598 92 123 123"
+            placeholder="+598 99 123 123"
             placeholderTextColor={COLORS.muted}
             keyboardType="phone-pad"
             value={telefono}
@@ -159,7 +165,12 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
               style={[styles.segmentBtn, rol === 'cliente' && styles.segmentActive]}
               onPress={() => setRol('cliente')}
             >
-              <Text style={[styles.segmentText, rol === 'cliente' && styles.segmentTextActive]}>
+              <Text
+                style={[
+                  styles.segmentText,
+                  rol === 'cliente' && styles.segmentTextActive,
+                ]}
+              >
                 Cliente
               </Text>
             </TouchableOpacity>
@@ -167,21 +178,16 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
               style={[styles.segmentBtn, rol === 'profesional' && styles.segmentActive]}
               onPress={() => setRol('profesional')}
             >
-              <Text style={[styles.segmentText, rol === 'profesional' && styles.segmentTextActive]}>
+              <Text
+                style={[
+                  styles.segmentText,
+                  rol === 'profesional' && styles.segmentTextActive,
+                ]}
+              >
                 Profesional
               </Text>
             </TouchableOpacity>
           </View>
-
-          {/* Ciudad (opcional, por ahora solo visual) */}
-          <Text style={styles.label}>Ciudad (opcional)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Montevideo"
-            placeholderTextColor={COLORS.muted}
-            value={ciudad}
-            onChangeText={setCiudad}
-          />
 
           {/* Términos */}
           <View style={styles.termsRow}>
@@ -194,11 +200,17 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
             />
             <Text style={styles.termsText}>
               Acepto los{' '}
-              <Text style={styles.link} onPress={() => Alert.alert('Términos', 'Pendiente.')}>
+              <Text
+                style={styles.link}
+                onPress={() => Alert.alert('Términos', 'Pendiente.')}
+              >
                 Términos
               </Text>{' '}
               y la{' '}
-              <Text style={styles.link} onPress={() => Alert.alert('Privacidad', 'Pendiente.')}>
+              <Text
+                style={styles.link}
+                onPress={() => Alert.alert('Privacidad', 'Pendiente.')}
+              >
                 Privacidad
               </Text>
               .
@@ -211,13 +223,18 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
             onPress={handleSubmit}
             disabled={loading}
           >
-            <Text style={styles.buttonText}>{loading ? 'Creando...' : 'Crear cuenta'}</Text>
+            <Text style={styles.buttonText}>
+              {loading ? 'Creando...' : 'Crear cuenta'}
+            </Text>
           </TouchableOpacity>
 
           {/* Footer */}
           <Text style={styles.footer}>
             ¿Ya tenés cuenta?{' '}
-            <Text style={styles.footerLink} onPress={() => navigation?.navigate('Login')}>
+            <Text
+              style={styles.footerLink}
+              onPress={() => navigation?.navigate('Login')}
+            >
               Iniciar sesión
             </Text>
           </Text>

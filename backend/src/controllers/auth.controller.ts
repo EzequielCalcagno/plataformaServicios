@@ -1,3 +1,4 @@
+// src/controllers/auth.controller.ts
 import { Request, Response } from 'express';
 // Services
 import { loginService, registerService } from '../services/auth.service';
@@ -16,9 +17,10 @@ export const Login = async (req: Request, res: Response) => {
 };
 
 export const Register = async (req: Request, res: Response) => {
-  const { email, password, rol, nombre, apellido } = req.body;
+  const { email, password, rol, nombre, apellido, telefono } = req.body;
+
   try {
-    const rolCode = mapRolToRoleKey(rol);
+    const rolCode = mapRolToRoleKey(rol); // 'cliente' | 'profesional' → 1 | 2
 
     await registerService({
       email,
@@ -26,7 +28,9 @@ export const Register = async (req: Request, res: Response) => {
       rolCode,
       nombre,
       apellido,
+      telefono, 
     });
+
     return res.status(201).json({ message: 'Usuario registrado exitosamente' });
   } catch (error: any) {
     console.error('❌ Error en controller:', error);
