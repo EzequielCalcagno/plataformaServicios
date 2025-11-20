@@ -1,12 +1,8 @@
 // src/services/auth.service.ts
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import {
-  getUserByEmailRepository,
-  createUserRepository,
-} from '../repositories/auth.repository';
+import { getUserByEmailRepository, createUserRepository } from '../repositories/users.repository';
 import { getNextClienteId, getNextProfesionalId } from '../repositories/id.repository';
-import { CrearUsuarioSchema } from '../schemas/user.schema';
 import { ROLES, RoleKey } from '../constants/roles';
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
@@ -25,13 +21,11 @@ export const loginService = async (email: string, password: string) => {
   const isValidPassword = await bcrypt.compare(password, user.contrasena_hash);
   if (!isValidPassword) throw new Error('Contraseña incorrecta');
 
-  const rolId = user.id_rol;
-
   const token = jwt.sign(
     {
-      sub: user.id,
+      id: user.id,
       email: user.email,
-      rolId,
+      rolId: user.id_rol,
     },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN },
@@ -46,7 +40,7 @@ type RegisterParams = {
   rolCode: RoleKey;
   nombre?: string;
   apellido?: string;
-  telefono?: string; 
+  telefono?: string;
 };
 
 export const registerService = async ({
@@ -83,6 +77,6 @@ export const registerService = async ({
     email,
     contrasena_hash: passwordHash,
     id_rol: rolId,
-    telefono: telefono ?? null, 
+    telefono: telefono ?? null,
   });
 };

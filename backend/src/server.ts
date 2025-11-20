@@ -5,7 +5,6 @@ import express from 'express';
 import cors from 'cors';
 
 // Routes
-import healthRouter from './routes/health.route';
 import publicRouter from './routes/public.route';
 import authRouter from './routes/auth.route';
 import privateRouter from './routes/private.route';
@@ -40,7 +39,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(`${prefix}`, publicRouter);
 app.use(`${prefix}/auth`, authRouter);
 app.use(`${prefix}`, requireAuth, privateRouter);
-app.use(`${prefix}/health`, healthRouter);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

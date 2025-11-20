@@ -20,7 +20,8 @@ interface RegisterProps {
 }
 
 const Register: React.FC<RegisterProps> = ({ navigation }) => {
-  const [fullname, setFullname] = useState('');
+  const [name, setName] = useState('');
+  const [apellido, setApellido] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -42,9 +43,8 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
     setAlertMsg(null);
     setOk(false);
 
-    if (!fullname.trim()) return setAlertMsg('Ingresá nombre y apellido.');
-    const { nombre, apellido } = splitName(fullname);
-    if (!nombre || !apellido) return setAlertMsg('Ingresá nombre y apellido.');
+    if (!name.trim()) return setAlertMsg('Ingresá un nombre.');
+    if (!apellido.trim()) return setAlertMsg('Ingresá un apellido.');
 
     if (!email.trim()) return setAlertMsg('Ingresá un email válido.');
     if (!password || password.length < 6) {
@@ -64,8 +64,8 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
       email: email.trim(),
       password,
       rol, // 'cliente' | 'profesional'
-      nombre,
-      apellido,
+      nombre: name.trim(),
+      apellido: apellido.trim(),
       telefono: telefono.trim(),
     };
 
@@ -104,25 +104,30 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
 
           {/* Títulos */}
           <Text style={styles.title}>Crea tu cuenta</Text>
-          <Text style={styles.subtitle}>
-            Encontrá técnicos confiables cerca de vos en Uruguay.
-          </Text>
+          <Text style={styles.subtitle}>Encontrá técnicos confiables cerca de vos en Uruguay.</Text>
 
           {/* Alertas */}
           {alertMsg ? (
-            <Text style={[styles.alert, ok ? styles.alertOk : styles.alertErr]}>
-              {alertMsg}
-            </Text>
+            <Text style={[styles.alert, ok ? styles.alertOk : styles.alertErr]}>{alertMsg}</Text>
           ) : null}
 
-          {/* Nombre y apellido */}
-          <Text style={styles.label}>Nombre y apellido</Text>
+          {/* Nombre */}
+          <Text style={styles.label}>Nombre</Text>
           <TextInput
             style={styles.input}
-            placeholder="Nombre Apellido"
+            placeholder="Nombre"
             placeholderTextColor={COLORS.muted}
-            value={fullname}
-            onChangeText={setFullname}
+            value={name}
+            onChangeText={setName}
+          />
+
+          <Text style={styles.label}>Apellido</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Apellido"
+            placeholderTextColor={COLORS.muted}
+            value={apellido}
+            onChangeText={setApellido}
           />
 
           {/* Email */}
@@ -165,12 +170,7 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
               style={[styles.segmentBtn, rol === 'cliente' && styles.segmentActive]}
               onPress={() => setRol('cliente')}
             >
-              <Text
-                style={[
-                  styles.segmentText,
-                  rol === 'cliente' && styles.segmentTextActive,
-                ]}
-              >
+              <Text style={[styles.segmentText, rol === 'cliente' && styles.segmentTextActive]}>
                 Cliente
               </Text>
             </TouchableOpacity>
@@ -178,12 +178,7 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
               style={[styles.segmentBtn, rol === 'profesional' && styles.segmentActive]}
               onPress={() => setRol('profesional')}
             >
-              <Text
-                style={[
-                  styles.segmentText,
-                  rol === 'profesional' && styles.segmentTextActive,
-                ]}
-              >
+              <Text style={[styles.segmentText, rol === 'profesional' && styles.segmentTextActive]}>
                 Profesional
               </Text>
             </TouchableOpacity>
@@ -200,17 +195,11 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
             />
             <Text style={styles.termsText}>
               Acepto los{' '}
-              <Text
-                style={styles.link}
-                onPress={() => Alert.alert('Términos', 'Pendiente.')}
-              >
+              <Text style={styles.link} onPress={() => Alert.alert('Términos', 'Pendiente.')}>
                 Términos
               </Text>{' '}
               y la{' '}
-              <Text
-                style={styles.link}
-                onPress={() => Alert.alert('Privacidad', 'Pendiente.')}
-              >
+              <Text style={styles.link} onPress={() => Alert.alert('Privacidad', 'Pendiente.')}>
                 Privacidad
               </Text>
               .
@@ -223,18 +212,13 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
             onPress={handleSubmit}
             disabled={loading}
           >
-            <Text style={styles.buttonText}>
-              {loading ? 'Creando...' : 'Crear cuenta'}
-            </Text>
+            <Text style={styles.buttonText}>{loading ? 'Creando...' : 'Crear cuenta'}</Text>
           </TouchableOpacity>
 
           {/* Footer */}
           <Text style={styles.footer}>
             ¿Ya tenés cuenta?{' '}
-            <Text
-              style={styles.footerLink}
-              onPress={() => navigation?.navigate('Login')}
-            >
+            <Text style={styles.footerLink} onPress={() => navigation?.navigate('Login')}>
               Iniciar sesión
             </Text>
           </Text>

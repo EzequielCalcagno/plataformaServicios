@@ -10,17 +10,18 @@ export const ProfessionalSchema = z.object({
 });
 
 export const UbicationSchema = z.object({
-  id: z.number(),
+  id: z.string(),
   nombreUbicacion: z.string().optional().nullable(),
   ciudad: z.string().optional().nullable(),
   direccion: z.string().optional().nullable(),
   tipo: z.string().optional().nullable(),
   principal: z.boolean().optional(),
+  coordenadas: z.any().nullable().optional(),
   activa: z.boolean().optional(),
 });
 
 export const ProfessionalProfileResponseSchema = z.object({
-  id: z.number(),
+  id: z.string(),
   nombre: z.string(),
   apellido: z.string().nullable(),
   email: z.string().email(),
@@ -33,3 +34,12 @@ export const ProfessionalProfileResponseSchema = z.object({
 });
 
 export type ProfessionalProfileResponse = z.infer<typeof ProfessionalProfileResponseSchema>;
+
+export const UpdateProfessionalProfileSchema = z.object({
+  descripcion: z.string().max(2000).optional(),
+  especialidad: z.string().max(100).optional(),
+  experiencia: z.string().max(4000).optional(),
+  portadaUrl: z.string().url().nullable().optional(),
+});
+
+export type UpdateProfessionalProfileInput = z.infer<typeof UpdateProfessionalProfileSchema>;

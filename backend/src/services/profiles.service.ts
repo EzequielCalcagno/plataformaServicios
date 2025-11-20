@@ -1,8 +1,14 @@
 // src/services/profiles.service.ts
-import { getProfessionalProfileByUserIdRepository } from '../repositories/profiles.repository';
-import { ProfessionalProfileResponseSchema } from '../schemas/profile.schema';
+import {
+  getProfessionalProfileByUserIdRepository,
+  upsertProfessionalProfileRepository,
+} from '../repositories/profiles.repository';
+import {
+  ProfessionalProfileResponseSchema,
+  UpdateProfessionalProfileSchema,
+} from '../schemas/profile.schema';
 
-export const getProfessionalProfileByUserIdService = async (userId: number) => {
+export const getProfessionalProfileByUserIdService = async (userId: string) => {
   const raw = await getProfessionalProfileByUserIdRepository(userId);
 
   if (!raw) return null;
@@ -16,20 +22,70 @@ export const getProfessionalProfileByUserIdService = async (userId: number) => {
     apellido: raw.apellido,
     email: raw.email,
     avatarUrl: raw.avatar_url,
-    rol: rolObj?.nombre ?? null,
-    profesional: perfil
+    rol: Array.isArray(rolObj) && rolObj.length > 0 ? rolObj[0]?.nombre ?? null : null,
+    profesional: Array.isArray(perfil) && perfil.length > 0
       ? {
-          descripcion: perfil.descripcion,
-          especialidad: perfil.especialidad,
-          experiencia: perfil.experiencia,
-          portadaUrl: perfil.portada_url,
-          ratingPromedio: perfil.rating_promedio,
-          fechaActualizacion: perfil.fecha_actualizacion,
+          descripcion: perfil[0].descripcion,
+          especialidad: perfil[0].especialidad,
+          experiencia: perfil[0].experiencia,
+          portadaUrl: perfil[0].portada_url,
+          ratingPromedio: perfil[0].rating_promedio,
+          fechaActualizacion: perfil[0].fecha_actualizacion
+            ? new Date(perfil[0].fecha_actualizacion).toISOString()
+            : null,
         }
       : null,
     ubicaciones: raw.ubicaciones ?? [],
   };
 
-  // Validamos y retornamos el objeto mapeado
   return ProfessionalProfileResponseSchema.parse(mapped);
+};
+
+// Crear perfil profesional del usuario
+export const createMyProfessionalProfileService = async (userId: string, payload: unknown) => {
+  // 1) Validar body con Zod (mismo schema del update)
+  const parsed = UpdateProfessionalProfileSchema.parse(payload);
+
+  // 2) Verificar si YA existe
+  const existing = await getProfessionalProfileByUserIdRepository(userId);
+
+  if (existing?.perfil) {
+    throw new Error('Ya tenés un perfil profesional creado');
+  }
+
+  // 3) Crear (upsert con solo crear)
+  const dbPayload = {
+    usuario_id: userId,
+    descripcion: parsed.descripcion,
+    especialidad: parsed.especialidad,
+    experiencia: parsed.experiencia,
+    portada_url: parsed.portadaUrl ?? null,
+    fecha_actualizacion: new Date().toISOString(),
+  };
+
+  await upsertProfessionalProfileRepository(dbPayload);
+
+  // 4) Retornar el perfil completo
+  return getProfessionalProfileByUserIdService(userId);
+};
+
+// Editar / crear perfil profesional del usuario
+export const updateMyProfessionalProfileService = async (userId: string, payload: unknown) => {
+  // 1) Validamos body con Zod
+  const parsed = UpdateProfessionalProfileSchema.parse(payload);
+
+  // 2) Mapeamos nombres del schema -> columnas DB
+  const dbPayload = {
+    usuario_id: userId,
+    descripcion: parsed.descripcion,
+    especialidad: parsed.especialidad,
+    experiencia: parsed.experiencia,
+    portada_url: parsed.portadaUrl ?? null,
+    fecha_actualizacion: new Date().toISOString(),
+  };
+
+  await upsertProfessionalProfileRepository(dbPayload);
+
+  // 3) Devolvemos el perfil completo (igual que el GET /profile)
+  return getProfessionalProfileByUserIdService(userId);
 };

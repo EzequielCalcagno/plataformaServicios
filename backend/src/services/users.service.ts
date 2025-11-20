@@ -6,7 +6,8 @@ export const getAllUsersService = async () => {
   return users;
 };
 
-export const getUserByIdService = async (id: number) => {
+export const getUserByIdService = async (id: string) => {
   const user = await getUserByIdRepository(id);
   return user;
 };
+
