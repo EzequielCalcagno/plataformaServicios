@@ -1,20 +1,14 @@
 // src/screens/EditProfile.tsx
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-} from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 
-// misma URL que usás en Login/Profile
-const API_URL = 'http://192.168.1.8:3000';
+import Constants from 'expo-constants';
+
+const API_URL = Constants.expoConfig?.extra?.API_URL;
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EditProfile'>;
 type AppRole = 'professional' | 'client';
@@ -69,7 +63,7 @@ export default function EditProfile({ navigation }: Props) {
 
         setRole(storedRole);
 
-        const res = await fetch(`${API_URL}/v1/profiles/me`, {
+        const res = await fetch(`${API_URL}/profiles/me`, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -272,9 +266,7 @@ export default function EditProfile({ navigation }: Props) {
           disabled={saving}
           style={[styles.saveButton, saving && { opacity: 0.7 }]}
         >
-          <Text style={styles.saveButtonText}>
-            {saving ? 'Guardando...' : 'Guardar cambios'}
-          </Text>
+          <Text style={styles.saveButtonText}>{saving ? 'Guardando...' : 'Guardar cambios'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

@@ -5,10 +5,13 @@
     "version": "1.0.0",
     "orientation": "portrait",
 
+    "extra": {
+      "API_URL": "http://192.168.11.237:3000/api/v1"
+    },
+
     "icon": "./assets/images/fixo-logo.png",
 
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
 
     "splash": {
       "image": "./assets/images/fixo-logo.png",

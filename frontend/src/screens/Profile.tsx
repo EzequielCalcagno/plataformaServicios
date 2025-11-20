@@ -17,9 +17,6 @@ import { RootStackParamList } from '../../App';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
-// MISMA URL base que uses en src/api/auth.ts
-const API_URL = 'http://192.168.1.8:3000';
-
 type ProfessionalProfile = {
   photoUrl: string;
   name: string;
