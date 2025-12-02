@@ -4,18 +4,26 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   FlatList,
   ScrollView,
   Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { RootStackParamList } from '../../App';
+import { API_URL } from '../utils/api';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
+// 🔹 Componentes genéricos
+import { AppScreen } from '../components/AppScreen';
+import { TopBar } from '../components/TopBar';
+import { AppCard } from '../components/AppCard';
+import { AppButton } from '../components/AppButton';
+import { SectionTitle } from '../components/SectionTitle';
+import { COLORS, SPACING, RADII } from '../styles/theme';
+
+type Props = {
+  navigation: any;
+  route: any;
+};
 
 type ProfessionalProfile = {
   photoUrl: string;
@@ -65,7 +73,8 @@ type ClientProfile = {
 };
 
 export default function Profile({ route, navigation }: Props) {
-  const { role } = route.params; // 'professional' | 'client'
+  // role puede venir undefined si entras directo desde la tab
+  const role = route?.params?.role ?? 'professional'; // 'professional' | 'client'
   const isProfessional = role === 'professional';
 
   const [showMenu, setShowMenu] = useState(false);
@@ -87,7 +96,8 @@ export default function Profile({ route, navigation }: Props) {
         return;
       }
 
-      const res = await fetch(`${API_URL}/v1/profiles/me`, {
+      // usamos la nueva ruta de backend: /private/app/me
+      const res = await fetch(`${API_URL}/private/app/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -122,11 +132,11 @@ export default function Profile({ route, navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       loadProfile();
-    }, [loadProfile])
+    }, [loadProfile]),
   );
 
   const handlePressSettings = () => {
-    setShowMenu((prev) => !prev);
+    setShowMenu(prev => !prev);
   };
 
   const handleEditProfile = () => {
@@ -141,101 +151,108 @@ export default function Profile({ route, navigation }: Props) {
 
   const handleLogout = async () => {
     setShowMenu(false);
-    await AsyncStorage.multiRemove(['@token', '@user', '@role']);
+    await AsyncStorage.multiRemove(['@token', '@user', '@role', '@userId']);
     navigation.replace('Login');
   };
 
-  // Estados de carga / error
+  // ======== ESTADOS DE CARGA / ERROR ========
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.screen}>
-        <View style={{ padding: 20 }}>
-          <Text>Cargando perfil...</Text>
+      <AppScreen>
+        <View style={styles.centerContainer}>
+          <Text style={styles.paragraph}>Cargando perfil...</Text>
         </View>
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
   if (errorMsg) {
     return (
-      <SafeAreaView style={styles.screen}>
-        <View style={{ padding: 20 }}>
-          <Text style={{ marginBottom: 12 }}>{errorMsg}</Text>
-          <TouchableOpacity
-            onPress={handleLogout}
-            style={{
-              backgroundColor: '#2563eb',
-              paddingVertical: 10,
-              paddingHorizontal: 16,
-              borderRadius: 12,
-            }}
-          >
-            <Text style={{ color: '#fff', textAlign: 'center' }}>
-              Volver al login
-            </Text>
-          </TouchableOpacity>
+      <AppScreen>
+        <View style={styles.centerContainer}>
+          <Text style={[styles.paragraph, { marginBottom: SPACING.md }]}>
+            {errorMsg}
+          </Text>
+          <AppButton title="Volver al login" onPress={handleLogout} />
         </View>
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
   if (isProfessional && !professionalProfile) {
     return (
-      <SafeAreaView style={styles.screen}>
-        <View style={{ padding: 20 }}>
-          <Text>No se pudo cargar el perfil profesional.</Text>
+      <AppScreen>
+        <View style={styles.centerContainer}>
+          <Text style={styles.paragraph}>
+            No se pudo cargar el perfil profesional.
+          </Text>
         </View>
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
   if (!isProfessional && !clientProfile) {
     return (
-      <SafeAreaView style={styles.screen}>
-        <View style={{ padding: 20 }}>
-          <Text>No se pudo cargar el perfil del cliente.</Text>
+      <AppScreen>
+        <View style={styles.centerContainer}>
+          <Text style={styles.paragraph}>
+            No se pudo cargar el perfil del cliente.
+          </Text>
         </View>
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
+  // ======== RENDER PRINCIPAL ========
+
   return (
-    <SafeAreaView style={styles.screen}>
+    <AppScreen>
       {/* HEADER SIMPLE con tuerca */}
-      <View style={styles.topBar}>
-        <View style={{ width: 24 }} />
-        <Text style={styles.topBarTitle}>Profile</Text>
-        <TouchableOpacity onPress={handlePressSettings} style={styles.settingsButton}>
-          <Text style={{ fontSize: 20 }}>⚙️</Text>
-        </TouchableOpacity>
+      <TopBar
+        title="Profile"
+        rightIcon={<Text style={{ fontSize: 20 }}>⚙️</Text>}
+        onPressRight={handlePressSettings}
+      />
 
-        {showMenu && (
-          <View style={styles.menu}>
-            <TouchableOpacity onPress={handleEditProfile} style={styles.menuItem}>
-              <Text style={styles.menuItemText}>Edit Profile</Text>
-            </TouchableOpacity>
-
-            {isProfessional && (
-              <TouchableOpacity onPress={handleAddService} style={styles.menuItem}>
-                <Text style={styles.menuItemText}>Add Service</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              onPress={handleLogout}
-              style={[styles.menuItem, { borderTopWidth: 1, borderTopColor: '#eee' }]}
-            >
-              <Text style={[styles.menuItemText, { color: '#d11' }]}>Log Out</Text>
-            </TouchableOpacity>
+      {/* Menú flotante */}
+      {showMenu && (
+        <View style={styles.menu}>
+          <View style={styles.menuItem}>
+            <Text style={styles.menuItemText} onPress={handleEditProfile}>
+              Edit Profile
+            </Text>
           </View>
-        )}
-      </View>
+
+          {isProfessional && (
+            <View style={styles.menuItem}>
+              <Text style={styles.menuItemText} onPress={handleAddService}>
+                Add Service
+              </Text>
+            </View>
+          )}
+
+          <View
+            style={[
+              styles.menuItem,
+              { borderTopWidth: 1, borderTopColor: '#eee' },
+            ]}
+          >
+            <Text
+              style={[styles.menuItemText, { color: COLORS.danger }]}
+              onPress={handleLogout}
+            >
+              Log Out
+            </Text>
+          </View>
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={styles.content}>
         {isProfessional && professionalProfile ? (
           <>
             {/* CARD PRINCIPAL PROFESIONAL */}
-            <View style={styles.profileCard}>
+            <AppCard style={styles.profileCard} withShadow>
               <Image
                 source={{ uri: professionalProfile.photoUrl }}
                 style={styles.avatar}
@@ -250,17 +267,21 @@ export default function Profile({ route, navigation }: Props) {
                   <Text style={styles.statLabel}>Rating</Text>
                 </View>
 
-                {/* Jobs clickeable */}
-                <TouchableOpacity
-                  style={styles.statCard}
-                  activeOpacity={0.7}
-                  onPress={() => navigation.navigate('Jobs')}
-                >
-                  <Text style={styles.statValue}>
+                {/* Jobs clickeable → vamos a la tab Bookings */}
+                <View style={styles.statCardTouchable}>
+                  <Text
+                    style={styles.statValue}
+                    onPress={() => navigation.navigate('Bookings')}
+                  >
                     {professionalProfile.jobsCompleted}
                   </Text>
-                  <Text style={styles.statLabel}>Jobs</Text>
-                </TouchableOpacity>
+                  <Text
+                    style={styles.statLabel}
+                    onPress={() => navigation.navigate('Bookings')}
+                  >
+                    Jobs
+                  </Text>
+                </View>
 
                 <View style={styles.statCard}>
                   <Text style={styles.statValue}>
@@ -271,34 +292,41 @@ export default function Profile({ route, navigation }: Props) {
               </View>
 
               <View style={styles.actionsRow}>
-                <TouchableOpacity style={[styles.actionButton, styles.whatsappBtn]}>
-                  <Text style={styles.actionText}>WhatsApp</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.actionButton, styles.primaryBtn]}>
-                  <Text style={[styles.actionText, { color: '#fff' }]}>
-                    Request Service
-                  </Text>
-                </TouchableOpacity>
+                <AppButton
+                  title="WhatsApp"
+                  variant="outline"
+                  fullWidth={false}
+                  style={[styles.actionButton, styles.whatsappBtn]}
+                  textStyle={styles.whatsappText}
+                  onPress={() => {}}
+                />
+                <AppButton
+                  title="Request Service"
+                  variant="primary"
+                  fullWidth={false}
+                  style={styles.actionButton}
+                  onPress={() => {}}
+                />
               </View>
-            </View>
+            </AppCard>
 
             {/* ABOUT */}
-            <Text style={styles.sectionTitle}>About</Text>
+            <SectionTitle>About</SectionTitle>
             <Text style={styles.paragraph}>{professionalProfile.about}</Text>
 
             {/* PHOTOS */}
-            <Text style={styles.sectionTitle}>Photos</Text>
+            <SectionTitle>Photos</SectionTitle>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {professionalProfile.photos.map((p) => (
+              {professionalProfile.photos.map(p => (
                 <Image key={p.id} source={{ uri: p.url }} style={styles.photo} />
               ))}
             </ScrollView>
 
             {/* REVIEWS */}
-            <Text style={styles.sectionTitle}>Reviews</Text>
+            <SectionTitle>Reviews</SectionTitle>
 
-            <View style={styles.reviewSummary}>
-              <View style={{ alignItems: 'center', marginRight: 16 }}>
+            <AppCard style={styles.reviewSummary}>
+              <View style={{ alignItems: 'center', marginRight: SPACING.md }}>
                 <Text style={styles.summaryRating}>
                   {professionalProfile.rating}
                 </Text>
@@ -309,7 +337,7 @@ export default function Profile({ route, navigation }: Props) {
               </View>
 
               <View style={{ flex: 1 }}>
-                {professionalProfile.ratingSummary.distribution.map((item) => (
+                {professionalProfile.ratingSummary.distribution.map(item => (
                   <View key={item.stars} style={styles.distrRow}>
                     <Text style={styles.distrLabel}>{item.stars}</Text>
                     <View style={styles.distrBarBg}>
@@ -324,21 +352,21 @@ export default function Profile({ route, navigation }: Props) {
                   </View>
                 ))}
               </View>
-            </View>
+            </AppCard>
 
             <FlatList
               data={professionalProfile.reviews}
-              keyExtractor={(item) => item.id}
+              keyExtractor={item => item.id}
               scrollEnabled={false}
               renderItem={({ item }) => (
-                <View style={styles.reviewCard}>
+                <AppCard style={styles.reviewCard}>
                   <View style={styles.reviewHeader}>
                     <View style={styles.reviewAvatarPlaceholder} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.reviewName}>{item.clientName}</Text>
                       <Text style={styles.reviewTime}>{item.timeAgo}</Text>
                     </View>
-                    <Text style={styles.reviewStars}>
+                    <Text style={styles.reviewStarsText}>
                       {'★'.repeat(item.rating)}{' '}
                       {'☆'.repeat(5 - item.rating)}
                     </Text>
@@ -349,7 +377,7 @@ export default function Profile({ route, navigation }: Props) {
                     <Text style={styles.reviewMeta}>👍 {item.likes}</Text>
                     <Text style={styles.reviewMeta}>💬 {item.replies}</Text>
                   </View>
-                </View>
+                </AppCard>
               )}
             />
           </>
@@ -357,7 +385,7 @@ export default function Profile({ route, navigation }: Props) {
           clientProfile && (
             <>
               {/* CARD PRINCIPAL CLIENTE */}
-              <View style={styles.profileCard}>
+              <AppCard style={styles.profileCard} withShadow>
                 <Image
                   source={{ uri: clientProfile.photoUrl }}
                   style={styles.avatar}
@@ -365,7 +393,7 @@ export default function Profile({ route, navigation }: Props) {
                 <Text style={styles.name}>{clientProfile.name}</Text>
                 <Text style={styles.location}>{clientProfile.location}</Text>
 
-                <View style={[styles.statsRow, { marginTop: 16 }]}>
+                <View style={[styles.statsRow, { marginTop: SPACING.md }]}>
                   <View style={styles.statCard}>
                     <Text style={styles.statValue}>
                       {clientProfile.pendingRequests.length}
@@ -373,99 +401,88 @@ export default function Profile({ route, navigation }: Props) {
                     <Text style={styles.statLabel}>Pending</Text>
                   </View>
                 </View>
-              </View>
+              </AppCard>
 
               {/* DATOS DE CONTACTO */}
-              <Text style={styles.sectionTitle}>Contact</Text>
-              <View style={styles.card}>
+              <SectionTitle>Contact</SectionTitle>
+              <AppCard style={styles.card}>
                 <Text style={styles.paragraph}>Email: {clientProfile.email}</Text>
                 <Text style={styles.paragraph}>Phone: {clientProfile.phone}</Text>
-              </View>
+              </AppCard>
 
               {/* SOLICITUDES PENDIENTES */}
-              <Text style={styles.sectionTitle}>Pending Requests</Text>
+              <SectionTitle>Pending Requests</SectionTitle>
               {clientProfile.pendingRequests.length === 0 ? (
                 <Text style={styles.paragraph}>
                   You have no pending service requests.
                 </Text>
               ) : (
-                clientProfile.pendingRequests.map((req) => (
-                  <View key={req.id} style={styles.card}>
+                clientProfile.pendingRequests.map(req => (
+                  <AppCard key={req.id} style={styles.card}>
                     <Text style={styles.cardTitle}>{req.serviceType}</Text>
                     <Text style={styles.cardSubtitle}>
                       Professional: {req.professionalName}
                     </Text>
                     <Text style={styles.paragraph}>Status: {req.status}</Text>
                     <Text style={styles.reviewTime}>{req.createdAt}</Text>
-                  </View>
+                  </AppCard>
                 ))
               )}
             </>
           )
         )}
       </ScrollView>
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f5f7fb' },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
-    zIndex: 20, // para que el menú quede arriba
+  centerContainer: {
+    flex: 1,
+    padding: SPACING.lg,
+    justifyContent: 'center',
   },
-  topBarTitle: { fontSize: 16, fontWeight: '600' },
-  settingsButton: { padding: 4 },
   menu: {
     position: 'absolute',
-    top: 42,
-    right: 16,
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    top: 54,
+    right: SPACING.lg,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: RADII.md,
     paddingVertical: 4,
     minWidth: 160,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 20,
+    ...{
+      shadowColor: '#000',
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 6,
+    },
     zIndex: 40,
   },
   menuItem: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 2,
   },
-  menuItemText: { fontSize: 14, color: '#111827' },
+  menuItemText: { fontSize: 14, color: COLORS.text },
   content: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xl * 2,
   },
   profileCard: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
     alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 12,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   avatar: {
     width: 84,
     height: 84,
     borderRadius: 42,
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
-  name: { fontSize: 20, fontWeight: '700', marginTop: 4 },
+  name: { fontSize: 20, fontWeight: '700', marginTop: 4, color: COLORS.text },
   specialty: {
     fontSize: 14,
-    color: '#6b7280',
+    color: COLORS.textMuted,
     marginTop: 2,
   },
   location: {
@@ -475,49 +492,42 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    marginTop: 16,
+    marginTop: SPACING.md,
     justifyContent: 'space-between',
     width: '100%',
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: COLORS.graySoft,
     marginHorizontal: 4,
-    borderRadius: 14,
+    borderRadius: RADII.md,
     paddingVertical: 10,
     alignItems: 'center',
   },
-  statValue: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  statLabel: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  statCardTouchable: {
+    flex: 1,
+    backgroundColor: COLORS.graySoft,
+    marginHorizontal: 4,
+    borderRadius: RADII.md,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  statValue: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  statLabel: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
   actionsRow: {
     flexDirection: 'row',
-    marginTop: 16,
+    marginTop: SPACING.md,
     width: '100%',
   },
   actionButton: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginHorizontal: 4,
-    borderWidth: 1,
   },
   whatsappBtn: {
-    borderColor: '#22c55e',
-    backgroundColor: '#ecfdf3',
+    borderColor: COLORS.success,
   },
-  primaryBtn: {
-    borderColor: '#2563eb',
-    backgroundColor: '#2563eb',
-  },
-  actionText: { fontSize: 14, fontWeight: '600', color: '#16a34a' },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 18,
-    marginBottom: 6,
-    color: '#111827',
+  whatsappText: {
+    color: COLORS.success,
   },
   paragraph: {
     fontSize: 14,
@@ -527,21 +537,18 @@ const styles = StyleSheet.create({
   photo: {
     width: 180,
     height: 120,
-    borderRadius: 16,
+    borderRadius: RADII.lg,
     marginRight: 10,
     marginTop: 6,
   },
   reviewSummary: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
     marginTop: 8,
     marginBottom: 8,
   },
-  summaryRating: { fontSize: 24, fontWeight: '700', color: '#111827' },
-  summaryStars: { fontSize: 16, color: '#fbbf24', marginTop: 2 },
-  summaryCount: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  summaryRating: { fontSize: 24, fontWeight: '700', color: COLORS.text },
+  summaryStars: { fontSize: 16, color: COLORS.warning, marginTop: 2 },
+  summaryCount: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
   distrRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -551,22 +558,24 @@ const styles = StyleSheet.create({
   distrBarBg: {
     flex: 1,
     height: 6,
-    borderRadius: 999,
-    backgroundColor: '#e5e7eb',
+    borderRadius: RADII.pill,
+    backgroundColor: COLORS.border,
     marginHorizontal: 6,
     overflow: 'hidden',
     flexDirection: 'row',
   },
   distrBarFill: {
     height: 6,
-    borderRadius: 999,
-    backgroundColor: '#fbbf24',
+    borderRadius: RADII.pill,
+    backgroundColor: COLORS.warning,
   },
-  distrPercent: { width: 32, fontSize: 11, color: '#6b7280', textAlign: 'right' },
+  distrPercent: {
+    width: 32,
+    fontSize: 11,
+    color: COLORS.textMuted,
+    textAlign: 'right',
+  },
   reviewCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 12,
     marginTop: 8,
   },
   reviewHeader: {
@@ -578,24 +587,21 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: COLORS.border,
     marginRight: 8,
   },
-  reviewName: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  reviewName: { fontSize: 14, fontWeight: '600', color: COLORS.text },
   reviewTime: { fontSize: 11, color: '#9ca3af' },
-  reviewStars: { fontSize: 13, color: '#fbbf24' },
+  reviewStarsText: { fontSize: 13, color: COLORS.warning },
   reviewFooter: {
     flexDirection: 'row',
     marginTop: 6,
     columnGap: 16,
   },
-  reviewMeta: { fontSize: 12, color: '#6b7280' },
+  reviewMeta: { fontSize: 12, color: COLORS.textMuted },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 12,
     marginTop: 8,
   },
   cardTitle: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  cardSubtitle: { fontSize: 12, color: '#6b7280', marginBottom: 4 },
+  cardSubtitle: { fontSize: 12, color: COLORS.textMuted, marginBottom: 4 },
 });

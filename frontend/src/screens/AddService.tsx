@@ -7,16 +7,19 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Image,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../App';
+import { API_URL } from '../utils/api';
+import * as ImagePicker from 'expo-image-picker';
 
-// misma URL que usás en Login/Profile
-const API_URL = 'http://192.168.1.8:3000';
+type Props = {
+  navigation: any;
+  route: any;
+};
 
-type Props = NativeStackScreenProps<RootStackParamList, 'AddService'>;
 type AppRole = 'professional' | 'client';
 
 export default function AddService({ navigation }: Props) {
@@ -26,12 +29,22 @@ export default function AddService({ navigation }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(''); // opcional, formato YYYY-MM-DD
-  const [imageUrl, setImageUrl] = useState('');
+
+  // URL escrita a mano (sigue existiendo como opción)
+  const [imageUrlInput, setImageUrlInput] = useState('');
+
+  // Imagen local seleccionada desde la galería
+  const [localImageUri, setLocalImageUri] = useState<string | null>(null);
+
+  // URL pública devuelta por el backend al subir la imagen
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Cargar rol desde AsyncStorage
   useEffect(() => {
     const loadRole = async () => {
       try {
@@ -45,6 +58,97 @@ export default function AddService({ navigation }: Props) {
     };
     loadRole();
   }, []);
+
+  // ======= PICKER DE IMAGEN =======
+
+  const pickImage = async () => {
+    try {
+      // Pedir permisos
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permiso requerido',
+          'Necesitamos acceso a tus fotos para subir imágenes de tus trabajos.',
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+         mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  quality: 0.8,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setLocalImageUri(asset.uri);
+      setUploadedImageUrl(null); // reseteamos la subida previa
+    } catch (err) {
+      console.log('Error al abrir galería', err);
+      Alert.alert('Error', 'No se pudo abrir la galería de imágenes.');
+    }
+  };
+
+  // ======= SUBIR IMAGEN AL BACKEND =======
+
+  const uploadImage = async () => {
+    try {
+      if (!localImageUri) {
+        Alert.alert('Sin imagen', 'Primero seleccioná una imagen.');
+        return;
+      }
+
+      setUploading(true);
+      setErrorMsg(null);
+
+      const token = await AsyncStorage.getItem('@token');
+      if (!token) {
+        setErrorMsg('No hay sesión activa.');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('image', {
+        uri: localImageUri,
+        name: 'work-image.jpg',
+        type: 'image/jpeg',
+      } as any);
+
+      // IMPORTANTE: no setear Content-Type a mano para mantener el boundary
+      const res = await fetch(`${API_URL}/uploads/work-image`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        console.log('Error upload image', res.status, txt);
+        throw new Error('No se pudo subir la imagen.');
+      }
+
+      const data = await res.json();
+      console.log('✅ Imagen subida (frontend):', data);
+
+      if (!data.url) {
+        throw new Error('La respuesta no contiene una URL de imagen.');
+      }
+
+      setUploadedImageUrl(data.url);
+      setSuccessMsg('Imagen subida correctamente.');
+    } catch (err: any) {
+      console.log('Error al subir imagen', err);
+      setErrorMsg(err?.message || 'No se pudo subir la imagen.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // ======= GUARDAR SERVICIO / TRABAJO =======
 
   const handleSave = async () => {
     try {
@@ -69,16 +173,25 @@ export default function AddService({ navigation }: Props) {
         return;
       }
 
+      // armamos array de URLs de imagen (subida o escrita a mano)
+      const imageUrls: string[] = [];
+      if (uploadedImageUrl) {
+        imageUrls.push(uploadedImageUrl);
+      }
+      if (imageUrlInput.trim()) {
+        imageUrls.push(imageUrlInput.trim());
+      }
+
       const body: any = {
         title: title.trim(),
         description: description.trim(),
       };
 
       if (date.trim()) body.date = date.trim();
-      if (imageUrl.trim()) body.imageUrls = [imageUrl.trim()];
+      if (imageUrls.length > 0) body.imageUrls = imageUrls;
 
-      // endpoint sugerido: luego lo implementamos en el backend
-      const res = await fetch(`${API_URL}/v1/works`, {
+      // POST /private/app/works (o el endpoint donde estés creando el trabajo)
+      const res = await fetch(`${API_URL}/private/app/works`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -94,11 +207,16 @@ export default function AddService({ navigation }: Props) {
         return;
       }
 
+      const created = await res.json();
+      console.log('✅ Servicio / trabajo creado:', created);
+
       setSuccessMsg('Servicio / trabajo agregado correctamente.');
       setTitle('');
       setDescription('');
       setDate('');
-      setImageUrl('');
+      setImageUrlInput('');
+      setLocalImageUri(null);
+      setUploadedImageUrl(null);
     } catch (e) {
       console.log('Error AddService save', e);
       setErrorMsg('Error de red al guardar el servicio.');
@@ -106,6 +224,8 @@ export default function AddService({ navigation }: Props) {
       setSaving(false);
     }
   };
+
+  // ======= ESTADOS ESPECIALES POR ROL =======
 
   if (loadingRole) {
     return (
@@ -136,6 +256,8 @@ export default function AddService({ navigation }: Props) {
       </SafeAreaView>
     );
   }
+
+  // ======= RENDER PRINCIPAL =======
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -179,12 +301,46 @@ export default function AddService({ navigation }: Props) {
           onChangeText={setDate}
         />
 
-        <Text style={styles.label}>URL de imagen (opcional)</Text>
+        {/* Sección de imagen */}
+        <Text style={styles.label}>Imagen del trabajo</Text>
+
+        {/* Preview si hay selección local o URL subida */}
+        {localImageUri || uploadedImageUrl ? (
+          <Image
+            source={{ uri: uploadedImageUrl || localImageUri! }}
+            style={styles.previewImage}
+          />
+        ) : null}
+
+        <View style={styles.row}>
+          <TouchableOpacity style={styles.smallButton} onPress={pickImage}>
+            <Text style={styles.smallButtonText}>Elegir foto</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.smallButton,
+              { backgroundColor: '#16a34a' },
+              (uploading || !localImageUri) && { opacity: 0.7 },
+            ]}
+            onPress={uploadImage}
+            disabled={uploading || !localImageUri}
+          >
+            <Text style={styles.smallButtonText}>
+              {uploading ? 'Subiendo...' : 'Subir imagen'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.helpText}>
+          También podés pegar una URL directa de imagen si ya la tenés subida:
+        </Text>
+
         <TextInput
           style={styles.input}
           placeholder="https://..."
-          value={imageUrl}
-          onChangeText={setImageUrl}
+          value={imageUrlInput}
+          onChangeText={setImageUrlInput}
         />
 
         <TouchableOpacity
@@ -237,6 +393,37 @@ const styles = StyleSheet.create({
   },
   inputMultiline: {
     minHeight: 100,
+  },
+  previewImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 12,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    marginTop: 8,
+    marginBottom: 4,
+    columnGap: 8,
+  },
+  smallButton: {
+    flex: 1,
+    backgroundColor: '#2563eb',
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  smallButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  helpText: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+    marginBottom: 4,
   },
   saveButton: {
     marginTop: 24,

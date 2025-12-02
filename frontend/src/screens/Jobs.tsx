@@ -10,12 +10,12 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../App';
+import { API_URL } from '../utils/api';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Jobs'>;
-
-const API_URL = 'http://192.168.1.8:3000';
+type Props = {
+  navigation: any;
+  route: any;
+};
 
 type WorkImage = {
   url: string;
@@ -42,16 +42,15 @@ export default function Jobs({ navigation }: Props) {
         setErrorMsg(null);
 
         const token = await AsyncStorage.getItem('@token');
-        const userStr = await AsyncStorage.getItem('@user');
+        const userId = await AsyncStorage.getItem('@userId');
 
-        if (!token || !userStr) {
+        if (!token || !userId) {
           setErrorMsg('Sesión no válida. Volvé a iniciar sesión.');
           return;
         }
 
-        const user = JSON.parse(userStr) as { id: number };
-
-        const res = await fetch(`${API_URL}/v1/profiles/${user.id}/works`, {
+        // API_URL ya incluye /api/v1
+        const res = await fetch(`${API_URL}/profiles/${userId}/works`, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',

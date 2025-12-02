@@ -1,16 +1,22 @@
 // src/screens/EditProfile.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../App';
+import { API_URL } from '../utils/api';
 
-import Constants from 'expo-constants';
+type Props = {
+  navigation: any;
+  route: any;
+};
 
-const API_URL = Constants.expoConfig?.extra?.API_URL;
-
-type Props = NativeStackScreenProps<RootStackParamList, 'EditProfile'>;
 type AppRole = 'professional' | 'client';
 
 type ProfessionalForm = {
@@ -63,6 +69,7 @@ export default function EditProfile({ navigation }: Props) {
 
         setRole(storedRole);
 
+        // API_URL ya incluye /api/v1 → GET /api/v1/profiles/me
         const res = await fetch(`${API_URL}/profiles/me`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -132,7 +139,8 @@ export default function EditProfile({ navigation }: Props) {
         };
       }
 
-      const res = await fetch(`${API_URL}/v1/profiles/me`, {
+      // PUT /api/v1/profiles/me
+      const res = await fetch(`${API_URL}/profiles/me`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -266,7 +274,9 @@ export default function EditProfile({ navigation }: Props) {
           disabled={saving}
           style={[styles.saveButton, saving && { opacity: 0.7 }]}
         >
-          <Text style={styles.saveButtonText}>{saving ? 'Guardando...' : 'Guardar cambios'}</Text>
+          <Text style={styles.saveButtonText}>
+            {saving ? 'Guardando...' : 'Guardar cambios'}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

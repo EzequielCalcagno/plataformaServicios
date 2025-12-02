@@ -1,19 +1,25 @@
 // src/screens/Register.tsx
 import React, { useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
   StyleSheet,
-  TextInput,
-  TouchableOpacity,
   Image,
   KeyboardAvoidingView,
   Platform,
   Switch,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { register } from '../services/auth.client';
+
+// 🔹 Componentes genéricos
+import { AppScreen } from '../components/AppScreen';
+import { AppInput } from '../components/AppInput';
+import { AppAlert } from '../components/AppAlert';
+import { AppButton } from '../components/AppButton';
+import { SectionTitle } from '../components/SectionTitle';
+import { COLORS, SPACING, RADII } from '../styles/theme';
 
 interface RegisterProps {
   navigation?: any;
@@ -51,7 +57,6 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
       return setAlertMsg('La contraseña debe tener al menos 6 caracteres.');
     }
 
-    // Podés hacerlo obligatorio si querés
     if (!telefono.trim()) {
       return setAlertMsg('Ingresá un teléfono de contacto.');
     }
@@ -89,164 +94,144 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.select({ ios: 'padding', android: undefined })}
-      >
-        <View style={styles.content}>
-          {/* Logo */}
-          <Image
-            source={require('../../assets/images/fixo-logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-
-          {/* Títulos */}
-          <Text style={styles.title}>Crea tu cuenta</Text>
-          <Text style={styles.subtitle}>Encontrá técnicos confiables cerca de vos en Uruguay.</Text>
-
-          {/* Alertas */}
-          {alertMsg ? (
-            <Text style={[styles.alert, ok ? styles.alertOk : styles.alertErr]}>{alertMsg}</Text>
-          ) : null}
-
-          {/* Nombre */}
-          <Text style={styles.label}>Nombre</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nombre"
-            placeholderTextColor={COLORS.muted}
-            value={name}
-            onChangeText={setName}
-          />
-
-          <Text style={styles.label}>Apellido</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Apellido"
-            placeholderTextColor={COLORS.muted}
-            value={apellido}
-            onChangeText={setApellido}
-          />
-
-          {/* Email */}
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="correo@ejemplo.com"
-            placeholderTextColor={COLORS.muted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={email}
-            onChangeText={setEmail}
-          />
-
-          {/* Contraseña */}
-          <Text style={styles.label}>Contraseña</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Mínimo 6 caracteres"
-            placeholderTextColor={COLORS.muted}
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-
-          {/* Teléfono */}
-          <Text style={styles.label}>Teléfono</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="+598 99 123 123"
-            placeholderTextColor={COLORS.muted}
-            keyboardType="phone-pad"
-            value={telefono}
-            onChangeText={setTelefono}
-          />
-
-          {/* Rol */}
-          <View style={styles.segmented}>
-            <TouchableOpacity
-              style={[styles.segmentBtn, rol === 'cliente' && styles.segmentActive]}
-              onPress={() => setRol('cliente')}
-            >
-              <Text style={[styles.segmentText, rol === 'cliente' && styles.segmentTextActive]}>
-                Cliente
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.segmentBtn, rol === 'profesional' && styles.segmentActive]}
-              onPress={() => setRol('profesional')}
-            >
-              <Text style={[styles.segmentText, rol === 'profesional' && styles.segmentTextActive]}>
-                Profesional
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Términos */}
-          <View style={styles.termsRow}>
-            <Switch
-              value={termsAccepted}
-              onValueChange={setTermsAccepted}
-              trackColor={{ false: '#cbd5e1', true: COLORS.primary }}
-              thumbColor="#ffffff"
-              ios_backgroundColor="#cbd5e1"
+    <AppScreen>
+      <SafeAreaView style={styles.safe}>
+        <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.select({ ios: 'padding', android: undefined })}
+        >
+          <View style={styles.content}>
+            {/* Logo */}
+            <Image
+              source={require('../../assets/images/fixo-logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
             />
-            <Text style={styles.termsText}>
-              Acepto los{' '}
-              <Text style={styles.link} onPress={() => Alert.alert('Términos', 'Pendiente.')}>
-                Términos
-              </Text>{' '}
-              y la{' '}
-              <Text style={styles.link} onPress={() => Alert.alert('Privacidad', 'Pendiente.')}>
-                Privacidad
+
+            {/* Títulos */}
+            <SectionTitle style={styles.title}>Crea tu cuenta</SectionTitle>
+            <Text style={styles.subtitle}>
+              Encontrá técnicos confiables cerca de vos en Uruguay.
+            </Text>
+
+            {/* Alertas */}
+            {alertMsg && (
+              <AppAlert
+                type={ok ? 'success' : 'error'}
+                message={alertMsg}
+                style={{ marginBottom: SPACING.sm }}
+              />
+            )}
+
+            {/* Nombre y apellido */}
+            <AppInput
+              label="Nombre y apellido"
+              placeholder="Nombre Apellido"
+              value={fullname}
+              onChangeText={setFullname}
+              style={{ marginBottom: SPACING.sm }}
+            />
+
+            {/* Email */}
+            <AppInput
+              label="Email"
+              placeholder="correo@ejemplo.com"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              style={{ marginBottom: SPACING.sm }}
+            />
+
+            {/* Contraseña */}
+            <AppInput
+              label="Contraseña"
+              placeholder="Mínimo 6 caracteres"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              style={{ marginBottom: SPACING.sm }}
+            />
+
+            {/* Teléfono */}
+            <AppInput
+              label="Teléfono"
+              placeholder="+598 99 123 123"
+              value={telefono}
+              onChangeText={setTelefono}
+              keyboardType="phone-pad"
+              style={{ marginBottom: SPACING.sm }}
+            />
+
+            {/* Rol */}
+            <View style={styles.segmented}>
+              <AppButton
+                title="Cliente"
+                variant={rol === 'cliente' ? 'primary' : 'outline'}
+                onPress={() => setRol('cliente')}
+                style={{ flex: 1, marginRight: SPACING.xs }}
+              />
+              <AppButton
+                title="Profesional"
+                variant={rol === 'profesional' ? 'primary' : 'outline'}
+                onPress={() => setRol('profesional')}
+                style={{ flex: 1, marginLeft: SPACING.xs }}
+              />
+            </View>
+
+            {/* Términos */}
+            <View style={styles.termsRow}>
+              <Switch
+                value={termsAccepted}
+                onValueChange={setTermsAccepted}
+                trackColor={{ false: '#cbd5e1', true: COLORS.primary }}
+                thumbColor="#ffffff"
+                ios_backgroundColor="#cbd5e1"
+              />
+              <Text style={styles.termsText}>
+                Acepto los{' '}
+                <Text
+                  style={styles.link}
+                  onPress={() => Alert.alert('Términos', 'Pendiente.')}
+                >
+                  Términos
+                </Text>{' '}
+                y la{' '}
+                <Text
+                  style={styles.link}
+                  onPress={() => Alert.alert('Privacidad', 'Pendiente.')}
+                >
+                  Privacidad
+                </Text>
+                .
               </Text>
-              .
+            </View>
+
+            {/* Botón Crear cuenta */}
+            <AppButton
+              title={loading ? 'Creando...' : 'Crear cuenta'}
+              onPress={handleSubmit}
+              disabled={loading}
+              style={styles.mainButton}
+            />
+
+            {/* Footer */}
+            <Text style={styles.footer}>
+              ¿Ya tenés cuenta?{' '}
+              <Text
+                style={styles.footerLink}
+                onPress={() => navigation?.navigate('Login')}
+              >
+                Iniciar sesión
+              </Text>
             </Text>
           </View>
-
-          {/* Botón Crear cuenta */}
-          <TouchableOpacity
-            style={[styles.button, loading && { opacity: 0.7 }]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>{loading ? 'Creando...' : 'Crear cuenta'}</Text>
-          </TouchableOpacity>
-
-          {/* Footer */}
-          <Text style={styles.footer}>
-            ¿Ya tenés cuenta?{' '}
-            <Text style={styles.footerLink} onPress={() => navigation?.navigate('Login')}>
-              Iniciar sesión
-            </Text>
-          </Text>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </AppScreen>
   );
 };
 
 export default Register;
-
-/* ===== Colores y estilo alineados al HTML ===== */
-const COLORS = {
-  bg: '#f7f9fc',
-  text: '#1f2937',
-  muted: '#6b7280',
-  input: '#e9eef5',
-  border: '#dbe3ef',
-  primary: '#1d8cff',
-  primary600: '#1876d9',
-  ok: '#166534',
-  okBg: '#dcfce7',
-  okBd: '#bbf7d0',
-  err: '#b91c1c',
-  errBg: '#fee2e2',
-  errBd: '#fecaca',
-  link: '#0f60e6',
-};
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.bg },
@@ -259,111 +244,57 @@ const styles = StyleSheet.create({
   content: {
     width: '100%',
     maxWidth: 360,
-    paddingHorizontal: 16,
-    paddingBottom: 36,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xl + SPACING.md,
   },
   logo: {
     width: 120,
     height: 48,
     alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.text,
     textAlign: 'center',
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
   },
   subtitle: {
     textAlign: 'center',
-    color: COLORS.muted,
+    color: COLORS.textMuted,
     fontSize: 14,
     lineHeight: 20,
     marginHorizontal: 6,
-    marginBottom: 22,
+    marginBottom: SPACING.lg + SPACING.sm,
   },
-  alert: {
-    marginTop: 6,
-    marginBottom: 8,
-    fontSize: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
+  segmented: {
+    flexDirection: 'row',
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.sm,
   },
-  alertOk: { color: COLORS.ok, backgroundColor: COLORS.okBg, borderColor: COLORS.okBd },
-  alertErr: { color: COLORS.err, backgroundColor: COLORS.errBg, borderColor: COLORS.errBd },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginLeft: 4,
-    marginBottom: 6,
-  },
-  input: {
-    width: '100%',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.input,
-    fontSize: 15,
-    color: COLORS.text,
-    marginBottom: 10,
-  },
-  segmented: { flexDirection: 'row', marginBottom: 10 },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-  },
-  segmentActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  segmentText: { fontWeight: '700', color: COLORS.text },
-  segmentTextActive: { color: '#fff' },
   termsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
-    marginBottom: 6,
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.xs,
   },
-  termsText: { color: COLORS.muted, fontSize: 13, flex: 1, flexWrap: 'wrap' },
-  link: { color: COLORS.link, textDecorationLine: 'underline' },
-  button: {
-    width: '100%',
-    marginTop: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+  termsText: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    flex: 1,
+    flexWrap: 'wrap',
+    marginLeft: SPACING.sm,
   },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  link: { color: COLORS.primary, textDecorationLine: 'underline' },
+  mainButton: {
+    marginTop: SPACING.md,
+    borderRadius: RADII.md,
+  },
   footer: {
     textAlign: 'center',
-    marginTop: 14,
+    marginTop: SPACING.md,
     fontSize: 14,
-    color: COLORS.muted,
+    color: COLORS.textMuted,
   },
-  footerLink: { color: COLORS.link, textDecorationLine: 'underline' },
+  footerLink: { color: COLORS.primary, textDecorationLine: 'underline' },
 });

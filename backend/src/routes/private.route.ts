@@ -1,6 +1,6 @@
 // src/routes/private.route.ts
-import { Router } from 'express';
-//Middlewares
+import { Router, Request, Response } from 'express';
+import { requireAuth } from '../middlewares/requireAuth.middleware';
 import { requireRole } from '../middlewares/requireRole.middleware';
 // Controllers
 import { getCurrentUserController } from '../controllers/users.controller';
@@ -8,6 +8,7 @@ import {
   getMyProfessionalProfileController,
   createMyProfessionalProfileController,
   updateMyProfessionalProfileController,
+  getMyAppProfileController,
 } from '../controllers/profiles.controller';
 
 const router = Router();
@@ -20,6 +21,62 @@ router.get('/profile', requireRole('PROFESIONAL'), getMyProfessionalProfileContr
 router.post('/profile', requireRole('PROFESIONAL'), createMyProfessionalProfileController); // Crear perfil profesional del usuario autenticado
 router.patch('/profile', requireRole('PROFESIONAL'), updateMyProfessionalProfileController); // Actualizar perfil profesional del usuario autenticado
 
-// Más cosas privadas después: /profiles/:id, /profiles/:id/locations, etc.
+/**
+ * GET /api/v1/private/app/me
+ * Perfil “app” (se usa en Home, Profile, etc.)
+ */
+router.get('/app/me', requireAuth, getMyAppProfileController);
+
+/**
+ * POST /api/v1/private/app/works
+ * Crea un trabajo/servicio realizado por el profesional.
+ *
+ * Body:
+ * {
+ *   "title": string;
+ *   "description": string;
+ *   "date"?: string;         // YYYY-MM-DD opcional
+ *   "imageUrls"?: string[];  // opcional
+ * }
+ */
+router.post(
+  '/app/works',
+  requireAuth,
+  requireRole('PROFESIONAL'),
+  async (req: Request, res: Response) => {
+    try {
+      const { title, description, date, imageUrls } = req.body;
+
+      if (!title || !description) {
+        return res
+          .status(400)
+          .json({ message: 'title y description son obligatorios' });
+      }
+
+      // TODO: acá más adelante vas a guardar en la BD real.
+      // Por ahora devolvemos un mock para que el frontend funcione.
+
+      const newWork = {
+        id: Date.now(), // ID mock
+        titulo: title,
+        descripcion: description,
+        fecha: date || null,
+        imagenes: Array.isArray(imageUrls)
+          ? imageUrls.map((url: string, index: number) => ({
+              url,
+              orden: index,
+            }))
+          : [],
+      };
+
+      return res.status(201).json(newWork);
+    } catch (err) {
+      console.error('Error en POST /private/app/works', err);
+      return res
+        .status(500)
+        .json({ message: 'Error interno al crear el trabajo' });
+    }
+  },
+);
 
 export default router;

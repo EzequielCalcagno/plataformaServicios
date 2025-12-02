@@ -1,20 +1,25 @@
 // src/screens/Login.tsx
 import React, { useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
   StyleSheet,
-  TextInput,
-  TouchableOpacity,
   Image,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { login } from '../services/auth.client';
 import { decodeJwtPayload } from '../utils/jwt';
 import { AppRole, mapRolFromId } from '../utils/roles';
+
+// 🔹 componentes genéricos
+import { AppScreen } from '../components/AppScreen';
+import { AppInput } from '../components/AppInput';
+import { AppAlert } from '../components/AppAlert';
+import { AppButton } from '../components/AppButton';
+import { COLORS, SPACING } from '../styles/theme';
 
 interface LoginProps {
   navigation?: any;
@@ -42,19 +47,22 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
 
       const { token } = await login(email.trim(), password);
       const decoded = decodeJwtPayload(token);
+
       const appRole: AppRole = mapRolFromId(decoded?.rolId);
 
-      // Guardar token y rol (user lo podés traer luego con un /me si querés)
       await AsyncStorage.multiSet([
         ['@token', token],
         ['@role', appRole],
-        decoded?.sub ? ['@userId', decoded.sub] : ['@userId', ''],
+        ['@userId', decoded?.id ? String(decoded.id) : ''],
       ]);
 
       setOk(true);
       setAlertMsg('¡Inicio de sesión correcto!');
 
-      navigation?.replace('Profile', { role: appRole });
+      navigation?.reset({
+        index: 0,
+        routes: [{ name: 'MainTabs' }],
+      });
     } catch (err: any) {
       setOk(false);
       setAlertMsg(err?.message || 'No se pudo iniciar sesión');
@@ -68,67 +76,74 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <AppScreen style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.select({ ios: 'padding', android: undefined })}
       >
         <View style={styles.content}>
+          {/* Logo */}
           <Image
             source={require('../../assets/images/fixo-logo.png')}
             style={styles.logo}
             resizeMode="contain"
           />
 
+          {/* Títulos */}
           <Text style={styles.title}>Bienvenido a Fixo</Text>
           <Text style={styles.subtitle}>
             Encontrá técnicos de servicios para el hogar en Uruguay.
           </Text>
 
-          {alertMsg ? (
-            <Text style={[styles.alert, ok ? styles.alertOk : styles.alertErr, styles.alertText]}>
-              {alertMsg}
-            </Text>
-          ) : null}
+          {/* Alertas */}
+          {alertMsg && (
+            <AppAlert
+              type={ok ? 'success' : 'error'}
+              message={alertMsg}
+              style={{ marginBottom: SPACING.sm }}
+            />
+          )}
 
+          {/* Email */}
           <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor={COLORS.muted}
+          <AppInput
+            placeholder="correo@ejemplo.com"
             keyboardType="email-address"
             autoCapitalize="none"
             value={email}
             onChangeText={setEmail}
           />
 
+          {/* Contraseña + toggle */}
           <Text style={styles.label}>Contraseña</Text>
           <View style={styles.row}>
-            <TextInput
-              style={[styles.input, styles.inputFlex]}
+            <AppInput
               placeholder="Password"
-              placeholderTextColor={COLORS.muted}
               secureTextEntry={secure}
               value={password}
               onChangeText={setPassword}
+              containerStyle={[styles.inputFlex, { marginBottom: 0 }]}
             />
             <TouchableOpacity
-              onPress={() => setSecure((s) => !s)}
+              onPress={() => setSecure(s => !s)}
               style={styles.toggle}
               accessibilityLabel="Mostrar u ocultar contraseña"
             >
-              <Text style={styles.toggleText}>{secure ? 'Mostrar' : 'Ocultar'}</Text>
+              <Text style={styles.toggleText}>
+                {secure ? 'Mostrar' : 'Ocultar'}
+              </Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={[styles.button, loading && { opacity: 0.7 }]}
+          {/* Botón login */}
+          <AppButton
+            title={loading ? 'Ingresando...' : 'Iniciar sesión'}
             onPress={handleLoginPress}
             disabled={loading}
-          >
-            <Text style={styles.buttonText}>{loading ? 'Ingresando...' : 'Iniciar sesión'}</Text>
-          </TouchableOpacity>
+            style={{ marginTop: SPACING.md }}
+          />
 
+          {/* Footer */}
           <Text style={styles.footer}>
             ¿No tenés una cuenta?{' '}
             <Text style={styles.footerLink} onPress={handleSignUpPress}>
@@ -137,31 +152,16 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
           </Text>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </AppScreen>
   );
 };
 
 export default Login;
 
-/* ===== Colores alineados al HTML ===== */
-const COLORS = {
-  bg: '#f7f9fc',
-  text: '#1f2937',
-  muted: '#6b7280',
-  input: '#e9eef5',
-  border: '#dbe3ef',
-  primary: '#1d8cff',
-  primary600: '#1876d9',
-  ok: '#166534',
-  okBg: '#dcfce7',
-  okBd: '#bbf7d0',
-  err: '#b91c1c',
-  errBg: '#fee2e2',
-  errBd: '#fecaca',
-};
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.bg },
+  safe: {
+    backgroundColor: COLORS.bg,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.bg,
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     textAlign: 'center',
-    color: COLORS.muted,
+    color: COLORS.textMuted,
     fontSize: 14,
     lineHeight: 20,
     marginHorizontal: 6,
@@ -204,20 +204,14 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     marginBottom: 6,
   },
-  input: {
-    width: '100%',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.input,
-    fontSize: 15,
-    color: COLORS.text,
-    marginBottom: 10,
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
   },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  inputFlex: { flex: 1, marginBottom: 0 },
+  inputFlex: {
+    flex: 1,
+  },
   toggle: {
     marginLeft: 8,
     paddingVertical: 10,
@@ -225,34 +219,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.cardBg,
   },
-  toggleText: { color: COLORS.primary, fontWeight: '700' },
-  button: {
-    width: '100%',
-    marginTop: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
+  toggleText: {
+    color: COLORS.primary,
+    fontWeight: '700',
   },
-  buttonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   footer: {
     textAlign: 'center',
     marginTop: 14,
     fontSize: 14,
-    color: COLORS.muted,
+    color: COLORS.textMuted,
   },
-  footerLink: { color: '#0f60e6', textDecorationLine: 'underline' },
-  alert: {
-    marginTop: 6,
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
+  footerLink: {
+    color: COLORS.primary,
+    textDecorationLine: 'underline',
   },
-  alertOk: { backgroundColor: COLORS.okBg, borderColor: COLORS.okBd },
-  alertErr: { backgroundColor: COLORS.errBg, borderColor: COLORS.errBd },
-  alertText: { color: COLORS.text, fontSize: 14 },
 });

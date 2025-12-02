@@ -1,7 +1,10 @@
 // src/utils/jwt.ts
-interface JwtPayload {
-  sub: string;
-  email: string;
+
+// Payload del JWT tal como lo usamos en la app/backend
+export interface JwtPayload {
+  id?: string | number;   // 👈 AHORA sí existe 'id'
+  sub?: string;           // por si alguna vez lo usás también
+  email?: string;
   rolId?: number;
   iat?: number;
   exp?: number;
@@ -16,9 +19,11 @@ export const decodeJwtPayload = (token: string): JwtPayload | null => {
     // React Native a veces no trae atob, podés instalar "base-64" si hace falta
     const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
     const decoded =
-      typeof atob === 'function' ? atob(base64) : Buffer.from(base64, 'base64').toString('utf8');
+      typeof atob === 'function'
+        ? atob(base64)
+        : Buffer.from(base64, 'base64').toString('utf8');
 
-    return JSON.parse(decoded);
+    return JSON.parse(decoded) as JwtPayload;
   } catch {
     return null;
   }

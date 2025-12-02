@@ -8,7 +8,8 @@ import cors from 'cors';
 import publicRouter from './routes/public.route';
 import authRouter from './routes/auth.route';
 import privateRouter from './routes/private.route';
-
+import workUploadsRouter from './routes/workUploads';
+import path from 'path';
 // Middlewares
 import { requireAuth } from './middlewares/requireAuth.middleware';
 
@@ -38,7 +39,9 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use(`${prefix}`, publicRouter);
 app.use(`${prefix}/auth`, authRouter);
-app.use(`${prefix}`, requireAuth, privateRouter);
+app.use(`${prefix}/private`, requireAuth, privateRouter);
+app.use('/api/v1', workUploadsRouter);
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
