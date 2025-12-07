@@ -5,7 +5,7 @@ import { loginService, registerService } from '../services/auth.service';
 // Constants
 import { mapRolToRoleKey } from '../constants/roles';
 
-export const Login = async (req: Request, res: Response) => {
+export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
   try {
     const token = await loginService(email, password);
@@ -16,7 +16,7 @@ export const Login = async (req: Request, res: Response) => {
   }
 };
 
-export const Register = async (req: Request, res: Response) => {
+export const register = async (req: Request, res: Response) => {
   const { email, password, rol, nombre, apellido, telefono } = req.body;
 
   try {
@@ -28,7 +28,7 @@ export const Register = async (req: Request, res: Response) => {
       rolCode,
       nombre,
       apellido,
-      telefono, 
+      telefono,
     });
 
     return res.status(201).json({ message: 'Usuario registrado exitosamente' });

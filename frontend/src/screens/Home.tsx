@@ -8,9 +8,11 @@ import {
   ActivityIndicator,
   TouchableOpacity,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-import { API_URL } from '../utils/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { getMyProfile, ProfileResponse } from '../services/profile.client';
+import { ApiError } from '../utils/http';
 
 // 🔹 Componentes genéricos
 import { AppScreen } from '../components/AppScreen';
@@ -21,69 +23,46 @@ import { COLORS, SPACING, RADII } from '../styles/theme';
 
 const ROLE_PROFESSIONAL = 2;
 
-type AppProfile = {
-  roleId: number;
-  photoUrl?: string;
-  name: string;
-  location?: string;
-  rating?: number;
-  jobsCompleted?: number;
-};
-
 export default function Home() {
   const navigation = useNavigation<any>();
-  const [profile, setProfile] = useState<AppProfile | null>(null);
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   const isProfessional = profile?.roleId === ROLE_PROFESSIONAL;
 
   useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const token = await AsyncStorage.getItem('@token');
-        if (!token) {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          });
-          return;
-        }
+  const loadProfile = async () => {
+    try {
+      const token = await AsyncStorage.getItem('@token');
 
-        const res = await fetch(`${API_URL}/private/app/me`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      if (!token) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
         });
-
-        if (!res.ok) {
-          const text = await res.text();
-          console.log('❌ Error backend perfil:', res.status, text);
-
-          if (res.status === 401) {
-            await AsyncStorage.removeItem('@token');
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Login' }],
-            });
-            return;
-          }
-
-          throw new Error('No se pudo cargar el perfil');
-        }
-
-        const data = await res.json();
-        setProfile(data);
-      } catch (err) {
-        console.error('Error cargando perfil en Home:', err);
-      } finally {
-        setLoading(false);
+        return;
       }
-    };
 
-    loadProfile();
-  }, [navigation]);
+      const data = await getMyProfile();
+      setProfile(data);
+    } catch (err) {
+      console.error('Error cargando perfil en Home:', err);
 
+      if (err instanceof ApiError && err.status === 401) {
+        await AsyncStorage.removeItem('@token');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        });
+        return;
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadProfile();
+}, [navigation]);
   // ===== ESTADOS ESPECIALES =====
 
   if (loading) {
@@ -114,7 +93,7 @@ export default function Home() {
     );
   }
 
-  const firstName = profile.name.split(' ')[0] || profile.name;
+  const firstName = profile.name;
 
   // Menú para cliente
   const clientMenu = [

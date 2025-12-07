@@ -123,12 +123,21 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
               />
             )}
 
-            {/* Nombre y apellido */}
+            {/* Nombre*/}
             <AppInput
-              label="Nombre y apellido"
-              placeholder="Nombre Apellido"
-              value={fullname}
-              onChangeText={setFullname}
+              label="Nombre"
+              placeholder="Nombre"
+              value={name}
+              onChangeText={setName}
+              style={{ marginBottom: SPACING.sm }}
+            />
+
+            {/* Apellido */}
+            <AppInput
+              label="Apellido"
+              placeholder="Apellido"
+              value={apellido}
+              onChangeText={setApellido}
               style={{ marginBottom: SPACING.sm }}
             />
 
@@ -189,17 +198,11 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
               />
               <Text style={styles.termsText}>
                 Acepto los{' '}
-                <Text
-                  style={styles.link}
-                  onPress={() => Alert.alert('Términos', 'Pendiente.')}
-                >
+                <Text style={styles.link} onPress={() => Alert.alert('Términos', 'Pendiente.')}>
                   Términos
                 </Text>{' '}
                 y la{' '}
-                <Text
-                  style={styles.link}
-                  onPress={() => Alert.alert('Privacidad', 'Pendiente.')}
-                >
+                <Text style={styles.link} onPress={() => Alert.alert('Privacidad', 'Pendiente.')}>
                   Privacidad
                 </Text>
                 .
@@ -217,10 +220,7 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
             {/* Footer */}
             <Text style={styles.footer}>
               ¿Ya tenés cuenta?{' '}
-              <Text
-                style={styles.footerLink}
-                onPress={() => navigation?.navigate('Login')}
-              >
+              <Text style={styles.footerLink} onPress={() => navigation?.navigate('Login')}>
                 Iniciar sesión
               </Text>
             </Text>

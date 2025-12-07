@@ -8,7 +8,6 @@ import {
   getMyProfessionalProfileController,
   createMyProfessionalProfileController,
   updateMyProfessionalProfileController,
-  getMyAppProfileController,
 } from '../controllers/profiles.controller';
 
 const router = Router();
@@ -21,11 +20,10 @@ router.get('/profile', requireRole('PROFESIONAL'), getMyProfessionalProfileContr
 router.post('/profile', requireRole('PROFESIONAL'), createMyProfessionalProfileController); // Crear perfil profesional del usuario autenticado
 router.patch('/profile', requireRole('PROFESIONAL'), updateMyProfessionalProfileController); // Actualizar perfil profesional del usuario autenticado
 
-/**
- * GET /api/v1/private/app/me
- * Perfil “app” (se usa en Home, Profile, etc.)
- */
-router.get('/app/me', requireAuth, getMyAppProfileController);
+// --------------- UBICATION ROUTES ---------------
+
+
+
 
 /**
  * POST /api/v1/private/app/works
@@ -48,9 +46,7 @@ router.post(
       const { title, description, date, imageUrls } = req.body;
 
       if (!title || !description) {
-        return res
-          .status(400)
-          .json({ message: 'title y description son obligatorios' });
+        return res.status(400).json({ message: 'title y description son obligatorios' });
       }
 
       // TODO: acá más adelante vas a guardar en la BD real.
@@ -72,9 +68,7 @@ router.post(
       return res.status(201).json(newWork);
     } catch (err) {
       console.error('Error en POST /private/app/works', err);
-      return res
-        .status(500)
-        .json({ message: 'Error interno al crear el trabajo' });
+      return res.status(500).json({ message: 'Error interno al crear el trabajo' });
     }
   },
 );

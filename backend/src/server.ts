@@ -25,6 +25,7 @@ const corsOptions = {
 
 (async () => {
   try {
+    // Aquí podrías inicializar la conexión a la base de datos u otros servicios
   } catch (error) {
     console.error(error);
     process.exit(1);

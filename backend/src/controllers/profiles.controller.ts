@@ -11,6 +11,8 @@ export const getMyProfessionalProfileController = async (req: Request, res: Resp
   try {
     const authUser: any = (req as any).user;
 
+    const userId = authUser?.id;
+
     if (!userId || typeof userId !== 'string') {
       return res.status(400).json({ error: 'ID de usuario no válido' });
     }
@@ -18,76 +20,13 @@ export const getMyProfessionalProfileController = async (req: Request, res: Resp
     const profile = await getProfessionalProfileByUserIdService(userId);
 
     if (!profile) {
-      return res
-        .status(404)
-        .json({ error: 'Perfil profesional no encontrado' });
+      return res.status(404).json({ error: 'Perfil profesional no encontrado' });
     }
 
     return res.status(200).json(profile);
   } catch (error) {
     console.error('❌ Error en getMyProfessionalProfileController:', error);
-    return res
-      .status(500)
-      .json({ error: 'Error al obtener el perfil profesional' });
-  }
-};
-
-// 🔹 Perfil para la app móvil (cliente o profesional)
-export const getMyAppProfileController = async (
-  req: Request,
-  res: Response,
-) => {
-  try {
-    const authUser: any = (req as any).user;
-
-    if (!authUser) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
-    }
-
-    console.log('👤 authUser en getMyAppProfileController:', authUser);
-
-    // 👉 OJO: para la app usamos el id tal cual (puede ser 'p_00005', 'c_00001', etc.)
-    const rawId = authUser.id ?? authUser.sub ?? null;
-
-    if (!rawId) {
-      console.error('⚠️ Token sin id/sub de usuario');
-      return res
-        .status(400)
-        .json({ error: 'Token sin identificador de usuario' });
-    }
-
-    // No convertimos a número: puede ser string tipo 'p_00005'
-    const userId: string | number = rawId;
-
-    // Rol: sí suele ser numérico
-    const rawRolId =
-      authUser.rolId ??
-      authUser.id_rol ??
-      authUser.roleId ??
-      authUser.role_id ??
-      null;
-
-    let rolId: number | undefined = undefined;
-    if (rawRolId != null) {
-      rolId =
-        typeof rawRolId === 'number'
-          ? rawRolId
-          : Number(rawRolId);
-
-      if (Number.isNaN(rolId)) {
-        console.error('⚠️ rolId del token no es numérico:', rawRolId);
-        rolId = undefined; // si querés, acá podrías devolver 400
-      }
-    }
-
-    const profile = await getAppProfileByUserIdService(userId, rolId);
-
-    return res.status(200).json(profile);
-  } catch (e) {
-    console.error('❌ Error en getMyAppProfileController:', e);
-    return res
-      .status(500)
-      .json({ error: 'Error al obtener el perfil para la app' });
+    return res.status(500).json({ error: 'Error al obtener el perfil profesional' });
   }
 };
 

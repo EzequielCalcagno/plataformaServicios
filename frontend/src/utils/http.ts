@@ -1,5 +1,6 @@
 // src/utils/http.ts
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_URL = Constants.expoConfig?.extra?.API_URL;
 
@@ -21,7 +22,7 @@ export interface HttpOptions {
   method?: HttpMethod;
   headers?: Record<string, string>;
   body?: any;
-  token?: string | null;
+  token?: string | null; // si lo pasás, pisa el de AsyncStorage
   timeoutMs?: number;
   query?: Record<string, string | number | boolean | undefined | null>;
 }
@@ -43,8 +44,22 @@ function buildUrl(path: string, query?: HttpOptions['query']): string {
   return qs ? `${fullPath}?${qs}` : fullPath;
 }
 
-export async function http<T = any>(path: string, opts: HttpOptions = {}): Promise<T> {
-  const { method = 'GET', headers = {}, body, token, timeoutMs = 12000, query } = opts;
+export async function http<T = any>(
+  path: string,
+  opts: HttpOptions = {}
+): Promise<T> {
+  const {
+    method = 'GET',
+    headers = {},
+    body,
+    token: explicitToken,
+    timeoutMs = 12000,
+    query,
+  } = opts;
+
+  // 👇 si no me pasás token explícito, levanto el de AsyncStorage
+  const storedToken = await AsyncStorage.getItem('@token');
+  const token = explicitToken ?? storedToken;
 
   const url = buildUrl(path, query);
   console.log('🌐 Fetching:', method, url);
@@ -69,7 +84,6 @@ export async function http<T = any>(path: string, opts: HttpOptions = {}): Promi
       signal: controller.signal,
     });
 
-    // 204 No Content → no intentes parsear JSON
     if (res.status === 204) {
       return {} as T;
     }
@@ -83,7 +97,8 @@ export async function http<T = any>(path: string, opts: HttpOptions = {}): Promi
     }
 
     if (!res.ok) {
-      const msg = (data && (data.error || data.message)) || `HTTP ${res.status}`;
+      const msg =
+        (data && (data.error || data.message)) || `HTTP ${res.status}`;
       throw new ApiError(msg, res.status, data);
     }
 
