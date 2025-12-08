@@ -4,39 +4,20 @@ import db from '../config/db';
 // Obtener el perfil profesional por ID de usuario
 export const getProfessionalProfileByUserIdRepository = async (userId: string) => {
   const { data, error } = await db
-    .from('usuarios')
+    .from('perfiles_profesionales')
     .select(
       `
       id,
-      nombre,
-      apellido,
-      email,
-      avatar_url:foto_url,
-      rol:roles (
-        nombre
-      ),
-      perfil:perfiles_profesionales (
-        descripcion,
-        especialidad,
-        experiencia,
-        portada_url,
-        rating_promedio,
-        fecha_actualizacion
-      ),
-      ubicaciones (
-        id,
-        nombreUbicacion:nombre_ubicacion,
-        ciudad,
-        direccion,
-        coordenadas,
-        tipo,
-        principal,
-        activa,
-        fecha_registro
-      )
+      usuario_id,
+      descripcion,
+      especialidad,
+      experiencia,
+      portada_url,
+      rating_promedio,
+      fecha_actualizacion
     `,
     )
-    .eq('id', userId)
+    .eq('usuario_id', userId)
     .single();
 
   if (error) {

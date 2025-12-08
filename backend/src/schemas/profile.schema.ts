@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ProfessionalSchema = z.object({
+export const ProfessionalProfileSchema = z.object({
   descripcion: z.string().optional().nullable(),
   especialidad: z.string().optional().nullable(),
   experiencia: z.string().optional().nullable(),
@@ -28,12 +28,10 @@ export const ProfessionalProfileResponseSchema = z.object({
   avatarUrl: z.string().url().nullable().optional(),
   rol: z.string().nullable(),
 
-  profesional: ProfessionalSchema.nullable(),
+  profesional: ProfessionalProfileSchema.nullable(),
 
   ubicaciones: z.array(UbicationSchema),
 });
-
-export type ProfessionalProfileResponse = z.infer<typeof ProfessionalProfileResponseSchema>;
 
 export const UpdateProfessionalProfileSchema = z.object({
   descripcion: z.string().max(2000).optional(),

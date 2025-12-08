@@ -1,78 +1,21 @@
 // src/services/profiles.service.ts
+import { raw } from 'express';
 import {
   getProfessionalProfileByUserIdRepository,
   upsertProfessionalProfileRepository,
 } from '../repositories/profiles.repository';
 import {
-  ProfessionalProfileResponseSchema,
+  ProfessionalProfileSchema,
   UpdateProfessionalProfileSchema,
 } from '../schemas/profile.schema';
-import { ROLES } from '../constants/roles';
 
-type RawRolItem = {
-  nombre: string;
-};
-
-type RawPerfilProfesional = {
-  descripcion: string | null;
-  especialidad: string | null;
-  experiencia: string | null;
-  portada_url: string | null;
-  rating_promedio: number | null;
-  fecha_actualizacion: string | null;
-};
-
-type RawProfessionalProfileRow = {
-  id: string;
-  nombre: string;
-  apellido: string | null;
-  email: string;
-  avatar_url: string | null;
-  // 👇 el repo devuelve arrays
-  rol: RawRolItem[] | null;
-  perfil: RawPerfilProfesional[] | null;
-  ubicaciones?: any[];
-};
-
-// 🔹 Servicio que ya usás para el perfil profesional “web”
+// Obtener el perfil profesional por ID de usuario
 export const getProfessionalProfileByUserIdService = async (userId: string) => {
-  const rawResponse = await getProfessionalProfileByUserIdRepository(userId);
+  const professional = await getProfessionalProfileByUserIdRepository(userId);
 
-  if (!rawResponse) return null;
+  if (!professional) return null;
 
-  const raw = rawResponse as unknown as RawProfessionalProfileRow;
-
-  const perfil = raw.perfil && raw.perfil.length > 0 ? raw.perfil[0] : null;
-
-  let rolNombre: string | null = null;
-  if (raw.rol && raw.rol.length > 0) {
-    rolNombre = raw.rol[0].nombre;
-  }
-
-  const mapped = {
-    id: raw.id,
-    nombre: raw.nombre,
-    apellido: raw.apellido,
-    email: raw.email,
-    avatarUrl: raw.avatar_url,
-    rol: Array.isArray(rolNombre) && rolNombre.length > 0 ? (rolNombre[0]?.nombre ?? null) : null,
-    profesional:
-      Array.isArray(perfil) && perfil.length > 0
-        ? {
-            descripcion: perfil[0].descripcion,
-            especialidad: perfil[0].especialidad,
-            experiencia: perfil[0].experiencia,
-            portadaUrl: perfil[0].portada_url,
-            ratingPromedio: perfil[0].rating_promedio,
-            fechaActualizacion: perfil[0].fecha_actualizacion
-              ? new Date(perfil[0].fecha_actualizacion).toISOString()
-              : null,
-          }
-        : null,
-    ubicaciones: raw.ubicaciones ?? [],
-  };
-
-  return ProfessionalProfileResponseSchema.parse(mapped);
+  return ProfessionalProfileSchema.parse(professional);
 };
 
 //__________________CAMBIOS ELIAS _______________________________
@@ -85,7 +28,7 @@ export const createMyProfessionalProfileService = async (userId: string, payload
   // 2) Verificar si YA existe
   const existing = await getProfessionalProfileByUserIdRepository(userId);
 
-  if (existing?.perfil) {
+  if (existing) {
     throw new Error('Ya tenés un perfil profesional creado');
   }
 

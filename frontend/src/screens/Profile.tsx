@@ -1,16 +1,10 @@
 // src/screens/Profile.tsx
 import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ScrollView,
-  Image,
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, ScrollView, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { API_URL } from '../utils/api';
+
+import { getMyProfile } from '../services/profile.client';
 
 // 🔹 Componentes genéricos
 import { AppScreen } from '../components/AppScreen';
@@ -78,65 +72,43 @@ export default function Profile({ route, navigation }: Props) {
   const isProfessional = role === 'professional';
 
   const [showMenu, setShowMenu] = useState(false);
-  const [professionalProfile, setProfessionalProfile] =
-    useState<ProfessionalProfile | null>(null);
+  const [professionalProfile, setProfessionalProfile] = useState<ProfessionalProfile | null>(null);
   const [clientProfile, setClientProfile] = useState<ClientProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // 🔹 función reutilizable para cargar el perfil
-  const loadProfile = useCallback(async () => {
+  // 🔄 Carga el perfil según el rol
+  const fetchProfile = useCallback(async () => {
     try {
       setErrorMsg(null);
       setLoading(true);
 
-      const token = await AsyncStorage.getItem('@token');
-      if (!token) {
-        setErrorMsg('No hay sesión activa. Volvé a iniciar sesión.');
-        return;
-      }
-
-      // usamos la nueva ruta de backend: /private/app/me
-      const res = await fetch(`${API_URL}/private/app/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!res.ok) {
-        const txt = await res.text();
-        console.log('Error al cargar perfil', res.status, txt);
-        setErrorMsg(`Error al cargar perfil (${res.status})`);
-        return;
-      }
-
-      const data = await res.json();
+      const data = await getMyProfile();
 
       if (isProfessional) {
-        setProfessionalProfile(data as ProfessionalProfile);
+        setProfessionalProfile(data as unknown as ProfessionalProfile);
         setClientProfile(null);
       } else {
-        setClientProfile(data as ClientProfile);
+        setClientProfile(data as unknown as ClientProfile);
         setProfessionalProfile(null);
       }
     } catch (e) {
-      console.log('Error loadProfile', e);
+      console.log('Error fetchProfile', e);
       setErrorMsg('Error de red al cargar el perfil.');
     } finally {
       setLoading(false);
     }
   }, [isProfessional]);
 
-  // 🔁 Se dispara cada vez que la pantalla Profile gana foco
+  // Refresca el perfil cada vez que se enfoca la pantalla
   useFocusEffect(
     useCallback(() => {
-      loadProfile();
-    }, [loadProfile]),
+      fetchProfile();
+    }, [fetchProfile]),
   );
 
   const handlePressSettings = () => {
-    setShowMenu(prev => !prev);
+    setShowMenu((prev) => !prev);
   };
 
   const handleEditProfile = () => {
@@ -171,9 +143,7 @@ export default function Profile({ route, navigation }: Props) {
     return (
       <AppScreen>
         <View style={styles.centerContainer}>
-          <Text style={[styles.paragraph, { marginBottom: SPACING.md }]}>
-            {errorMsg}
-          </Text>
+          <Text style={[styles.paragraph, { marginBottom: SPACING.md }]}>{errorMsg}</Text>
           <AppButton title="Volver al login" onPress={handleLogout} />
         </View>
       </AppScreen>
@@ -184,9 +154,7 @@ export default function Profile({ route, navigation }: Props) {
     return (
       <AppScreen>
         <View style={styles.centerContainer}>
-          <Text style={styles.paragraph}>
-            No se pudo cargar el perfil profesional.
-          </Text>
+          <Text style={styles.paragraph}>No se pudo cargar el perfil profesional.</Text>
         </View>
       </AppScreen>
     );
@@ -196,9 +164,7 @@ export default function Profile({ route, navigation }: Props) {
     return (
       <AppScreen>
         <View style={styles.centerContainer}>
-          <Text style={styles.paragraph}>
-            No se pudo cargar el perfil del cliente.
-          </Text>
+          <Text style={styles.paragraph}>No se pudo cargar el perfil del cliente.</Text>
         </View>
       </AppScreen>
     );
@@ -232,16 +198,8 @@ export default function Profile({ route, navigation }: Props) {
             </View>
           )}
 
-          <View
-            style={[
-              styles.menuItem,
-              { borderTopWidth: 1, borderTopColor: '#eee' },
-            ]}
-          >
-            <Text
-              style={[styles.menuItemText, { color: COLORS.danger }]}
-              onPress={handleLogout}
-            >
+          <View style={[styles.menuItem, { borderTopWidth: 1, borderTopColor: '#eee' }]}>
+            <Text style={[styles.menuItemText, { color: COLORS.danger }]} onPress={handleLogout}>
               Log Out
             </Text>
           </View>
@@ -253,10 +211,7 @@ export default function Profile({ route, navigation }: Props) {
           <>
             {/* CARD PRINCIPAL PROFESIONAL */}
             <AppCard style={styles.profileCard} withShadow>
-              <Image
-                source={{ uri: professionalProfile.photoUrl }}
-                style={styles.avatar}
-              />
+              <Image source={{ uri: professionalProfile.photoUrl }} style={styles.avatar} />
               <Text style={styles.name}>{professionalProfile.name}</Text>
               <Text style={styles.specialty}>{professionalProfile.specialty}</Text>
               <Text style={styles.location}>{professionalProfile.location}</Text>
@@ -269,24 +224,16 @@ export default function Profile({ route, navigation }: Props) {
 
                 {/* Jobs clickeable → vamos a la tab Bookings */}
                 <View style={styles.statCardTouchable}>
-                  <Text
-                    style={styles.statValue}
-                    onPress={() => navigation.navigate('Bookings')}
-                  >
+                  <Text style={styles.statValue} onPress={() => navigation.navigate('Bookings')}>
                     {professionalProfile.jobsCompleted}
                   </Text>
-                  <Text
-                    style={styles.statLabel}
-                    onPress={() => navigation.navigate('Bookings')}
-                  >
+                  <Text style={styles.statLabel} onPress={() => navigation.navigate('Bookings')}>
                     Jobs
                   </Text>
                 </View>
 
                 <View style={styles.statCard}>
-                  <Text style={styles.statValue}>
-                    {professionalProfile.positiveFeedback}%
-                  </Text>
+                  <Text style={styles.statValue}>{professionalProfile.positiveFeedback}%</Text>
                   <Text style={styles.statLabel}>Positive</Text>
                 </View>
               </View>
@@ -316,28 +263,26 @@ export default function Profile({ route, navigation }: Props) {
 
             {/* PHOTOS */}
             <SectionTitle>Photos</SectionTitle>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {professionalProfile.photos.map(p => (
+            {/* <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {professionalProfile.photos.map((p) => (
                 <Image key={p.id} source={{ uri: p.url }} style={styles.photo} />
               ))}
-            </ScrollView>
+            </ScrollView> */}
 
             {/* REVIEWS */}
             <SectionTitle>Reviews</SectionTitle>
 
             <AppCard style={styles.reviewSummary}>
-              <View style={{ alignItems: 'center', marginRight: SPACING.md }}>
-                <Text style={styles.summaryRating}>
-                  {professionalProfile.rating}
-                </Text>
+              {/* <View style={{ alignItems: 'center', marginRight: SPACING.md }}>
+                <Text style={styles.summaryRating}>{professionalProfile.rating}</Text>
                 <Text style={styles.summaryStars}>★★★★☆</Text>
                 <Text style={styles.summaryCount}>
                   {professionalProfile.ratingSummary.totalReviews} reviews
                 </Text>
-              </View>
+              </View> */}
 
               <View style={{ flex: 1 }}>
-                {professionalProfile.ratingSummary.distribution.map(item => (
+                {/* {professionalProfile.ratingSummary.distribution.map((item) => (
                   <View key={item.stars} style={styles.distrRow}>
                     <Text style={styles.distrLabel}>{item.stars}</Text>
                     <View style={styles.distrBarBg}>
@@ -350,13 +295,13 @@ export default function Profile({ route, navigation }: Props) {
                     </View>
                     <Text style={styles.distrPercent}>{item.percent}%</Text>
                   </View>
-                ))}
+                ))} */}
               </View>
             </AppCard>
 
             <FlatList
               data={professionalProfile.reviews}
-              keyExtractor={item => item.id}
+              keyExtractor={(item) => item.id}
               scrollEnabled={false}
               renderItem={({ item }) => (
                 <AppCard style={styles.reviewCard}>
@@ -367,8 +312,7 @@ export default function Profile({ route, navigation }: Props) {
                       <Text style={styles.reviewTime}>{item.timeAgo}</Text>
                     </View>
                     <Text style={styles.reviewStarsText}>
-                      {'★'.repeat(item.rating)}{' '}
-                      {'☆'.repeat(5 - item.rating)}
+                      {'★'.repeat(item.rating)} {'☆'.repeat(5 - item.rating)}
                     </Text>
                   </View>
                   <Text style={styles.paragraph}>{item.comment}</Text>
@@ -386,18 +330,13 @@ export default function Profile({ route, navigation }: Props) {
             <>
               {/* CARD PRINCIPAL CLIENTE */}
               <AppCard style={styles.profileCard} withShadow>
-                <Image
-                  source={{ uri: clientProfile.photoUrl }}
-                  style={styles.avatar}
-                />
+                <Image source={{ uri: clientProfile.photoUrl }} style={styles.avatar} />
                 <Text style={styles.name}>{clientProfile.name}</Text>
                 <Text style={styles.location}>{clientProfile.location}</Text>
 
                 <View style={[styles.statsRow, { marginTop: SPACING.md }]}>
                   <View style={styles.statCard}>
-                    <Text style={styles.statValue}>
-                      {clientProfile.pendingRequests.length}
-                    </Text>
+                    <Text style={styles.statValue}>{clientProfile.pendingRequests.length}</Text>
                     <Text style={styles.statLabel}>Pending</Text>
                   </View>
                 </View>
@@ -413,16 +352,12 @@ export default function Profile({ route, navigation }: Props) {
               {/* SOLICITUDES PENDIENTES */}
               <SectionTitle>Pending Requests</SectionTitle>
               {clientProfile.pendingRequests.length === 0 ? (
-                <Text style={styles.paragraph}>
-                  You have no pending service requests.
-                </Text>
+                <Text style={styles.paragraph}>You have no pending service requests.</Text>
               ) : (
-                clientProfile.pendingRequests.map(req => (
+                clientProfile.pendingRequests.map((req) => (
                   <AppCard key={req.id} style={styles.card}>
                     <Text style={styles.cardTitle}>{req.serviceType}</Text>
-                    <Text style={styles.cardSubtitle}>
-                      Professional: {req.professionalName}
-                    </Text>
+                    <Text style={styles.cardSubtitle}>Professional: {req.professionalName}</Text>
                     <Text style={styles.paragraph}>Status: {req.status}</Text>
                     <Text style={styles.reviewTime}>{req.createdAt}</Text>
                   </AppCard>

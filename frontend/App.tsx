@@ -13,7 +13,8 @@ import Home from './src/screens/Home';
 import Profile from './src/screens/Profile';
 import AddService from './src/screens/AddService';
 import EditProfile from './src/screens/EditProfile';
-import Jobs from './src/screens/Jobs';
+import Jobs from './src/screens/Jobs'; // para Bookings
+import Search from './src/screens/Search'; // para Search
 
 export type RootStackParamList = {
   Login: undefined;
@@ -25,7 +26,7 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-// ⚠️ Para no pelear con TypeScript, relajamos el tipo del Tab
+// Usamos any para no pelearnos con los tipos del Tab
 const Tab = createBottomTabNavigator<any>();
 
 function MainTabs() {
@@ -56,21 +57,9 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Home" component={Home as any} />
-      <Tab.Screen
-        name="Search"
-        component={Jobs as any}
-        options={{ title: 'Search' }}
-      />
-      <Tab.Screen
-        name="Bookings"
-        component={Jobs as any}
-        options={{ title: 'Bookings' }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={Profile as any}
-        options={{ title: 'Profile' }}
-      />
+      <Tab.Screen name="Search" component={Search as any} options={{ title: 'Search' }} />
+      <Tab.Screen name="Bookings" component={Jobs as any} options={{ title: 'Bookings' }} />
+      <Tab.Screen name="Profile" component={Profile as any} options={{ title: 'Profile' }} />
     </Tab.Navigator>
   );
 }
@@ -79,10 +68,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <NavigationContainer>
-        <Stack.Navigator
-          initialRouteName="Login"
-          screenOptions={{ headerShown: false }}
-        >
+        <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Login" component={Login} />
           <Stack.Screen name="Register" component={Register} />
 
