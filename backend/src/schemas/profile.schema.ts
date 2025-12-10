@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LocationSchema } from './locationSchema';
 
 export const ProfessionalProfileSchema = z.object({
   descripcion: z.string().optional().nullable(),
@@ -7,17 +8,6 @@ export const ProfessionalProfileSchema = z.object({
   portadaUrl: z.string().url().optional().nullable(),
   ratingPromedio: z.number().optional().nullable(),
   fechaActualizacion: z.string().datetime().optional().nullable(),
-});
-
-export const UbicationSchema = z.object({
-  id: z.string(),
-  nombreUbicacion: z.string().optional().nullable(),
-  ciudad: z.string().optional().nullable(),
-  direccion: z.string().optional().nullable(),
-  tipo: z.string().optional().nullable(),
-  principal: z.boolean().optional(),
-  coordenadas: z.any().nullable().optional(),
-  activa: z.boolean().optional(),
 });
 
 export const ProfessionalProfileResponseSchema = z.object({
@@ -30,7 +20,7 @@ export const ProfessionalProfileResponseSchema = z.object({
 
   profesional: ProfessionalProfileSchema.nullable(),
 
-  ubicaciones: z.array(UbicationSchema),
+  ubicaciones: z.array(LocationSchema),
 });
 
 export const UpdateProfessionalProfileSchema = z.object({

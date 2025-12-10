@@ -1,6 +1,5 @@
 // src/routes/private.route.ts
 import { Router, Request, Response } from 'express';
-import { requireAuth } from '../middlewares/requireAuth.middleware';
 import { requireRole } from '../middlewares/requireRole.middleware';
 // Controllers
 import { getCurrentUserController } from '../controllers/users.controller';
@@ -9,8 +8,20 @@ import {
   createMyProfessionalProfileController,
   updateMyProfessionalProfileController,
 } from '../controllers/profiles.controller';
+import {
+  getMyLocationsController,
+  getLocationByIdController,
+  createMyLocationController,
+  updateMyLocationController,
+  deleteMyLocationController,
+} from '../controllers/locations.controller';
 
 const router = Router();
+
+/**
+ * Todas las rutas aquí dentro ya pasan por requireAuth,
+ * porque el server las monta bajo: /api/v1/private → requireAuth → private.router
+ */
 
 // --------------- USER ROUTES ---------------
 router.get('/currentUser', getCurrentUserController); // Obtener datos del usuario autenticado
@@ -20,10 +31,13 @@ router.get('/profile', requireRole('PROFESIONAL'), getMyProfessionalProfileContr
 router.post('/profile', requireRole('PROFESIONAL'), createMyProfessionalProfileController); // Crear perfil profesional del usuario autenticado
 router.patch('/profile', requireRole('PROFESIONAL'), updateMyProfessionalProfileController); // Actualizar perfil profesional del usuario autenticado
 
-// --------------- UBICATION ROUTES ---------------
-
-
-
+// --------------- LOCATION ROUTES ---------------
+router.get('/locations', getMyLocationsController); // Obtener todas las locaciones del usuario autenticado
+router.get('/locations/:id', getLocationByIdController); // Obtener una locación por ID
+router.post('/locations', createMyLocationController); // Crear una nueva locación
+router.patch('/locations/:id', updateMyLocationController); // Actualizar una locación existente
+router.delete('/locations/:id', deleteMyLocationController); // Eliminar una locación
+// --------------- WORK ROUTES ---------------
 
 /**
  * POST /api/v1/private/app/works
@@ -37,40 +51,35 @@ router.patch('/profile', requireRole('PROFESIONAL'), updateMyProfessionalProfile
  *   "imageUrls"?: string[];  // opcional
  * }
  */
-router.post(
-  '/app/works',
-  requireAuth,
-  requireRole('PROFESIONAL'),
-  async (req: Request, res: Response) => {
-    try {
-      const { title, description, date, imageUrls } = req.body;
+router.post('/app/works', requireRole('PROFESIONAL'), async (req: Request, res: Response) => {
+  try {
+    const { title, description, date, imageUrls } = req.body;
 
-      if (!title || !description) {
-        return res.status(400).json({ message: 'title y description son obligatorios' });
-      }
-
-      // TODO: acá más adelante vas a guardar en la BD real.
-      // Por ahora devolvemos un mock para que el frontend funcione.
-
-      const newWork = {
-        id: Date.now(), // ID mock
-        titulo: title,
-        descripcion: description,
-        fecha: date || null,
-        imagenes: Array.isArray(imageUrls)
-          ? imageUrls.map((url: string, index: number) => ({
-              url,
-              orden: index,
-            }))
-          : [],
-      };
-
-      return res.status(201).json(newWork);
-    } catch (err) {
-      console.error('Error en POST /private/app/works', err);
-      return res.status(500).json({ message: 'Error interno al crear el trabajo' });
+    if (!title || !description) {
+      return res.status(400).json({ message: 'title y description son obligatorios' });
     }
-  },
-);
+
+    // TODO: acá más adelante vas a guardar en la BD real.
+    // Por ahora devolvemos un mock para que el frontend funcione.
+
+    const newWork = {
+      id: Date.now(), // ID mock
+      titulo: title,
+      descripcion: description,
+      fecha: date || null,
+      imagenes: Array.isArray(imageUrls)
+        ? imageUrls.map((url: string, index: number) => ({
+            url,
+            orden: index,
+          }))
+        : [],
+    };
+
+    return res.status(201).json(newWork);
+  } catch (err) {
+    console.error('Error en POST /private/app/works', err);
+    return res.status(500).json({ message: 'Error interno al crear el trabajo' });
+  }
+});
 
 export default router;

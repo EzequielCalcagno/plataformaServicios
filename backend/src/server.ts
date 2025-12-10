@@ -38,12 +38,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use(`${prefix}`, publicRouter);
+app.use(`${prefix}/public`, publicRouter);
 app.use(`${prefix}/auth`, authRouter);
 app.use(`${prefix}/private`, requireAuth, privateRouter);
-app.use('/api/v1', workUploadsRouter);
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use(`${prefix}/app/works`, workUploadsRouter); // TODO: Revisar esta ruta que hace esta ruta y ponerla donde debe
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'))); // Servir archivos estáticos desde /uploads
 
+// Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
