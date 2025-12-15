@@ -65,3 +65,31 @@ export const upsertProfessionalProfileRepository = async (
 
   return data;
 };
+export const getProfessionalPublicProfileByUserIdRepository = async (
+  userId: string,
+) => {
+  const { data, error } = await db
+    .from('perfiles_profesionales')
+    .select(
+      `
+      usuario_id,
+      descripcion,
+      especialidad,
+      experiencia,
+      portada_url,
+      rating_promedio
+    `,
+    )
+    .eq('usuario_id', userId)
+    .single();
+
+  if (error) {
+    console.error(
+      '❌ Error en getProfessionalPublicProfileByUserIdRepository:',
+      error,
+    );
+    return null;
+  }
+
+  return data;
+};

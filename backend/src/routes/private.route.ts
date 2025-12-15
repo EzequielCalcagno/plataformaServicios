@@ -3,10 +3,13 @@ import { Router, Request, Response } from 'express';
 import { requireRole } from '../middlewares/requireRole.middleware';
 // Controllers
 import { getCurrentUserController } from '../controllers/users.controller';
+import { searchServiciosController } from '../controllers/search.controller';
+import { getProfessionalProfileByIdController } from '../controllers/profiles.controller';
 import {
   getMyProfessionalProfileController,
   createMyProfessionalProfileController,
   updateMyProfessionalProfileController,
+  getMyAppProfileController,
 } from '../controllers/profiles.controller';
 import {
   getMyLocationsController,
@@ -24,7 +27,10 @@ const router = Router();
  */
 
 // --------------- USER ROUTES ---------------
-router.get('/currentUser', getCurrentUserController); // Obtener datos del usuario autenticado
+router.get(
+  '/currentUser',
+  getCurrentUserController,
+);
 
 // --------------- PROFILE ROUTES ---------------
 router.get('/profile', requireRole('PROFESIONAL'), getMyProfessionalProfileController); // Obtener perfil profesional del usuario autenticado
@@ -39,6 +45,7 @@ router.patch('/locations/:id', updateMyLocationController); // Actualizar una lo
 router.delete('/locations/:id', deleteMyLocationController); // Eliminar una locación
 // --------------- WORK ROUTES ---------------
 
+// --------------- WORKS (Servicios / trabajos) ---------------
 /**
  * POST /api/v1/private/app/works
  * Crea un trabajo/servicio realizado por el profesional.
@@ -52,16 +59,18 @@ router.delete('/locations/:id', deleteMyLocationController); // Eliminar una loc
  * }
  */
 router.post('/app/works', requireRole('PROFESIONAL'), async (req: Request, res: Response) => {
-  try {
+  
     const { title, description, date, imageUrls } = req.body;
 
     if (!title || !description) {
-      return res.status(400).json({ message: 'title y description son obligatorios' });
+      return res
+        .status(400)
+        .json({ message: 'title y description son obligatorios' });
     }
 
-    // TODO: acá más adelante vas a guardar en la BD real.
-    // Por ahora devolvemos un mock para que el frontend funcione.
+    // TODO: guardar en la BD real.
 
+    try {
     const newWork = {
       id: Date.now(), // ID mock
       titulo: title,
@@ -69,17 +78,65 @@ router.post('/app/works', requireRole('PROFESIONAL'), async (req: Request, res: 
       fecha: date || null,
       imagenes: Array.isArray(imageUrls)
         ? imageUrls.map((url: string, index: number) => ({
-            url,
-            orden: index,
-          }))
+          url,
+          orden: index,
+        }))
         : [],
     };
 
     return res.status(201).json(newWork);
   } catch (err) {
     console.error('Error en POST /private/app/works', err);
-    return res.status(500).json({ message: 'Error interno al crear el trabajo' });
+    return res
+      .status(500)
+      .json({ message: 'Error interno al crear el trabajo' });
   }
-});
+
+  // TODO: acá más adelante vas a guardar en la BD real.
+  // Por ahora devolvemos un mock para que el frontend funcione.
+
+  // const newWork = {
+  //   id: Date.now(), // ID mock
+  //   titulo: title,
+  //   descripcion: description,
+  //   fecha: date || null,
+  //   imagenes: Array.isArray(imageUrls)
+  //     ? imageUrls.map((url: string, index: number) => ({
+  //       url,
+  //       orden: index,
+  //     }))
+  //     : [],
+  // };
+
+//   return res.status(201).json(newWork);
+// } catch (err) {
+//   console.error('Error en POST /private/app/works', err);
+//   return res.status(500).json({ message: 'Error interno al crear el trabajo' });
+// }
+ });
+
+/**
+ * (Opcional) GET /api/v1/private/app/works
+ * Para listar los trabajos del profesional en MyAccount / Profile.
+ * Por ahora devuelve un array vacío o un mock.
+ */
+router.get(
+  '/app/works'
+  ,
+  requireRole('PROFESIONAL'),
+  async (_req: Request, res: Response) => {
+    // TODO: traer de la BD real
+    return res.json([]);
+  },
+);
+
+// GET /api/v1/search/servicios?lat=-34.9&lng=-56.1&q=pintura&radiusKm=10
+router.get('/search/servicios', searchServiciosController);
+
+router.get(
+  '/professionals/:userId',
+  getProfessionalProfileByIdController,
+);
+
 
 export default router;

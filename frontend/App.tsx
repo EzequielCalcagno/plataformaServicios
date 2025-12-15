@@ -7,14 +7,21 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
-import Login from './src/screens/Login'; // para Login
-import Register from './src/screens/Register'; // para Register
-import Home from './src/screens/Home'; // para Home
-import Profile from './src/screens/Profile'; // para Profile
-import AddService from './src/screens/AddService'; // para AddService
-import EditProfile from './src/screens/EditProfile'; // para EditProfile
-import Jobs from './src/screens/Jobs'; // para Bookings
-import Search from './src/screens/Search'; // para Search
+import Login from './src/screens/Login';
+import Register from './src/screens/Register';
+import Home from './src/screens/Home';
+
+// Perfil “viejo” para ver otros profesionales
+import Profile from './src/screens/Profile';
+
+// Nuevo perfil “Mi cuenta”
+import MyAccount from './src/screens/MyAccount';
+
+import AddService from './src/screens/AddService';
+import EditProfile from './src/screens/EditProfile';
+import Jobs from './src/screens/Jobs';      // para Bookings
+import Search from './src/screens/Search';  // para Search
+import LocationPicker from './src/screens/LocationPicker';
 import Locations from './src/screens/Locations'; // para Locations
 import LocationFormScreen from './src/screens/LocationForm'; // para LocationForm
 
@@ -24,12 +31,14 @@ export type RootStackParamList = {
   MainTabs: undefined;
   EditProfile: undefined;
   AddService: undefined;
+  ProfessionalProfile?: { professionalId?: number };
+  LocationPicker: undefined;        // 👈 nuevo
   LocationForm: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-// Usamos any para no pelearnos con los tipos del Tab
+// Usamos any para no pelear con los tipos del Tab
 const Tab = createBottomTabNavigator<any>();
 
 function MainTabs() {
@@ -53,7 +62,7 @@ function MainTabs() {
           if (route.name === 'Home') iconName = 'home-outline';
           if (route.name === 'Search') iconName = 'search-outline';
           if (route.name === 'Bookings') iconName = 'calendar-outline';
-          if (route.name === 'Profile') iconName = 'person-outline';
+          if (route.name === 'Account') iconName = 'person-outline';
           if (route.name === 'Locations') iconName = 'location-outline';
 
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -61,10 +70,22 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Home" component={Home as any} />
-      <Tab.Screen name="Search" component={Search as any} options={{ title: 'Search' }} />
-      <Tab.Screen name="Bookings" component={Jobs as any} options={{ title: 'Bookings' }} />
-      <Tab.Screen name="Profile" component={Profile as any} options={{ title: 'Profile' }} />
-      <Tab.Screen name="Locations" component={Locations as any} options={{ title: 'Locations' }} />
+      <Tab.Screen
+        name="Search"
+        component={Search as any}
+        options={{ title: 'Search' }}
+      />
+      <Tab.Screen
+        name="Bookings"
+        component={Jobs as any}
+        options={{ title: 'Bookings' }}
+      />
+      {/* La pestaña Profile ahora muestra MyAccount */}
+      <Tab.Screen
+        name="Account"
+        component={MyAccount as any}
+        options={{ title: 'Account' }}
+      />
     </Tab.Navigator>
   );
 }
@@ -73,7 +94,10 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <NavigationContainer>
-        <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
+        <Stack.Navigator
+          initialRouteName="Login"
+          screenOptions={{ headerShown: false }}
+        >
           <Stack.Screen name="Login" component={Login} />
           <Stack.Screen name="Register" component={Register} />
 
@@ -86,6 +110,13 @@ export default function App() {
 
           {/* Pantallas de Locations */}
           <Stack.Screen name="LocationForm" component={LocationFormScreen} />
+          <Stack.Screen name="LocationPicker" component={LocationPicker} />
+
+          {/* Perfil de otro profesional (usa el Profile viejo) */}
+          <Stack.Screen
+            name="ProfessionalProfile"
+            component={Profile as any}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

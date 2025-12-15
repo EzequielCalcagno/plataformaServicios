@@ -1,12 +1,24 @@
-// src/screens/Profile.tsx
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ScrollView, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  ScrollView,
+  Image,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { getMyProfile } from '../services/profile.client';
+import {
+  getMyProfile,
+  getProfessionalProfileById,
+} from '../services/profile.client';
 
-// 🔹 Componentes genéricos
+// ✅ para llamar /private/profile (perfil profesional completo)
+import { api } from '../utils/api';
+
+// 🔹 Componentes
 import { AppScreen } from '../components/AppScreen';
 import { TopBar } from '../components/TopBar';
 import { AppCard } from '../components/AppCard';
@@ -19,21 +31,26 @@ type Props = {
   route: any;
 };
 
+/* ===========================
+   TIPOS
+=========================== */
+
 type ProfessionalProfile = {
-  photoUrl: string;
+  id: string;
+  photoUrl: string | null;
   name: string;
-  specialty: string;
-  location: string;
-  rating: number;
-  jobsCompleted: number;
-  positiveFeedback: number;
-  about: string;
-  photos: { id: string; url: string }[];
-  ratingSummary: {
-    totalReviews: number;
-    distribution: { stars: number; percent: number }[];
-  };
-  reviews: {
+  specialty?: string | null;
+  location?: string | null;
+  rating?: number | null;
+  jobsCompleted?: number | null;
+  positiveFeedback?: number | null;
+  about?: string | null;
+  services?: {
+    id: string;
+    title: string;
+    category: string;
+  }[];
+  reviews?: {
     id: string;
     clientName: string;
     timeAgo: string;
@@ -45,95 +62,167 @@ type ProfessionalProfile = {
 };
 
 type ClientProfile = {
-  photoUrl: string;
+  photoUrl: string | null;
   name: string;
-  location: string;
+  location: string | null;
   email: string;
   phone: string;
-  pendingRequests: {
-    id: string;
-    serviceType: string;
-    professionalName: string;
-    status: string;
-    createdAt: string;
-  }[];
-  completedWorks: {
-    id: string;
-    title: string;
-    description: string;
-    professionalName: string;
-    date: string;
-  }[];
+  pendingRequests: any[];
 };
 
+/* ===========================
+   HELPERS
+=========================== */
+
+// Normaliza respuestas del backend (por si vienen campos con otros nombres)
+function normalizeProfessionalProfile(input: any): ProfessionalProfile {
+  const id = String(input?.id ?? input?.userId ?? input?.usuario_id ?? '');
+  const name =
+    String(input?.name ?? input?.nombre_completo ?? input?.fullName ?? '').trim();
+
+  const photoUrl =
+    (input?.photoUrl ??
+      input?.portadaUrl ??
+      input?.portada_url ??
+      input?.foto_url ??
+      null) as string | null;
+
+  return {
+    id,
+    photoUrl,
+    name: name || 'Profesional',
+    specialty: input?.specialty ?? input?.especialidad ?? null,
+    location: input?.location ?? input?.ubicacion ?? null,
+    rating: input?.rating ?? input?.rating_promedio ?? null,
+    jobsCompleted: input?.jobsCompleted ?? input?.jobs_completed ?? null,
+    positiveFeedback: input?.positiveFeedback ?? input?.positive_feedback ?? null,
+    about: input?.about ?? input?.descripcion ?? null,
+    services: Array.isArray(input?.services)
+      ? input.services.map((s: any) => ({
+          id: String(s?.id ?? s?.servicio_id ?? ''),
+          title: String(s?.title ?? s?.titulo ?? ''),
+          category: String(s?.category ?? s?.categoria ?? ''),
+        }))
+      : undefined,
+    reviews: Array.isArray(input?.reviews)
+      ? input.reviews.map((r: any) => ({
+          id: String(r?.id ?? ''),
+          clientName: String(r?.clientName ?? r?.cliente ?? ''),
+          timeAgo: String(r?.timeAgo ?? r?.time_ago ?? ''),
+          rating: Number(r?.rating ?? 0),
+          comment: String(r?.comment ?? ''),
+          likes: Number(r?.likes ?? 0),
+          replies: Number(r?.replies ?? 0),
+        }))
+      : undefined,
+  };
+}
+
+function mapCompactToClientProfile(compact: any): ClientProfile {
+  return {
+    photoUrl: (compact?.photoUrl ?? null) as string | null,
+    name: String(compact?.name ?? 'Usuario'),
+    location: (compact?.location ?? null) as string | null,
+    email: '', // todavía no viene en ProfileResponse (compacto)
+    phone: '', // todavía no viene en ProfileResponse (compacto)
+    pendingRequests: [],
+  };
+}
+
+/* ===========================
+   COMPONENTE
+=========================== */
+
 export default function Profile({ route, navigation }: Props) {
-  // role puede venir undefined si entras directo desde la tab
-  const role = route?.params?.role ?? 'professional'; // 'professional' | 'client'
+  // 👉 si viene este param, estamos viendo OTRO profesional
+  const profesionalIdFromRoute = route?.params?.profesionalId ?? null;
+  const isViewingOtherProfessional = !!profesionalIdFromRoute;
+
+  // Rol (solo relevante para MI perfil)
+  const role = route?.params?.role ?? 'professional';
   const isProfessional = role === 'professional';
 
   const [showMenu, setShowMenu] = useState(false);
-  const [professionalProfile, setProfessionalProfile] = useState<ProfessionalProfile | null>(null);
-  const [clientProfile, setClientProfile] = useState<ClientProfile | null>(null);
+
+  const [professionalProfile, setProfessionalProfile] =
+    useState<ProfessionalProfile | null>(null);
+
+  const [clientProfile, setClientProfile] =
+    useState<ClientProfile | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // 🔄 Carga el perfil según el rol
+  /* ===========================
+     FETCH PROFILE
+  =========================== */
+
   const fetchProfile = useCallback(async () => {
     try {
       setErrorMsg(null);
       setLoading(true);
 
-      const data = await getMyProfile();
+      // Caso 1: ver perfil de OTRO profesional (público/visible)
+      if (isViewingOtherProfessional) {
+        const data = await getProfessionalProfileById(profesionalIdFromRoute);
+        const normalized = normalizeProfessionalProfile(data);
+        if (!normalized.id) {
+          throw new Error('Perfil profesional inválido (sin id)');
+        }
+        setProfessionalProfile(normalized);
+        setClientProfile(null);
+        return;
+      }
 
+      // Caso 2: mi perfil
       if (isProfessional) {
-        setProfessionalProfile(data as unknown as ProfessionalProfile);
+        // ✅ MI PERFIL PROFESIONAL COMPLETO (NO usar getMyProfile que es compacto)
+        const data = await api.get<any>('/private/profile');
+        const normalized = normalizeProfessionalProfile(data);
+        if (!normalized.id) {
+          // si tu backend devuelve sin "id", revisamos luego el endpoint
+          throw new Error('Tu perfil profesional llegó sin id');
+        }
+        setProfessionalProfile(normalized);
         setClientProfile(null);
       } else {
-        setClientProfile(data as unknown as ClientProfile);
+        // Caso 3: cliente (por ahora, el único endpoint disponible es compacto)
+        const compact = await getMyProfile();
+        setClientProfile(mapCompactToClientProfile(compact));
         setProfessionalProfile(null);
       }
     } catch (e) {
-      console.log('Error fetchProfile', e);
-      setErrorMsg('Error de red al cargar el perfil.');
+      console.log('❌ Error fetchProfile', e);
+      setErrorMsg('Error al cargar el perfil.');
     } finally {
       setLoading(false);
     }
-  }, [isProfessional]);
+  }, [isViewingOtherProfessional, profesionalIdFromRoute, isProfessional]);
 
-  // Refresca el perfil cada vez que se enfoca la pantalla
   useFocusEffect(
     useCallback(() => {
       fetchProfile();
     }, [fetchProfile]),
   );
 
-  const handlePressSettings = () => {
-    setShowMenu((prev) => !prev);
-  };
-
-  const handleEditProfile = () => {
-    setShowMenu(false);
-    navigation.navigate('EditProfile');
-  };
-
-  const handleAddService = () => {
-    setShowMenu(false);
-    navigation.navigate('AddService');
-  };
+  /* ===========================
+     LOGOUT
+  =========================== */
 
   const handleLogout = async () => {
-    setShowMenu(false);
     await AsyncStorage.multiRemove(['@token', '@user', '@role', '@userId']);
     navigation.replace('Login');
   };
 
-  // ======== ESTADOS DE CARGA / ERROR ========
+  /* ===========================
+     ESTADOS
+  =========================== */
 
   if (loading) {
     return (
       <AppScreen>
-        <View style={styles.centerContainer}>
-          <Text style={styles.paragraph}>Cargando perfil...</Text>
+        <View style={styles.center}>
+          <Text>Cargando perfil…</Text>
         </View>
       </AppScreen>
     );
@@ -142,401 +231,279 @@ export default function Profile({ route, navigation }: Props) {
   if (errorMsg) {
     return (
       <AppScreen>
-        <View style={styles.centerContainer}>
-          <Text style={[styles.paragraph, { marginBottom: SPACING.md }]}>{errorMsg}</Text>
-          <AppButton title="Volver al login" onPress={handleLogout} />
+        <View style={styles.center}>
+          <Text>{errorMsg}</Text>
+          {!isViewingOtherProfessional && (
+            <AppButton title="Salir" onPress={handleLogout} />
+          )}
         </View>
       </AppScreen>
     );
   }
 
-  if (isProfessional && !professionalProfile) {
-    return (
-      <AppScreen>
-        <View style={styles.centerContainer}>
-          <Text style={styles.paragraph}>No se pudo cargar el perfil profesional.</Text>
-        </View>
-      </AppScreen>
-    );
-  }
-
-  if (!isProfessional && !clientProfile) {
-    return (
-      <AppScreen>
-        <View style={styles.centerContainer}>
-          <Text style={styles.paragraph}>No se pudo cargar el perfil del cliente.</Text>
-        </View>
-      </AppScreen>
-    );
-  }
-
-  // ======== RENDER PRINCIPAL ========
+  /* ===========================
+     RENDER
+  =========================== */
 
   return (
     <AppScreen>
-      {/* HEADER SIMPLE con tuerca */}
+      {/* HEADER */}
       <TopBar
-        title="Profile"
-        rightIcon={<Text style={{ fontSize: 20 }}>⚙️</Text>}
-        onPressRight={handlePressSettings}
+        title="Perfil"
+        rightIcon={
+          !isViewingOtherProfessional ? (
+            <Text style={{ fontSize: 20 }}>⚙️</Text>
+          ) : null
+        }
+        onPressRight={
+          !isViewingOtherProfessional
+            ? () => setShowMenu((p) => !p)
+            : undefined
+        }
       />
 
-      {/* Menú flotante */}
-      {showMenu && (
+      {/* MENU */}
+      {showMenu && !isViewingOtherProfessional && (
         <View style={styles.menu}>
-          <View style={styles.menuItem}>
-            <Text style={styles.menuItemText} onPress={handleEditProfile}>
-              Edit Profile
-            </Text>
-          </View>
-
-          {isProfessional && (
-            <View style={styles.menuItem}>
-              <Text style={styles.menuItemText} onPress={handleAddService}>
-                Add Service
-              </Text>
-            </View>
-          )}
-
-          <View style={[styles.menuItem, { borderTopWidth: 1, borderTopColor: '#eee' }]}>
-            <Text style={[styles.menuItemText, { color: COLORS.danger }]} onPress={handleLogout}>
-              Log Out
-            </Text>
-          </View>
+          <Text style={styles.menuItem}>Editar perfil</Text>
+          <Text style={[styles.menuItem, styles.danger]} onPress={handleLogout}>
+            Cerrar sesión
+          </Text>
         </View>
       )}
 
       <ScrollView contentContainerStyle={styles.content}>
-        {isProfessional && professionalProfile ? (
+        {/* ================= PROFESIONAL ================= */}
+        {professionalProfile && (
           <>
-            {/* CARD PRINCIPAL PROFESIONAL */}
             <AppCard style={styles.profileCard} withShadow>
-              <Image source={{ uri: professionalProfile.photoUrl }} style={styles.avatar} />
+              {professionalProfile.photoUrl ? (
+                <Image
+                  source={{ uri: professionalProfile.photoUrl }}
+                  style={styles.avatar}
+                />
+              ) : (
+                <View style={styles.avatarPlaceholder} />
+              )}
+
               <Text style={styles.name}>{professionalProfile.name}</Text>
-              <Text style={styles.specialty}>{professionalProfile.specialty}</Text>
-              <Text style={styles.location}>{professionalProfile.location}</Text>
+
+              {!!professionalProfile.specialty && (
+                <Text style={styles.specialty}>{professionalProfile.specialty}</Text>
+              )}
+
+              {!!professionalProfile.location && (
+                <Text style={styles.location}>{professionalProfile.location}</Text>
+              )}
 
               <View style={styles.statsRow}>
                 <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{professionalProfile.rating}</Text>
+                  <Text style={styles.statValue}>
+                    {professionalProfile.rating ?? 0}
+                  </Text>
                   <Text style={styles.statLabel}>Rating</Text>
                 </View>
 
-                {/* Jobs clickeable → vamos a la tab Bookings */}
-                <View style={styles.statCardTouchable}>
-                  <Text style={styles.statValue} onPress={() => navigation.navigate('Bookings')}>
-                    {professionalProfile.jobsCompleted}
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>
+                    {professionalProfile.jobsCompleted ?? 0}
                   </Text>
-                  <Text style={styles.statLabel} onPress={() => navigation.navigate('Bookings')}>
-                    Jobs
-                  </Text>
+                  <Text style={styles.statLabel}>Jobs</Text>
                 </View>
 
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{professionalProfile.positiveFeedback}%</Text>
-                  <Text style={styles.statLabel}>Positive</Text>
-                </View>
+                {professionalProfile.positiveFeedback != null && (
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>
+                      {professionalProfile.positiveFeedback}%
+                    </Text>
+                    <Text style={styles.statLabel}>Positive</Text>
+                  </View>
+                )}
               </View>
 
-              <View style={styles.actionsRow}>
-                <AppButton
-                  title="WhatsApp"
-                  variant="outline"
-                  fullWidth={false}
-                  style={[styles.actionButton, styles.whatsappBtn]}
-                  textStyle={styles.whatsappText}
-                  onPress={() => {}}
-                />
+              {/* BOTÓN SOLO PARA PERFIL PÚBLICO */}
+              {isViewingOtherProfessional && (
                 <AppButton
                   title="Request Service"
-                  variant="primary"
-                  fullWidth={false}
-                  style={styles.actionButton}
-                  onPress={() => {}}
+                  style={{ marginTop: SPACING.md }}
+                  onPress={() =>
+                    navigation.navigate('CreateRequest', {
+                      profesionalId: professionalProfile.id,
+                    })
+                  }
                 />
-              </View>
+              )}
             </AppCard>
 
             {/* ABOUT */}
-            <SectionTitle>About</SectionTitle>
-            <Text style={styles.paragraph}>{professionalProfile.about}</Text>
+            {!!professionalProfile.about && (
+              <>
+                <SectionTitle>About</SectionTitle>
+                <Text style={styles.paragraph}>{professionalProfile.about}</Text>
+              </>
+            )}
 
-            {/* PHOTOS */}
-            <SectionTitle>Photos</SectionTitle>
-            {/* <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {professionalProfile.photos.map((p) => (
-                <Image key={p.id} source={{ uri: p.url }} style={styles.photo} />
-              ))}
-            </ScrollView> */}
+            {/* SERVICES */}
+            {!!professionalProfile.services?.length && (
+              <>
+                <SectionTitle>Services</SectionTitle>
+                {professionalProfile.services.map((s) => (
+                  <AppCard key={s.id} style={styles.serviceCard}>
+                    <Text style={styles.serviceTitle}>{s.title}</Text>
+                    <Text style={styles.serviceCategory}>{s.category}</Text>
+                  </AppCard>
+                ))}
+              </>
+            )}
 
             {/* REVIEWS */}
-            <SectionTitle>Reviews</SectionTitle>
-
-            <AppCard style={styles.reviewSummary}>
-              {/* <View style={{ alignItems: 'center', marginRight: SPACING.md }}>
-                <Text style={styles.summaryRating}>{professionalProfile.rating}</Text>
-                <Text style={styles.summaryStars}>★★★★☆</Text>
-                <Text style={styles.summaryCount}>
-                  {professionalProfile.ratingSummary.totalReviews} reviews
-                </Text>
-              </View> */}
-
-              <View style={{ flex: 1 }}>
-                {/* {professionalProfile.ratingSummary.distribution.map((item) => (
-                  <View key={item.stars} style={styles.distrRow}>
-                    <Text style={styles.distrLabel}>{item.stars}</Text>
-                    <View style={styles.distrBarBg}>
-                      <View
-                        style={[
-                          styles.distrBarFill,
-                          { flex: item.percent, maxWidth: `${item.percent}%` },
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.distrPercent}>{item.percent}%</Text>
-                  </View>
-                ))} */}
-              </View>
-            </AppCard>
-
-            <FlatList
-              data={professionalProfile.reviews}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <AppCard style={styles.reviewCard}>
-                  <View style={styles.reviewHeader}>
-                    <View style={styles.reviewAvatarPlaceholder} />
-                    <View style={{ flex: 1 }}>
+            {!!professionalProfile.reviews?.length && (
+              <>
+                <SectionTitle>Reviews</SectionTitle>
+                <FlatList
+                  data={professionalProfile.reviews}
+                  keyExtractor={(i) => i.id}
+                  scrollEnabled={false}
+                  renderItem={({ item }) => (
+                    <AppCard style={styles.reviewCard}>
                       <Text style={styles.reviewName}>{item.clientName}</Text>
-                      <Text style={styles.reviewTime}>{item.timeAgo}</Text>
-                    </View>
-                    <Text style={styles.reviewStarsText}>
-                      {'★'.repeat(item.rating)} {'☆'.repeat(5 - item.rating)}
-                    </Text>
-                  </View>
-                  <Text style={styles.paragraph}>{item.comment}</Text>
-
-                  <View style={styles.reviewFooter}>
-                    <Text style={styles.reviewMeta}>👍 {item.likes}</Text>
-                    <Text style={styles.reviewMeta}>💬 {item.replies}</Text>
-                  </View>
-                </AppCard>
-              )}
-            />
+                      <Text style={styles.reviewText}>{item.comment}</Text>
+                    </AppCard>
+                  )}
+                />
+              </>
+            )}
           </>
-        ) : (
-          clientProfile && (
-            <>
-              {/* CARD PRINCIPAL CLIENTE */}
-              <AppCard style={styles.profileCard} withShadow>
+        )}
+
+        {/* ================= CLIENTE (placeholder limpio) ================= */}
+        {!professionalProfile && clientProfile && (
+          <>
+            <AppCard style={styles.profileCard} withShadow>
+              {clientProfile.photoUrl ? (
                 <Image source={{ uri: clientProfile.photoUrl }} style={styles.avatar} />
-                <Text style={styles.name}>{clientProfile.name}</Text>
-                <Text style={styles.location}>{clientProfile.location}</Text>
-
-                <View style={[styles.statsRow, { marginTop: SPACING.md }]}>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statValue}>{clientProfile.pendingRequests.length}</Text>
-                    <Text style={styles.statLabel}>Pending</Text>
-                  </View>
-                </View>
-              </AppCard>
-
-              {/* DATOS DE CONTACTO */}
-              <SectionTitle>Contact</SectionTitle>
-              <AppCard style={styles.card}>
-                <Text style={styles.paragraph}>Email: {clientProfile.email}</Text>
-                <Text style={styles.paragraph}>Phone: {clientProfile.phone}</Text>
-              </AppCard>
-
-              {/* SOLICITUDES PENDIENTES */}
-              <SectionTitle>Pending Requests</SectionTitle>
-              {clientProfile.pendingRequests.length === 0 ? (
-                <Text style={styles.paragraph}>You have no pending service requests.</Text>
               ) : (
-                clientProfile.pendingRequests.map((req) => (
-                  <AppCard key={req.id} style={styles.card}>
-                    <Text style={styles.cardTitle}>{req.serviceType}</Text>
-                    <Text style={styles.cardSubtitle}>Professional: {req.professionalName}</Text>
-                    <Text style={styles.paragraph}>Status: {req.status}</Text>
-                    <Text style={styles.reviewTime}>{req.createdAt}</Text>
-                  </AppCard>
-                ))
+                <View style={styles.avatarPlaceholder} />
               )}
-            </>
-          )
+
+              <Text style={styles.name}>{clientProfile.name}</Text>
+
+              {!!clientProfile.location && (
+                <Text style={styles.location}>{clientProfile.location}</Text>
+              )}
+
+              <Text style={[styles.paragraph, { marginTop: SPACING.md }]}>
+                Perfil de cliente (en construcción).
+              </Text>
+            </AppCard>
+          </>
         )}
       </ScrollView>
     </AppScreen>
   );
 }
 
+/* ===========================
+   STYLES
+=========================== */
+
 const styles = StyleSheet.create({
-  centerContainer: {
+  center: {
     flex: 1,
-    padding: SPACING.lg,
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    padding: SPACING.lg,
+    paddingBottom: SPACING.xl,
   },
   menu: {
     position: 'absolute',
-    top: 54,
-    right: SPACING.lg,
-    backgroundColor: COLORS.cardBg,
+    right: 16,
+    top: 56,
+    backgroundColor: '#fff',
     borderRadius: RADII.md,
-    paddingVertical: 4,
-    minWidth: 160,
-    ...{
-      shadowColor: '#000',
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 6,
-    },
-    zIndex: 40,
+    padding: 8,
+    zIndex: 20,
+    elevation: 6,
   },
   menuItem: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 2,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
-  menuItemText: { fontSize: 14, color: COLORS.text },
-  content: {
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xl * 2,
+  danger: {
+    color: COLORS.danger,
   },
   profileCard: {
     alignItems: 'center',
-    marginTop: SPACING.lg,
     marginBottom: SPACING.md,
   },
   avatar: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    marginBottom: SPACING.sm,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    marginBottom: 8,
   },
-  name: { fontSize: 20, fontWeight: '700', marginTop: 4, color: COLORS.text },
+  avatarPlaceholder: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: COLORS.border,
+  },
+  name: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginTop: 4,
+  },
   specialty: {
     fontSize: 14,
     color: COLORS.textMuted,
-    marginTop: 2,
   },
   location: {
     fontSize: 13,
-    color: '#9ca3af',
-    marginTop: 2,
+    color: COLORS.textMuted,
   },
   statsRow: {
     flexDirection: 'row',
-    marginTop: SPACING.md,
-    justifyContent: 'space-between',
+    marginTop: 16,
     width: '100%',
   },
   statCard: {
     flex: 1,
-    backgroundColor: COLORS.graySoft,
-    marginHorizontal: 4,
-    borderRadius: RADII.md,
-    paddingVertical: 10,
     alignItems: 'center',
   },
-  statCardTouchable: {
-    flex: 1,
-    backgroundColor: COLORS.graySoft,
-    marginHorizontal: 4,
-    borderRadius: RADII.md,
-    paddingVertical: 10,
-    alignItems: 'center',
+  statValue: {
+    fontSize: 16,
+    fontWeight: '700',
   },
-  statValue: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  statLabel: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
-  actionsRow: {
-    flexDirection: 'row',
-    marginTop: SPACING.md,
-    width: '100%',
-  },
-  actionButton: {
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  whatsappBtn: {
-    borderColor: COLORS.success,
-  },
-  whatsappText: {
-    color: COLORS.success,
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.textMuted,
   },
   paragraph: {
     fontSize: 14,
-    color: '#4b5563',
-    marginBottom: 4,
+    color: COLORS.text,
+    marginBottom: 12,
   },
-  photo: {
-    width: 180,
-    height: 120,
-    borderRadius: RADII.lg,
-    marginRight: 10,
-    marginTop: 6,
-  },
-  reviewSummary: {
-    flexDirection: 'row',
-    marginTop: 8,
+  serviceCard: {
     marginBottom: 8,
   },
-  summaryRating: { fontSize: 24, fontWeight: '700', color: COLORS.text },
-  summaryStars: { fontSize: 16, color: COLORS.warning, marginTop: 2 },
-  summaryCount: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
-  distrRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 2,
+  serviceTitle: {
+    fontSize: 14,
+    fontWeight: '700',
   },
-  distrLabel: { width: 16, fontSize: 12, color: '#4b5563' },
-  distrBarBg: {
-    flex: 1,
-    height: 6,
-    borderRadius: RADII.pill,
-    backgroundColor: COLORS.border,
-    marginHorizontal: 6,
-    overflow: 'hidden',
-    flexDirection: 'row',
-  },
-  distrBarFill: {
-    height: 6,
-    borderRadius: RADII.pill,
-    backgroundColor: COLORS.warning,
-  },
-  distrPercent: {
-    width: 32,
-    fontSize: 11,
+  serviceCategory: {
+    fontSize: 12,
     color: COLORS.textMuted,
-    textAlign: 'right',
   },
   reviewCard: {
-    marginTop: 8,
+    marginBottom: 8,
   },
-  reviewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
+  reviewName: {
+    fontWeight: '700',
   },
-  reviewAvatarPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.border,
-    marginRight: 8,
+  reviewText: {
+    fontSize: 13,
+    color: COLORS.text,
   },
-  reviewName: { fontSize: 14, fontWeight: '600', color: COLORS.text },
-  reviewTime: { fontSize: 11, color: '#9ca3af' },
-  reviewStarsText: { fontSize: 13, color: COLORS.warning },
-  reviewFooter: {
-    flexDirection: 'row',
-    marginTop: 6,
-    columnGap: 16,
-  },
-  reviewMeta: { fontSize: 12, color: COLORS.textMuted },
-  card: {
-    marginTop: 8,
-  },
-  cardTitle: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  cardSubtitle: { fontSize: 12, color: COLORS.textMuted, marginBottom: 4 },
 });

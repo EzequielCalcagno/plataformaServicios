@@ -8,12 +8,11 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
-  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { API_URL } from '../utils/api';
 import * as ImagePicker from 'expo-image-picker';
+import { API_URL } from '../utils/http'; // ✅ importante
 
 type Props = {
   navigation: any;
@@ -28,23 +27,14 @@ export default function AddService({ navigation }: Props) {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState(''); // opcional, formato YYYY-MM-DD
-
-  // URL escrita a mano (sigue existiendo como opción)
-  const [imageUrlInput, setImageUrlInput] = useState('');
-
-  // Imagen local seleccionada desde la galería
+  const [date, setDate] = useState('');
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [localImageUri, setLocalImageUri] = useState<string | null>(null);
 
-  // URL pública devuelta por el backend al subir la imagen
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
-
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Cargar rol desde AsyncStorage
   useEffect(() => {
     const loadRole = async () => {
       try {
@@ -59,97 +49,74 @@ export default function AddService({ navigation }: Props) {
     loadRole();
   }, []);
 
-  // ======= PICKER DE IMAGEN =======
-
+  // =====================================================
+  // 📸 Seleccionar imagen desde el dispositivo
+  // =====================================================
   const pickImage = async () => {
     try {
-      // Pedir permisos
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Permiso requerido',
-          'Necesitamos acceso a tus fotos para subir imágenes de tus trabajos.',
-        );
-        return;
-      }
-
       const result = await ImagePicker.launchImageLibraryAsync({
-         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-  quality: 0.8,
+        mediaTypes: ['images'],
+        quality: 0.8,
       });
 
-      if (result.canceled) {
-        return;
+      if (!result.canceled && result.assets?.length) {
+        setLocalImageUri(result.assets[0].uri);
+        setUploadedImageUrl(null); // limpio para evitar confusión
       }
-
-      const asset = result.assets[0];
-      setLocalImageUri(asset.uri);
-      setUploadedImageUrl(null); // reseteamos la subida previa
-    } catch (err) {
-      console.log('Error al abrir galería', err);
-      Alert.alert('Error', 'No se pudo abrir la galería de imágenes.');
+    } catch (e) {
+      console.log('Error seleccionando imagen:', e);
+      setErrorMsg('No se pudo seleccionar la imagen.');
     }
   };
 
-  // ======= SUBIR IMAGEN AL BACKEND =======
+  // =====================================================
+  // ☁️ Subir imagen al backend
+  // =====================================================
+  const uploadImage = async (): Promise<string | null> => {
+    if (!localImageUri) return null;
 
-  const uploadImage = async () => {
+    const token = await AsyncStorage.getItem('@token');
+    const uploadUrl = `${API_URL}/uploads/work-image`;
+
+    console.log('🌐 Subiendo imagen a:', uploadUrl);
+
+    const formData = new FormData();
+
+    formData.append('image', {
+      uri: localImageUri,
+      type: 'image/jpeg',
+      name: 'photo.jpg',
+    } as any);
+
     try {
-      if (!localImageUri) {
-        Alert.alert('Sin imagen', 'Primero seleccioná una imagen.');
-        return;
-      }
-
-      setUploading(true);
-      setErrorMsg(null);
-
-      const token = await AsyncStorage.getItem('@token');
-      if (!token) {
-        setErrorMsg('No hay sesión activa.');
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('image', {
-        uri: localImageUri,
-        name: 'work-image.jpg',
-        type: 'image/jpeg',
-      } as any);
-
-      // IMPORTANTE: no setear Content-Type a mano para mantener el boundary
-      const res = await fetch(`${API_URL}/uploads/work-image`, {
+      const res = await fetch(uploadUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
         },
         body: formData,
       });
 
+      const text = await res.text();
+
       if (!res.ok) {
-        const txt = await res.text();
-        console.log('Error upload image', res.status, txt);
-        throw new Error('No se pudo subir la imagen.');
+        console.log('🔥 Error upload image', res.status, text);
+        throw new Error('No se pudo subir la imagen');
       }
 
-      const data = await res.json();
-      console.log('✅ Imagen subida (frontend):', data);
-
-      if (!data.url) {
-        throw new Error('La respuesta no contiene una URL de imagen.');
-      }
-
-      setUploadedImageUrl(data.url);
-      setSuccessMsg('Imagen subida correctamente.');
-    } catch (err: any) {
+      const data = JSON.parse(text);
+      return data.url;
+    } catch (err) {
       console.log('Error al subir imagen', err);
-      setErrorMsg(err?.message || 'No se pudo subir la imagen.');
-    } finally {
-      setUploading(false);
+      setErrorMsg('No se pudo subir la imagen.');
+      return null;
     }
   };
 
-  // ======= GUARDAR SERVICIO / TRABAJO =======
-
+  // =====================================================
+  // 💾 Guardar servicio/trabajo
+  // =====================================================
   const handleSave = async () => {
     try {
       setErrorMsg(null);
@@ -161,7 +128,7 @@ export default function AddService({ navigation }: Props) {
       }
 
       if (role !== 'professional') {
-        setErrorMsg('Solo los profesionales pueden agregar servicios / trabajos.');
+        setErrorMsg('Solo los profesionales pueden agregar trabajos.');
         return;
       }
 
@@ -173,14 +140,16 @@ export default function AddService({ navigation }: Props) {
         return;
       }
 
-      // armamos array de URLs de imagen (subida o escrita a mano)
-      const imageUrls: string[] = [];
-      if (uploadedImageUrl) {
-        imageUrls.push(uploadedImageUrl);
+      // 1) Subir imagen si existe
+      let finalImageUrl: string | null = null;
+
+      if (localImageUri) {
+        finalImageUrl = await uploadImage();
+        if (!finalImageUrl) return; // error ya mostrado
       }
-      if (imageUrlInput.trim()) {
-        imageUrls.push(imageUrlInput.trim());
-      }
+
+      // 2) Enviar el servicio
+      const worksUrl = `${API_URL}/works`;
 
       const body: any = {
         title: title.trim(),
@@ -188,10 +157,11 @@ export default function AddService({ navigation }: Props) {
       };
 
       if (date.trim()) body.date = date.trim();
-      if (imageUrls.length > 0) body.imageUrls = imageUrls;
+      if (finalImageUrl) body.imageUrls = [finalImageUrl];
 
-      // POST /private/app/works (o el endpoint donde estés creando el trabajo)
-      const res = await fetch(`${API_URL}/private/app/works`, {
+      console.log('🌐 POST servicio a:', worksUrl, 'body:', body);
+
+      const res = await fetch(worksUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -200,23 +170,21 @@ export default function AddService({ navigation }: Props) {
         body: JSON.stringify(body),
       });
 
+      const txt = await res.text();
+
       if (!res.ok) {
-        const txt = await res.text();
         console.log('Error al crear servicio', res.status, txt);
         setErrorMsg('No se pudo guardar el servicio.');
         return;
       }
 
-      const created = await res.json();
-      console.log('✅ Servicio / trabajo creado:', created);
-
-      setSuccessMsg('Servicio / trabajo agregado correctamente.');
+      // reset UI
+      setSuccessMsg('Servicio agregado correctamente.');
       setTitle('');
       setDescription('');
       setDate('');
-      setImageUrlInput('');
       setLocalImageUri(null);
-      setUploadedImageUrl(null);
+      setUploadedImageUrl(finalImageUrl);
     } catch (e) {
       console.log('Error AddService save', e);
       setErrorMsg('Error de red al guardar el servicio.');
@@ -225,14 +193,13 @@ export default function AddService({ navigation }: Props) {
     }
   };
 
-  // ======= ESTADOS ESPECIALES POR ROL =======
-
+  // =====================================================
+  // RENDER
+  // =====================================================
   if (loadingRole) {
     return (
       <SafeAreaView style={styles.screen}>
-        <View style={{ padding: 20 }}>
-          <Text>Cargando...</Text>
-        </View>
+        <Text style={{ padding: 20 }}>Cargando...</Text>
       </SafeAreaView>
     );
   }
@@ -248,16 +215,12 @@ export default function AddService({ navigation }: Props) {
             onPress={() => navigation.goBack()}
             style={styles.backToProfileBtn}
           >
-            <Text style={{ color: '#fff', textAlign: 'center' }}>
-              Volver al perfil
-            </Text>
+            <Text style={{ color: '#fff', textAlign: 'center' }}>Volver</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
-
-  // ======= RENDER PRINCIPAL =======
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -266,7 +229,7 @@ export default function AddService({ navigation }: Props) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Text style={{ fontSize: 18 }}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Add Service / Work</Text>
+        <Text style={styles.topBarTitle}>Agregar Trabajo</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -277,76 +240,48 @@ export default function AddService({ navigation }: Props) {
         <Text style={styles.label}>Título</Text>
         <TextInput
           style={styles.input}
-          placeholder="Ej: Cambio de grifería, Instalación de calefón..."
           value={title}
           onChangeText={setTitle}
+          placeholder="Ej: Instalación de calefón"
         />
 
         <Text style={styles.label}>Descripción</Text>
         <TextInput
           style={[styles.input, styles.inputMultiline]}
           multiline
-          textAlignVertical="top"
           numberOfLines={4}
-          placeholder="Detalles del trabajo realizado..."
+          textAlignVertical="top"
           value={description}
           onChangeText={setDescription}
+          placeholder="Detalles del trabajo..."
         />
 
         <Text style={styles.label}>Fecha (opcional)</Text>
         <TextInput
           style={styles.input}
-          placeholder="YYYY-MM-DD"
           value={date}
           onChangeText={setDate}
+          placeholder="YYYY-MM-DD"
         />
 
-        {/* Sección de imagen */}
-        <Text style={styles.label}>Imagen del trabajo</Text>
-
-        {/* Preview si hay selección local o URL subida */}
-        {localImageUri || uploadedImageUrl ? (
+        {/* Imagen seleccionada */}
+        {localImageUri && (
           <Image
-            source={{ uri: uploadedImageUrl || localImageUri! }}
-            style={styles.previewImage}
+            source={{ uri: localImageUri }}
+            style={{ width: '100%', height: 180, marginTop: 10, borderRadius: 12 }}
           />
-        ) : null}
+        )}
 
-        <View style={styles.row}>
-          <TouchableOpacity style={styles.smallButton} onPress={pickImage}>
-            <Text style={styles.smallButtonText}>Elegir foto</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.smallButton,
-              { backgroundColor: '#16a34a' },
-              (uploading || !localImageUri) && { opacity: 0.7 },
-            ]}
-            onPress={uploadImage}
-            disabled={uploading || !localImageUri}
-          >
-            <Text style={styles.smallButtonText}>
-              {uploading ? 'Subiendo...' : 'Subir imagen'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.helpText}>
-          También podés pegar una URL directa de imagen si ya la tenés subida:
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="https://..."
-          value={imageUrlInput}
-          onChangeText={setImageUrlInput}
-        />
+        <TouchableOpacity style={styles.uploadBtn} onPress={pickImage}>
+          <Text style={styles.uploadBtnText}>
+            {localImageUri ? 'Cambiar imagen' : 'Seleccionar imagen'}
+          </Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={handleSave}
+          style={[styles.saveButton, saving && { opacity: 0.6 }]}
           disabled={saving}
-          style={[styles.saveButton, saving && { opacity: 0.7 }]}
+          onPress={handleSave}
         >
           <Text style={styles.saveButtonText}>
             {saving ? 'Guardando...' : 'Guardar servicio'}
@@ -357,8 +292,12 @@ export default function AddService({ navigation }: Props) {
   );
 }
 
+// =====================================================
+// ESTILOS
+// =====================================================
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f5f7fb' },
+
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -371,17 +310,20 @@ const styles = StyleSheet.create({
   },
   topBarTitle: { fontSize: 16, fontWeight: '600' },
   backButton: { padding: 4 },
+
   content: {
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
+
   label: {
     fontSize: 14,
     fontWeight: '600',
     color: '#111827',
     marginBottom: 6,
-    marginTop: 10,
+    marginTop: 12,
   },
+
   input: {
     borderRadius: 12,
     borderWidth: 1,
@@ -391,40 +333,24 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
   },
+
   inputMultiline: {
     minHeight: 100,
   },
-  previewImage: {
-    width: '100%',
-    height: 180,
+
+  uploadBtn: {
+    marginTop: 12,
+    paddingVertical: 12,
     borderRadius: 12,
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    marginTop: 8,
-    marginBottom: 4,
-    columnGap: 8,
-  },
-  smallButton: {
-    flex: 1,
-    backgroundColor: '#2563eb',
-    paddingVertical: 10,
-    borderRadius: 12,
+    backgroundColor: '#0ea5e9',
     alignItems: 'center',
   },
-  smallButtonText: {
+  uploadBtnText: {
     color: '#fff',
     fontWeight: '600',
-    fontSize: 13,
+    fontSize: 15,
   },
-  helpText: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 4,
-    marginBottom: 4,
-  },
+
   saveButton: {
     marginTop: 24,
     backgroundColor: '#2563eb',
@@ -437,14 +363,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 15,
   },
+
   errorText: {
     color: '#b91c1c',
     marginBottom: 8,
+    fontWeight: '600',
   },
   successText: {
     color: '#166534',
     marginBottom: 8,
+    fontWeight: '600',
   },
+
   backToProfileBtn: {
     backgroundColor: '#2563eb',
     paddingVertical: 10,

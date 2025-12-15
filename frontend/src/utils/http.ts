@@ -2,7 +2,9 @@
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = Constants.expoConfig?.extra?.API_URL;
+// 👇 exportamos para usarlo en AddService, Login, etc.
+export const API_URL =
+  (Constants.expoConfig?.extra?.API_URL as string | undefined) ?? '';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 

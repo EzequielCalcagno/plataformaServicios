@@ -1,5 +1,4 @@
 // src/services/profiles.service.ts
-import { raw } from 'express';
 import {
   getProfessionalProfileByUserIdRepository,
   upsertProfessionalProfileRepository,
@@ -8,6 +7,8 @@ import {
   ProfessionalProfileSchema,
   UpdateProfessionalProfileSchema,
 } from '../schemas/profile.schema';
+import { getProfessionalPublicProfileByUserIdRepository } from '../repositories/profiles.repository';
+
 
 // Obtener el perfil profesional por ID de usuario
 export const getProfessionalProfileByUserIdService = async (userId: string) => {
@@ -21,7 +22,10 @@ export const getProfessionalProfileByUserIdService = async (userId: string) => {
 //__________________CAMBIOS ELIAS _______________________________
 
 // Crear perfil profesional del usuario
-export const createMyProfessionalProfileService = async (userId: string, payload: unknown) => {
+export const createMyProfessionalProfileService = async (
+  userId: string,
+  payload: unknown,
+) => {
   // 1) Validar body con Zod (mismo schema del update)
   const parsed = UpdateProfessionalProfileSchema.parse(payload);
 
@@ -49,7 +53,10 @@ export const createMyProfessionalProfileService = async (userId: string, payload
 };
 
 // Editar / crear perfil profesional del usuario
-export const updateMyProfessionalProfileService = async (userId: string, payload: unknown) => {
+export const updateMyProfessionalProfileService = async (
+  userId: string,
+  payload: unknown,
+) => {
   // 1) Validamos body con Zod
   const parsed = UpdateProfessionalProfileSchema.parse(payload);
 
@@ -69,109 +76,73 @@ export const updateMyProfessionalProfileService = async (userId: string, payload
   return getProfessionalProfileByUserIdService(userId);
 };
 
-// // 🔹 Servicio específico para la APP (shape que espera Profile.tsx / Home.tsx)
-// export const getAppProfileByUserIdService = async (
-//   userId: string | number,
-//   rolId?: number,
-// ) => {
-//   // 👉 PARA LA APP: el id puede ser 'p_00005', 'c_00001', etc.
-//   // Lo usamos tal cual viene.
-//   const { data: user, error } = await db
-//     .from('usuarios')
-//     .select('*')
-//     .eq('id', userId) // 👈 sin Number()
-//     .maybeSingle();
+/**
+ * 🔹 Servicio específico para la APP (Home / MyAccount)
+ * Usa:
+ *  - datos básicos del usuario (req.user)
+ *  - perfil profesional (perfiles_profesionales) para obtener portadaUrl
+ */
+export const getAppProfileByUserService = async (authUser: any) => {
+  const userId = String(authUser.id);
 
-//   if (error) {
-//     console.error('❌ Error en getAppProfileByUserIdService (DB):', error);
-//     throw error;
-//   }
+  // Intentamos leer el perfil profesional (puede no existir aún)
+  let professionalProfile: any = null;
+  try {
+    professionalProfile = await getProfessionalProfileByUserIdService(userId);
+  } catch (e) {
+    console.error(
+      '⚠️ Error leyendo perfil profesional en getAppProfileByUserService:',
+      e,
+    );
+  }
 
-//   if (!user) {
-//     console.error(
-//       '❌ Usuario no encontrado en getAppProfileByUserIdService, id=',
-//       userId,
-//     );
-//     throw new Error('Usuario no encontrado');
-//   }
+  const fullName =
+    `${authUser.nombre ?? ''} ${authUser.apellido ?? ''}`.trim() ||
+    authUser.nombre_completo ||
+    authUser.email ||
+    'Usuario';
 
-//   // avatar puede tener distintos nombres según el esquema
-//   const avatar =
-//     (user as any).avatar_url ??
-//     (user as any).foto_url ??
-//     null;
+  const rawRoleId = authUser.rolId ?? authUser.id_rol ?? 2;
+  const roleId =
+    typeof rawRoleId === 'string' ? Number(rawRoleId) : Number(rawRoleId);
 
-//   // Normalizamos el rol: viene del token (rolId) o de la tabla usuarios.id_rol
-//   const rawRol =
-//     typeof rolId === 'number' && !Number.isNaN(rolId)
-//       ? rolId
-//       : (user as any).id_rol;
+  // 👇 PRIORIDAD de la foto:
+  // 1) portadaUrl del perfil profesional
+  // 2) foto_url / avatar_url del usuario
+  const photoUrl =
+    professionalProfile?.portadaUrl ??
+    authUser.foto_url ??
+    authUser.avatar_url ??
+    null;
 
-//   const effectiveRolId: number =
-//     typeof rawRol === 'string' ? Number(rawRol) : rawRol;
+  return {
+    roleId: roleId || 2,
+    name: fullName,
+    photoUrl, // 👈 ESTA es la que usa MyAccount
+    location: 'Montevideo, Uruguay', // placeholder por ahora
+    rating: 0, // placeholder
+    jobsCompleted: 0, // placeholder
+  };
+  
+};
+export const getProfessionalPublicProfileByUserIdService = async (
+  userId: string,
+) => {
+  const profile = await getProfessionalPublicProfileByUserIdRepository(userId);
 
-//   const isProfessional = effectiveRolId === ROLES.PROFESIONAL.id;
-//   const fullName = `${user.nombre} ${user.apellido ?? ''}`.trim();
+  if (!profile) return null;
 
-//   // 2) Profesional → shape ProfessionalProfile (lo que espera el front móvil)
-//   if (isProfessional) {
-//     return {
-//       roleId: effectiveRolId, // 👈 IMPORTANTE: lo mandamos al front
-//       photoUrl:
-//         avatar ?? 'https://picsum.photos/seed/default-professional/200',
-//       name: fullName || 'Profesional',
-//       specialty: 'Servicios generales', // luego podés sacarlo de perfiles_profesionales
-//       location: 'Montevideo, Uruguay', // luego de ubicaciones
-//       rating: 0,
-//       jobsCompleted: 0,
-//       positiveFeedback: 0,
-//       about:
-//         'Aún no hay información cargada sobre este profesional. Podés actualizarla desde Edit Profile.',
-//       photos: [] as { id: string; url: string }[],
-//       ratingSummary: {
-//         totalReviews: 0,
-//         distribution: [
-//           { stars: 5, percent: 0 },
-//           { stars: 4, percent: 0 },
-//           { stars: 3, percent: 0 },
-//           { stars: 2, percent: 0 },
-//           { stars: 1, percent: 0 },
-//         ],
-//       },
-//       reviews: [] as {
-//         id: string;
-//         clientName: string;
-//         timeAgo: string;
-//         rating: number;
-//         comment: string;
-//         likes: number;
-//         replies: number;
-//       }[],
-//     };
-//   }
-
-//   // 3) Cliente → shape ClientProfile
-//   return {
-//     roleId: effectiveRolId, // 👈 también para cliente
-//     photoUrl:
-//       avatar ?? 'https://picsum.photos/seed/default-client/200',
-//     name: fullName || 'Cliente',
-//     location: 'Montevideo, Uruguay',
-//     email: user.email,
-//     phone: user.telefono ?? '',
-//     pendingRequests: [] as {
-//       id: string;
-//       serviceType: string;
-//       professionalName: string;
-//       status: string;
-//       createdAt: string;
-//     }[],
-//     completedWorks: [] as {
-//       id: string;
-//       title: string;
-//       description: string;
-//       professionalName: string;
-//       date: string;
-//     }[],
-//   };
-// };
+  return {
+    id: userId, // 👈 CLAVE: ESTE ES EL ID QUE FALTABA
+    name: 'Profesional', // después podés unir con users si querés
+    photoUrl: profile.portada_url ?? null,
+    specialty: profile.especialidad ?? null,
+    location: 'Montevideo, Uruguay', // placeholder
+    rating: profile.rating_promedio ?? 0,
+    jobsCompleted: 0,
+    positiveFeedback: null,
+    about: profile.descripcion ?? null,
+    services: [], // luego se puede sumar
+    reviews: [],  // luego se puede sumar
+  };
+};
