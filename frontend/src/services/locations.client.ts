@@ -12,14 +12,18 @@ export type LocationDto = {
   principal: boolean;
   activa: boolean;
   fecha_registro: string;
+  lat: number | null;
+  lng: number | null;
 };
 
 // GET /private/locations
 export async function getMyLocations(): Promise<LocationDto[]> {
   const data = await api.get<LocationDto[]>('/private/locations');
+  console.log('Fetched locations:', data);
   return data;
 }
 
+// POST /private/locations
 export async function createLocation(payload: {
   nombre_ubicacion?: string;
   ciudad?: string;
@@ -34,7 +38,7 @@ export async function createLocation(payload: {
   return data;
 }
 
-// PATCH /private/locations/:id  (ej: marcar como principal)
+// PATCH /private/locations/:id
 export async function updateLocation(
   id: number,
   payload: Partial<{
@@ -47,7 +51,7 @@ export async function updateLocation(
   }>,
 ): Promise<LocationDto> {
   const data = await api.patch<LocationDto>(`/private/locations/${id}`, {
-    ...(payload as any),
+    body: payload,
   });
   return data;
 }

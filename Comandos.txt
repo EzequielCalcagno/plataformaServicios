@@ -1,5 +1,8 @@
 Instalar y actualizer librerias (node modules)
 npm install
+npm run build
+npm run start
 
-Arrancar la app
+Arrancar frontend
+npx expo install
 npm run start

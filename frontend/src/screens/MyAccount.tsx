@@ -1,13 +1,6 @@
 // src/screens/MyAccount.tsx
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,9 +8,10 @@ import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import { Image } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { getCurrentUser } from '../services/user.client';
+import { ApiError } from '../utils/http';
 
-const API_URL =
-  ((Constants.expoConfig?.extra?.API_URL as string) || '').replace(/\/+$/, '');
+const API_URL = ((Constants.expoConfig?.extra?.API_URL as string) || '').replace(/\/+$/, '');
 
 type Props = {
   navigation: any;
@@ -50,79 +44,116 @@ export default function MyAccount({ navigation }: Props) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [locations, setLocations] = useState<StoredLocation[]>([]);
-  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(
-    null,
-  );
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [savingLocation, setSavingLocation] = useState(false);
 
-  // ========= Cargar perfil compacto para la app =========
+  // // ========= Cargar perfil compacto para la app =========
+  // useEffect(() => {
+  //   const loadProfile = async () => {
+  //     try {
+  //       setErrorMsg(null);
+  //       setLoadingProfile(true);
+
+  //       const token = await AsyncStorage.getItem('@token');
+  //       if (!token) {
+  //         setErrorMsg('No hay sesión activa. Volvé a iniciar sesión.');
+  //         return;
+  //       }
+
+  //       const res = await fetch(`${API_URL}/private/app/me`, {
+  //         headers: {
+  //           Authorization: `Bearer ${token}`,
+  //           'Content-Type': 'application/json',
+  //         },
+  //       });
+
+  //       const text = await res.text();
+  //       let data: any = {};
+  //       try {
+  //         data = text ? JSON.parse(text) : {};
+  //       } catch {
+  //         data = { raw: text };
+  //       }
+
+  //       console.log('✅ /private/app/me data:', data);
+
+  //       if (!res.ok) {
+  //         setErrorMsg(
+  //           data?.message || 'No se pudo cargar la información de la cuenta.',
+  //         );
+  //         return;
+  //       }
+
+  //       const compact: AppProfileCompact = {
+  //         roleId: data.roleId ?? 2,
+  //         name: data.name ?? 'Usuario',
+  //         photoUrl: data.photoUrl ?? null,
+  //         location: data.location ?? 'Montevideo, Uruguay',
+  //         rating: data.rating ?? 0,
+  //         jobsCompleted: data.jobsCompleted ?? 0,
+  //       };
+
+  //       console.log('✅ Perfil normalizado:', compact);
+  //       setProfile(compact);
+  //     } catch (err) {
+  //       console.log('Error load MyAccount', err);
+  //       setErrorMsg('Error de red al cargar la cuenta.');
+  //     } finally {
+  //       setLoadingProfile(false);
+  //     }
+  //   };
+
+  //   loadProfile();
+  // }, []);
+
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        setErrorMsg(null);
-        setLoadingProfile(true);
+        const data = await getCurrentUser();
 
-        const token = await AsyncStorage.getItem('@token');
-        if (!token) {
-          setErrorMsg('No hay sesión activa. Volvé a iniciar sesión.');
-          return;
-        }
-
-        const res = await fetch(`${API_URL}/private/app/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        const text = await res.text();
-        let data: any = {};
-        try {
-          data = text ? JSON.parse(text) : {};
-        } catch {
-          data = { raw: text };
-        }
-
-        console.log('✅ /private/app/me data:', data);
-
-        if (!res.ok) {
-          setErrorMsg(
-            data?.message || 'No se pudo cargar la información de la cuenta.',
-          );
-          return;
-        }
+        // export type UserResponse = {
+        //   activo: boolean;
+        //   apellido?: string;
+        //   nombre?: string;
+        //   telefono?: string;
+        //   email: string;
+        //   foto_url?: string;
+        //   id_rol: number;
+        // };
 
         const compact: AppProfileCompact = {
-          roleId: data.roleId ?? 2,
-          name: data.name ?? 'Usuario',
-          photoUrl: data.photoUrl ?? null,
+          roleId: data.id_rol ?? 2,
+          name: data.nombre ?? 'Usuario',
+          photoUrl: data.foto_url ?? null,
           location: data.location ?? 'Montevideo, Uruguay',
           rating: data.rating ?? 0,
           jobsCompleted: data.jobsCompleted ?? 0,
         };
 
-        console.log('✅ Perfil normalizado:', compact);
         setProfile(compact);
       } catch (err) {
-        console.log('Error load MyAccount', err);
-        setErrorMsg('Error de red al cargar la cuenta.');
+        console.error('Error cargando perfil en Home:', err);
+
+        // Si el error es 401, redirigir al login
+        if (err instanceof ApiError && err.status === 401) {
+          await AsyncStorage.removeItem('authToken');
+          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+        }
       } finally {
         setLoadingProfile(false);
       }
     };
 
     loadProfile();
-  }, []);
+  }, [navigation]);
 
   // ========= Cargar ubicaciones guardadas =========
   const loadLocations = useCallback(async () => {
     try {
       setLoadingLocations(true);
       const stored = await AsyncStorage.getItem(LOCATIONS_KEY);
-      const storedSelectedId = await AsyncStorage.getItem(
-        SELECTED_LOCATION_ID_KEY,
-      );
+      const storedSelectedId = await AsyncStorage.getItem(SELECTED_LOCATION_ID_KEY);
 
       const parsed: StoredLocation[] = stored ? JSON.parse(stored) : [];
       setLocations(parsed);
@@ -143,10 +174,7 @@ export default function MyAccount({ navigation }: Props) {
     }, [loadLocations]),
   );
 
-  const persistLocations = async (
-    locs: StoredLocation[],
-    selectedId: string | null,
-  ) => {
+  const persistLocations = async (locs: StoredLocation[], selectedId: string | null) => {
     setLocations(locs);
     setSelectedLocationId(selectedId);
 
@@ -182,14 +210,11 @@ export default function MyAccount({ navigation }: Props) {
       const parsed: StoredLocation[] = raw ? JSON.parse(raw) : locations;
 
       // 1) Buscar si YA existe una "Ubicación actual"
-      let current = parsed.find(l => l.isCurrent || l.id === 'current');
+      let current = parsed.find((l) => l.isCurrent || l.id === 'current');
 
       // 2) Si no existe y ya hay MAX_LOCATIONS → no dejamos crear una nueva
       if (!current && parsed.length >= MAX_LOCATIONS) {
-        Alert.alert(
-          'Límite alcanzado',
-          `Solo podés guardar hasta ${MAX_LOCATIONS} ubicaciones.`,
-        );
+        Alert.alert('Límite alcanzado', `Solo podés guardar hasta ${MAX_LOCATIONS} ubicaciones.`);
         return;
       }
 
@@ -215,7 +240,7 @@ export default function MyAccount({ navigation }: Props) {
           longitude: lon,
           isCurrent: true,
         };
-        newList = newList.map(l => (l.id === current!.id ? current! : l));
+        newList = newList.map((l) => (l.id === current!.id ? current! : l));
         selectedId = current.id;
       }
 
@@ -235,7 +260,7 @@ export default function MyAccount({ navigation }: Props) {
   };
 
   const handleDeleteLocation = async (id: string) => {
-    const newList = locations.filter(l => l.id !== id);
+    const newList = locations.filter((l) => l.id !== id);
     let newSelected: string | null = selectedLocationId;
 
     if (selectedLocationId === id) {
@@ -263,31 +288,21 @@ export default function MyAccount({ navigation }: Props) {
 
         {/* Usar ubicación actual */}
         <TouchableOpacity
-          style={[
-            styles.row,
-            { justifyContent: 'space-between', alignItems: 'center' },
-          ]}
+          style={[styles.row, { justifyContent: 'space-between', alignItems: 'center' }]}
           activeOpacity={0.8}
           onPress={handleUseCurrentLocation}
           disabled={savingLocation}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name="locate-outline" size={18} color="#111827" />
-            <Text style={[styles.rowText, { marginLeft: 10 }]}>
-              Usar ubicación actual
-            </Text>
+            <Text style={[styles.rowText, { marginLeft: 10 }]}>Usar ubicación actual</Text>
           </View>
-          {savingLocation && (
-            <Text style={styles.rowSubText}>Actualizando…</Text>
-          )}
+          {savingLocation && <Text style={styles.rowSubText}>Actualizando…</Text>}
         </TouchableOpacity>
 
         {/* Agregar ubicación guardada (abre LocationPicker con mapa) */}
         <TouchableOpacity
-          style={[
-            styles.row,
-            { justifyContent: 'space-between', alignItems: 'center' },
-          ]}
+          style={[styles.row, { justifyContent: 'space-between', alignItems: 'center' }]}
           activeOpacity={0.8}
           onPress={() => {
             if (locations.length >= MAX_LOCATIONS) {
@@ -302,34 +317,25 @@ export default function MyAccount({ navigation }: Props) {
         >
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name="pin-outline" size={18} color="#111827" />
-            <Text style={[styles.rowText, { marginLeft: 10 }]}>
-              Agregar ubicación guardada
-            </Text>
+            <Text style={[styles.rowText, { marginLeft: 10 }]}>Agregar ubicación guardada</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
         </TouchableOpacity>
 
         {/* Lista de ubicaciones guardadas */}
         <View style={styles.locationsList}>
-          {loadingLocations && (
-            <Text style={styles.helperText}>Cargando ubicaciones…</Text>
-          )}
+          {loadingLocations && <Text style={styles.helperText}>Cargando ubicaciones…</Text>}
 
           {!loadingLocations && locations.length === 0 && (
-            <Text style={styles.helperText}>
-              Aún no tenés ubicaciones guardadas.
-            </Text>
+            <Text style={styles.helperText}>Aún no tenés ubicaciones guardadas.</Text>
           )}
 
-          {locations.map(loc => {
+          {locations.map((loc) => {
             const isSelected = loc.id === selectedLocationId;
             return (
               <View key={loc.id} style={styles.locationItemRow}>
                 <TouchableOpacity
-                  style={[
-                    styles.locationChip,
-                    isSelected && styles.locationChipSelected,
-                  ]}
+                  style={[styles.locationChip, isSelected && styles.locationChipSelected]}
                   onPress={() => handleSelectLocation(loc.id)}
                   activeOpacity={0.8}
                 >
@@ -340,10 +346,7 @@ export default function MyAccount({ navigation }: Props) {
                     style={{ marginRight: 6 }}
                   />
                   <Text
-                    style={[
-                      styles.locationChipText,
-                      isSelected && { color: '#1d4ed8' },
-                    ]}
+                    style={[styles.locationChipText, isSelected && { color: '#1d4ed8' }]}
                     numberOfLines={1}
                   >
                     {loc.label}
@@ -394,9 +397,7 @@ export default function MyAccount({ navigation }: Props) {
             <Image source={{ uri: profile.photoUrl }} style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarInitial}>
-                {profile.name?.[0]?.toUpperCase() || 'U'}
-              </Text>
+              <Text style={styles.avatarInitial}>{profile.name?.[0]?.toUpperCase() || 'U'}</Text>
             </View>
           )}
 
@@ -407,18 +408,12 @@ export default function MyAccount({ navigation }: Props) {
 
         {/* Acciones principales */}
         <View style={styles.section}>
-          <TouchableOpacity
-            style={styles.row}
-            onPress={() => navigation.navigate('EditProfile')}
-          >
+          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('EditProfile')}>
             <Ionicons name="create-outline" size={18} color="#111827" />
             <Text style={styles.rowText}>Edit Profile</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.row}
-            onPress={() => navigation.navigate('AddService')}
-          >
+          <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('AddService')}>
             <Ionicons name="add-circle-outline" size={18} color="#111827" />
             <Text style={styles.rowText}>Add Service</Text>
           </TouchableOpacity>
@@ -446,11 +441,7 @@ export default function MyAccount({ navigation }: Props) {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.row}>
-            <Ionicons
-              name="information-circle-outline"
-              size={18}
-              color="#111827"
-            />
+            <Ionicons name="information-circle-outline" size={18} color="#111827" />
             <Text style={styles.rowText}>Information</Text>
           </TouchableOpacity>
         </View>

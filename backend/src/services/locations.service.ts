@@ -22,7 +22,7 @@ export async function getMyLocationByIdService(userId: string, id: number) {
 }
 
 type CreateLocationInput = {
-  nombreUbicacion?: string;
+  nombre_ubicacion?: string;
   ciudad?: string;
   direccion?: string;
   lat?: number;
@@ -42,7 +42,7 @@ export async function createMyLocationService(userId: string, input: CreateLocat
 
   return createLocationRepository({
     usuario_id: userId,
-    nombre_ubicacion: input.nombreUbicacion,
+    nombre_ubicacion: input.nombre_ubicacion,
     ciudad: input.ciudad,
     direccion: input.direccion,
     lat: input.lat,
@@ -64,7 +64,7 @@ export async function updateMyLocationService(
 
   return updateLocationRepository(userId, id, {
     usuario_id: userId,
-    nombre_ubicacion: input.nombreUbicacion,
+    nombre_ubicacion: input.nombre_ubicacion,
     ciudad: input.ciudad,
     direccion: input.direccion,
     lat: input.lat,

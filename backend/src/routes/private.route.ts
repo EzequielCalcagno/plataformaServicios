@@ -27,10 +27,7 @@ const router = Router();
  */
 
 // --------------- USER ROUTES ---------------
-router.get(
-  '/currentUser',
-  getCurrentUserController,
-);
+router.get('/currentUser', getCurrentUserController);
 
 // --------------- PROFILE ROUTES ---------------
 router.get('/profile', requireRole('PROFESIONAL'), getMyProfessionalProfileController); // Obtener perfil profesional del usuario autenticado
@@ -59,18 +56,15 @@ router.delete('/locations/:id', deleteMyLocationController); // Eliminar una loc
  * }
  */
 router.post('/app/works', requireRole('PROFESIONAL'), async (req: Request, res: Response) => {
-  
-    const { title, description, date, imageUrls } = req.body;
+  const { title, description, date, imageUrls } = req.body;
 
-    if (!title || !description) {
-      return res
-        .status(400)
-        .json({ message: 'title y description son obligatorios' });
-    }
+  if (!title || !description) {
+    return res.status(400).json({ message: 'title y description son obligatorios' });
+  }
 
-    // TODO: guardar en la BD real.
+  // TODO: guardar en la BD real.
 
-    try {
+  try {
     const newWork = {
       id: Date.now(), // ID mock
       titulo: title,
@@ -78,18 +72,16 @@ router.post('/app/works', requireRole('PROFESIONAL'), async (req: Request, res: 
       fecha: date || null,
       imagenes: Array.isArray(imageUrls)
         ? imageUrls.map((url: string, index: number) => ({
-          url,
-          orden: index,
-        }))
+            url,
+            orden: index,
+          }))
         : [],
     };
 
     return res.status(201).json(newWork);
   } catch (err) {
     console.error('Error en POST /private/app/works', err);
-    return res
-      .status(500)
-      .json({ message: 'Error interno al crear el trabajo' });
+    return res.status(500).json({ message: 'Error interno al crear el trabajo' });
   }
 
   // TODO: acá más adelante vas a guardar en la BD real.
@@ -108,35 +100,26 @@ router.post('/app/works', requireRole('PROFESIONAL'), async (req: Request, res: 
   //     : [],
   // };
 
-//   return res.status(201).json(newWork);
-// } catch (err) {
-//   console.error('Error en POST /private/app/works', err);
-//   return res.status(500).json({ message: 'Error interno al crear el trabajo' });
-// }
- });
+  //   return res.status(201).json(newWork);
+  // } catch (err) {
+  //   console.error('Error en POST /private/app/works', err);
+  //   return res.status(500).json({ message: 'Error interno al crear el trabajo' });
+  // }
+});
 
 /**
  * (Opcional) GET /api/v1/private/app/works
  * Para listar los trabajos del profesional en MyAccount / Profile.
  * Por ahora devuelve un array vacío o un mock.
  */
-router.get(
-  '/app/works'
-  ,
-  requireRole('PROFESIONAL'),
-  async (_req: Request, res: Response) => {
-    // TODO: traer de la BD real
-    return res.json([]);
-  },
-);
+router.get('/app/works', requireRole('PROFESIONAL'), async (_req: Request, res: Response) => {
+  // TODO: traer de la BD real
+  return res.json([]);
+});
 
 // GET /api/v1/search/servicios?lat=-34.9&lng=-56.1&q=pintura&radiusKm=10
 router.get('/search/servicios', searchServiciosController);
 
-router.get(
-  '/professionals/:userId',
-  getProfessionalProfileByIdController,
-);
-
+router.get('/professionals/:userId', getProfessionalProfileByIdController);
 
 export default router;

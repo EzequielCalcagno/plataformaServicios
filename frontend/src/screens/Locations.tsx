@@ -80,9 +80,7 @@ export default function LocationsScreen() {
   };
 
   const handleEdit = (loc: LocationDto) => {
-    // Si después hacés una screen tipo LocationForm:
-    // navigation.navigate('LocationForm', { location: loc });
-    Alert.alert('TODO', 'Acá iría la pantalla de edición de ubicación 😜');
+    navigation.navigate('LocationForm', { location: loc });
   };
 
   const handleAddLocation = () => {
@@ -117,17 +115,6 @@ export default function LocationsScreen() {
             style={styles.smallButton}
             onPress={() => handleEdit(item)}
           />
-
-          {!isPrincipal && (
-            <AppButton
-              title={submittingId === item.id ? 'Guardando...' : 'Hacer principal'}
-              variant="primary"
-              fullWidth={false}
-              style={styles.smallButton}
-              disabled={submittingId === item.id}
-              onPress={() => handleSetPrincipal(item.id)}
-            />
-          )}
 
           <AppButton
             title={submittingId === item.id ? 'Eliminando...' : 'Eliminar'}

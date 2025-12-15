@@ -15,20 +15,11 @@ type AppInputProps = TextInputProps & {
   containerStyle?: StyleProp<ViewStyle>;
 };
 
-export const AppInput: React.FC<AppInputProps> = ({
-  label,
-  containerStyle,
-  style,
-  ...rest
-}) => {
+export const AppInput: React.FC<AppInputProps> = ({ label, containerStyle, style, ...rest }) => {
   return (
     <View style={[styles.container, containerStyle]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <TextInput
-        style={[styles.input, style]}
-        placeholderTextColor="#9ca3af"
-        {...rest}
-      />
+      <TextInput style={[styles.input, style]} placeholderTextColor="#9ca3af" {...rest} />
     </View>
   );
 };

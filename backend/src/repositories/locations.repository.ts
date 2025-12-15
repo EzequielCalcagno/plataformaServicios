@@ -7,11 +7,13 @@ export type LocationRow = {
   nombre_ubicacion: string | null;
   ciudad: string | null;
   direccion: string | null;
-  coordenadas: any; // Podés tipar mejor si querés
+  coordenadas: any; // PostGIS Geometry Point
   tipo: string;
   principal: boolean;
   activa: boolean;
   fecha_registro: string;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 type LocationPayload = {
@@ -26,11 +28,14 @@ type LocationPayload = {
   activa?: boolean;
 };
 
+const BASE_SELECT =
+  'id,usuario_id,nombre_ubicacion,ciudad,direccion,tipo,principal,activa,fecha_registro,coordenadas,lat,lng';
+
 // Listar ubicaciones activas del usuario
 export async function getLocationsByUserIdRepository(userId: string): Promise<LocationRow[]> {
   const { data, error } = await db
     .from('ubicaciones')
-    .select('*')
+    .select(BASE_SELECT as any) // 👈 importante
     .eq('usuario_id', userId)
     .eq('activa', true)
     .order('principal', { ascending: false });
@@ -40,7 +45,7 @@ export async function getLocationsByUserIdRepository(userId: string): Promise<Lo
     throw error;
   }
 
-  return data || [];
+  return (data as any as LocationRow[]) || [];
 }
 
 // Obtener una ubicación concreta (validando que sea del user)
@@ -50,7 +55,7 @@ export async function getLocationByIdRepository(
 ): Promise<LocationRow | null> {
   const { data, error } = await db
     .from('ubicaciones')
-    .select('*')
+    .select(BASE_SELECT as any)
     .eq('usuario_id', userId)
     .eq('id', id)
     .maybeSingle();
@@ -60,7 +65,63 @@ export async function getLocationByIdRepository(
     throw error;
   }
 
-  return data || null;
+  return (data as any as LocationRow) || null;
+}
+
+// Crear ubicación
+export async function createLocationRepository(payload: LocationPayload): Promise<LocationRow> {
+  const { lat, lng, ...rest } = payload;
+
+  const insertObj: any = {
+    ...rest,
+  };
+
+  if (lat != null && lng != null) {
+    insertObj.coordenadas = `SRID=4326;POINT(${lng} ${lat})`;
+  }
+
+  const { data, error } = await db
+    .from('ubicaciones')
+    .insert(insertObj)
+    .select(BASE_SELECT as any) // 👈
+    .single();
+
+  if (error) {
+    console.error('❌ Error createLocationRepository:', error);
+    throw error;
+  }
+
+  return data as any as LocationRow;
+}
+
+// Actualizar ubicación
+export async function updateLocationRepository(
+  userId: string,
+  id: number,
+  payload: LocationPayload,
+): Promise<LocationRow> {
+  const { lat, lng, ...rest } = payload;
+
+  const updateObj: any = { ...rest };
+
+  if (lat != null && lng != null) {
+    updateObj.coordenadas = `SRID=4326;POINT(${lng} ${lat})`;
+  }
+
+  const { data, error } = await db
+    .from('ubicaciones')
+    .update(updateObj)
+    .eq('usuario_id', userId)
+    .eq('id', id)
+    .select(BASE_SELECT as any) // 👈
+    .single();
+
+  if (error) {
+    console.error('❌ Error updateLocationRepository:', error);
+    throw error;
+  }
+
+  return data as any as LocationRow;
 }
 
 // Contar cuántas ubicaciones fijas activas tiene el user
@@ -92,60 +153,6 @@ export async function unsetOtherPrincipalLocationsRepository(userId: string) {
     console.error('❌ Error unsetOtherPrincipalLocationsRepository:', error);
     throw error;
   }
-}
-
-// Crear ubicación
-export async function createLocationRepository(payload: LocationPayload): Promise<LocationRow> {
-  // PostGIS: mandamos un geography point
-  const { lat, lng, ...rest } = payload;
-
-  const insertObj: any = {
-    ...rest,
-  };
-
-  if (lat != null && lng != null) {
-    // Formato WKT para geography: SRID=4326;POINT(lon lat)
-    insertObj.coordenadas = `SRID=4326;POINT(${lng} ${lat})`;
-  }
-
-  const { data, error } = await db.from('ubicaciones').insert(insertObj).select('*').single();
-
-  if (error) {
-    console.error('❌ Error createLocationRepository:', error);
-    throw error;
-  }
-
-  return data as LocationRow;
-}
-
-// Actualizar ubicación
-export async function updateLocationRepository(
-  userId: string,
-  id: number,
-  payload: LocationPayload,
-): Promise<LocationRow> {
-  const { lat, lng, ...rest } = payload;
-
-  const updateObj: any = { ...rest };
-
-  if (lat != null && lng != null) {
-    updateObj.coordenadas = `SRID=4326;POINT(${lng} ${lat})`;
-  }
-
-  const { data, error } = await db
-    .from('ubicaciones')
-    .update(updateObj)
-    .eq('usuario_id', userId)
-    .eq('id', id)
-    .select('*')
-    .single();
-
-  if (error) {
-    console.error('❌ Error updateLocationRepository:', error);
-    throw error;
-  }
-
-  return data as LocationRow;
 }
 
 // Eliminar (soft delete)
