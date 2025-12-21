@@ -3,9 +3,9 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
-import { AppScreen } from '../components/AppScreen';
-import { AppCard } from '../components/AppCard';
-import { AppButton } from '../components/AppButton';
+import { AppScreen } from '../components/Screen';
+import { AppCard } from '../components/Card';
+import { Button } from '../components/Button';
 import { TopBar } from '../components/TopBar';
 import { COLORS, SPACING, RADII } from '../styles/theme';
 
@@ -108,7 +108,7 @@ export default function LocationsScreen() {
         <Text style={styles.address}>{item.direccion || 'Sin dirección'}</Text>
 
         <View style={styles.actionsRow}>
-          <AppButton
+          <Button
             title="Editar"
             variant="outline"
             fullWidth={false}
@@ -116,7 +116,7 @@ export default function LocationsScreen() {
             onPress={() => handleEdit(item)}
           />
 
-          <AppButton
+          <Button
             title={submittingId === item.id ? 'Eliminando...' : 'Eliminar'}
             variant="outline"
             fullWidth={false}
@@ -137,7 +137,7 @@ export default function LocationsScreen() {
         showBack
         onPressBack={() => navigation.goBack()}
         rightNode={
-          <AppButton
+          <Button
             title="+ Agregar"
             variant="outline"
             fullWidth={false}
@@ -156,7 +156,7 @@ export default function LocationsScreen() {
         ) : errorMsg ? (
           <View style={styles.center}>
             <Text style={styles.errorText}>{errorMsg}</Text>
-            <AppButton
+            <Button
               title="Reintentar"
               onPress={loadLocations}
               style={{ marginTop: SPACING.sm }}
@@ -165,7 +165,7 @@ export default function LocationsScreen() {
         ) : locations.length === 0 ? (
           <View style={styles.center}>
             <Text style={styles.emptyText}>Todavía no tenés ubicaciones guardadas.</Text>
-            <AppButton
+            <Button
               title="Agregar ubicación"
               onPress={handleAddLocation}
               style={{ marginTop: SPACING.sm }}

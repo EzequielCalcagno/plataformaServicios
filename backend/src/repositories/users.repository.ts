@@ -1,5 +1,6 @@
 // src/repositories/auth.repository.ts
 import db from '../config/db';
+import { UserSchema } from '../schemas/user.schema';
 
 export const getUserByEmailRepository = async (email: string) => {
   const { data, error } = await db.from('usuarios').select('*').eq('email', email).single();
@@ -11,7 +12,7 @@ export const getUserByEmailRepository = async (email: string) => {
     throw error;
   }
 
-  return data;
+  return UserSchema.parse(data);
 };
 
 export const getUserByIdRepository = async (id: string) => {
@@ -24,7 +25,7 @@ export const getUserByIdRepository = async (id: string) => {
     throw error;
   }
 
-  return data;
+  return UserSchema.parse(data);
 };
 
 export const getAllUsersRepository = async () => {
@@ -34,7 +35,19 @@ export const getAllUsersRepository = async () => {
     throw error;
   }
 
-  return data;
+  return UserSchema.parse(data);
+};
+
+export const updateLastLogin = async (id: string) => {
+  const { error } = await db
+    .from('usuarios')
+    .update({ ultimo_login: new Date().toISOString() })
+    .eq('id', id);
+
+  if (error) {
+    console.error('❌ Error en updateLastLogin:', error);
+    throw error;
+  }
 };
 
 export type NewUser = {
@@ -55,8 +68,8 @@ export const createUserRepository = async (user: NewUser) => {
     apellido: user.apellido ?? null,
     email: user.email,
     contrasena_hash: user.contrasena_hash,
-    id_rol: user.id_rol,
     telefono: user.telefono ?? null,
+    id_rol: user.id_rol,
   };
 
   const { data, error } = await db.from('usuarios').insert(payload).select('*').single();

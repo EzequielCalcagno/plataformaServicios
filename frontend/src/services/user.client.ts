@@ -2,13 +2,14 @@
 import { api } from '../utils/api';
 
 export type UserResponse = {
-  activo: boolean;
   apellido?: string;
   nombre?: string;
   telefono?: string;
   email: string;
   foto_url?: string;
   id_rol: number;
+  fecha_registro: string;
+  verificado: boolean;
 };
 
 export async function getCurrentUser() {

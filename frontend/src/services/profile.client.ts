@@ -65,7 +65,7 @@ export type ProfessionalPublicProfileResponse = {
 
 /**
  * Perfil público/visible de un profesional (para “Ver perfil” desde Search)
- * Backend: GET /api/v1/private/professionals/:userId (requireAuth)
+ * Backend: GET /api/v1/private/profile/:userId (requireAuth)
  */
 export async function getProfessionalProfileById(profesionalId: string) {
   if (!profesionalId) {
@@ -73,7 +73,7 @@ export async function getProfessionalProfileById(profesionalId: string) {
   }
 
   return await api.get<ProfessionalPublicProfileResponse>(
-    `/private/professionals/${encodeURIComponent(profesionalId)}`,
+    `/private/profile/${encodeURIComponent(profesionalId)}`,
   );
 }
 

@@ -12,6 +12,8 @@ import privateRouter from './routes/private.route';
 import uploadsRouter from './routes/uploads.route';
 
 // Middlewares
+import { requestLogger } from './middlewares/requestLogger.middleware';
+import { errorLogger } from './middlewares/errorLogger.middleware';
 import { requireAuth } from './middlewares/requireAuth.middleware';
 
 const app = express();
@@ -33,6 +35,13 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(
+  requestLogger({
+    logBody: false, // true solo si estás debuggeando
+    // ignorePaths: [/^\/api\/v1\/public\/health/i],
+  }),
+);
+app.use(errorLogger);
 
 // Routes
 app.use(`${prefix}/public`, publicRouter);

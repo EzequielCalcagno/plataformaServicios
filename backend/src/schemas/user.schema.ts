@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const UserSchema = z.object({
-  id: z.number().int().optional(), // SERIAL PRIMARY KEY
+  id: z.string(),
 
   nombre: z.string().min(1, 'El nombre es obligatorio').max(100, 'Máximo 100 caracteres'),
 
@@ -15,19 +15,17 @@ export const UserSchema = z.object({
 
   foto_url: z.string().url('Debe ser una URL válida').optional().nullable(),
 
-  tipo_autenticacion: z.enum(['local', 'google', 'facebook']).default('local'),
+  tipo_autenticacion: z.enum(['local', 'google', 'apple']).default('local'),
 
   verificado: z.boolean().default(false),
 
-  fecha_registro: z.string().datetime().optional(),
+  fecha_registro: z.coerce.date(),
 
   id_rol: z.number().int().nullable().optional(),
 
   activo: z.boolean().default(true),
 
-  ultimo_login: z.string().datetime().optional().nullable(),
-
-  ip_ultimo_login: z.string().max(45).optional().nullable(),
+  ultimo_login: z.coerce.date().optional().nullable(),
 });
 
 // Esquema para crear usuario (sin campos autogenerados)

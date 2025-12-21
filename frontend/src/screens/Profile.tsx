@@ -19,10 +19,10 @@ import {
 import { api } from '../utils/api';
 
 // 🔹 Componentes
-import { AppScreen } from '../components/AppScreen';
+import { AppScreen } from '../components/Screen';
 import { TopBar } from '../components/TopBar';
-import { AppCard } from '../components/AppCard';
-import { AppButton } from '../components/AppButton';
+import { AppCard } from '../components/Card';
+import { Button } from '../components/Button';
 import { SectionTitle } from '../components/SectionTitle';
 import { COLORS, SPACING, RADII } from '../styles/theme';
 
@@ -234,7 +234,7 @@ export default function Profile({ route, navigation }: Props) {
         <View style={styles.center}>
           <Text>{errorMsg}</Text>
           {!isViewingOtherProfessional && (
-            <AppButton title="Salir" onPress={handleLogout} />
+            <Button title="Salir" onPress={handleLogout} />
           )}
         </View>
       </AppScreen>
@@ -323,7 +323,7 @@ export default function Profile({ route, navigation }: Props) {
 
               {/* BOTÓN SOLO PARA PERFIL PÚBLICO */}
               {isViewingOtherProfessional && (
-                <AppButton
+                <Button
                   title="Request Service"
                   style={{ marginTop: SPACING.md }}
                   onPress={() =>

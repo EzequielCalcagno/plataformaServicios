@@ -1,5 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SPACING, RADII } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +26,11 @@ export const TopBar: React.FC<Props> = ({ title, showBack = false, onPressBack, 
       {showBack ? (
         <TouchableOpacity onPress={onPressBack || navigation.goBack} style={styles.iconButton}>
           <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <Image
+            source={require('../../assets/images/apple-logo.png')}
+            style={{ width: 20, height: 20 }}
+            resizeMode="contain"
+          />
         </TouchableOpacity>
       ) : (
         <View style={{ width: 24 }} />

@@ -94,19 +94,19 @@ const getCategoryIcon = (category: string) => {
   const c = (category || '').toLowerCase();
   switch (c) {
     case 'plomería':
-      return require('../assets/icons/plumbing-pin.png');
+      return require('../../assets/icons/mapa/plumbing-pin.png');
     case 'electricidad':
-      return require('../assets/icons/electricity-pin.png');
+      return require('../../assets/icons/mapa/electricity-pin.png');
     case 'pintura':
-      return require('../assets/icons/painting-pin.png');
+      return require('../../assets/icons/mapa/painting-pin.png');
     case 'carpintería':
-      return require('../assets/icons/carpentry-pin.png');
+      return require('../../assets/icons/mapa/carpentry-pin.png');
     case 'gas':
-      return require('../assets/icons/gas-pin.png');
+      return require('../../assets/icons/mapa/gas-pin.png');
     case 'limpieza':
-      return require('../assets/icons/cleaning-pin.png');
+      return require('../../assets/icons/mapa/cleaning-pin.png');
     default:
-      return require('../assets/icons/default-pin.png');
+      return require('../../assets/icons/mapa/default-pin.png');
   }
 };
 
@@ -539,7 +539,7 @@ export default function Search({ navigation }: any) {
                 onPress={() => closePinCard()}
               >
                 <Image
-                  source={require('../assets/icons/default-pin.png')}
+                  source={require('../../assets/icons/mapa/default-pin.png')}
                   style={{ width: 40, height: 40 }}
                   resizeMode="contain"
                 />

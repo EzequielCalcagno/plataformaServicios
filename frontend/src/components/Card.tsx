@@ -7,24 +7,11 @@ type Props = {
   children: React.ReactNode;
   style?: ViewStyle | ViewStyle[];
   withShadow?: boolean;
+  onPress?: () => void;
 };
 
-export const AppCard: React.FC<Props> = ({
-  children,
-  style,
-  withShadow = false,
-}) => {
-  return (
-    <View
-      style={[
-        styles.card,
-        withShadow && SHADOWS.soft,
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
+export const Card: React.FC<Props> = ({ children, style, withShadow = false, onPress }) => {
+  return <View style={[styles.card, withShadow && SHADOWS.soft, style]} onTouchEnd={onPress}>{children}</View>;
 };
 
 const styles = StyleSheet.create({
@@ -33,5 +20,7 @@ const styles = StyleSheet.create({
     borderRadius: RADII.lg,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
+    borderColor: COLORS.borderCard,
+    borderWidth: 1,
   },
 });

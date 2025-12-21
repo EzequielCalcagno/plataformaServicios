@@ -12,10 +12,7 @@ import { getProfessionalPublicProfileByUserIdService } from '../services/profile
 // ================= EXISTENTE =================
 
 // Obtener el perfil profesional del usuario autenticado
-export const getMyProfessionalProfileController = async (
-  req: Request,
-  res: Response,
-) => {
+export const getMyProfessionalProfileController = async (req: Request, res: Response) => {
   try {
     const authUser: any = (req as any).user;
 
@@ -28,25 +25,18 @@ export const getMyProfessionalProfileController = async (
     const profile = await getProfessionalProfileByUserIdService(userId);
 
     if (!profile) {
-      return res
-        .status(404)
-        .json({ error: 'Perfil profesional no encontrado' });
+      return res.status(404).json({ error: 'Perfil profesional no encontrado' });
     }
 
     return res.status(200).json(profile);
   } catch (error) {
     console.error('❌ Error en getMyProfessionalProfileController:', error);
-    return res
-      .status(500)
-      .json({ error: 'Error al obtener el perfil profesional' });
+    return res.status(500).json({ error: 'Error al obtener el perfil profesional' });
   }
 };
 
 // Crear perfil profesional del usuario autenticado
-export const createMyProfessionalProfileController = async (
-  req: Request,
-  res: Response,
-) => {
+export const createMyProfessionalProfileController = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
 
@@ -61,26 +51,19 @@ export const createMyProfessionalProfileController = async (
     console.error('❌ Error en createMyProfessionalProfileController:', error);
 
     if (error.name === 'ZodError') {
-      return res
-        .status(400)
-        .json({ error: 'Datos inválidos', details: error.errors });
+      return res.status(400).json({ error: 'Datos inválidos', details: error.errors });
     }
 
     if (error.message.includes('Ya tenés un perfil')) {
       return res.status(409).json({ error: error.message });
     }
 
-    return res
-      .status(500)
-      .json({ error: 'Error al crear el perfil profesional' });
+    return res.status(500).json({ error: 'Error al crear el perfil profesional' });
   }
 };
 
 // Actualizar perfil profesional del usuario autenticado
-export const updateMyProfessionalProfileController = async (
-  req: Request,
-  res: Response,
-) => {
+export const updateMyProfessionalProfileController = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
 
@@ -88,34 +71,24 @@ export const updateMyProfessionalProfileController = async (
       return res.status(400).json({ error: 'ID de usuario no válido' });
     }
 
-    const updatedProfile = await updateMyProfessionalProfileService(
-      userId,
-      req.body,
-    );
+    const updatedProfile = await updateMyProfessionalProfileService(userId, req.body);
 
     return res.status(200).json(updatedProfile);
   } catch (error: any) {
     console.error('❌ Error en updateMyProfessionalProfileController:', error);
 
     if (error.name === 'ZodError') {
-      return res
-        .status(400)
-        .json({ error: 'Datos inválidos', details: error.errors });
+      return res.status(400).json({ error: 'Datos inválidos', details: error.errors });
     }
 
-    return res
-      .status(500)
-      .json({ error: 'Error al actualizar el perfil profesional' });
+    return res.status(500).json({ error: 'Error al actualizar el perfil profesional' });
   }
 };
 
 /**
  * 🔹 Perfil compacto para la app (Home / MyAccount)
  */
-export const getMyAppProfileController = async (
-  req: Request,
-  res: Response,
-) => {
+export const getMyAppProfileController = async (req: Request, res: Response) => {
   try {
     const authUser: any = (req as any).user;
 
@@ -125,9 +98,7 @@ export const getMyAppProfileController = async (
 
     const userId = String(authUser.id);
 
-    const professionalRow = await getProfessionalProfileByUserIdRepository(
-      userId,
-    );
+    const professionalRow = await getProfessionalProfileByUserIdRepository(userId);
 
     const fullName =
       `${authUser.nombre ?? ''} ${authUser.apellido ?? ''}`.trim() ||
@@ -136,8 +107,7 @@ export const getMyAppProfileController = async (
       'Usuario';
 
     const rawRoleId = authUser.rolId ?? authUser.id_rol ?? 2;
-    const roleId =
-      typeof rawRoleId === 'string' ? Number(rawRoleId) : Number(rawRoleId);
+    const roleId = typeof rawRoleId === 'string' ? Number(rawRoleId) : Number(rawRoleId);
 
     const photoUrl =
       (professionalRow as any)?.portadaUrl ??
@@ -156,9 +126,7 @@ export const getMyAppProfileController = async (
     });
   } catch (error) {
     console.error('❌ Error en getMyAppProfileController:', error);
-    return res
-      .status(500)
-      .json({ message: 'Error al obtener el perfil para la app' });
+    return res.status(500).json({ message: 'Error al obtener el perfil para la app' });
   }
 };
 
@@ -168,10 +136,7 @@ export const getMyAppProfileController = async (
  * 🔹 Obtener perfil profesional por ID (para Search → Ver perfil)
  * GET /api/v1/private/professionals/:userId
  */
-export const getProfessionalProfileByIdController = async (
-  req: Request,
-  res: Response,
-) => {
+export const getProfessionalProfileByIdController = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
 
@@ -179,23 +144,15 @@ export const getProfessionalProfileByIdController = async (
       return res.status(400).json({ error: 'userId requerido' });
     }
 
-    const profile =
-      await getProfessionalPublicProfileByUserIdService(userId);
+    const profile = await getProfessionalPublicProfileByUserIdService(userId);
 
     if (!profile) {
-      return res
-        .status(404)
-        .json({ error: 'Perfil profesional no encontrado' });
+      return res.status(404).json({ error: 'Perfil profesional no encontrado' });
     }
 
     return res.json(profile);
   } catch (error) {
-    console.error(
-      '❌ Error en getProfessionalProfileByIdController:',
-      error,
-    );
-    return res
-      .status(500)
-      .json({ error: 'Error al obtener perfil profesional' });
+    console.error('❌ Error en getProfessionalProfileByIdController:', error);
+    return res.status(500).json({ error: 'Error al obtener perfil profesional' });
   }
 };

@@ -1,29 +1,29 @@
-// src/screens/MyAccount.tsx
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+// src/screens/Account.tsx
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 import * as Location from 'expo-location';
-import { Image } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+
 import { getCurrentUser } from '../services/user.client';
 import { ApiError } from '../utils/http';
+import { useFocusEffect } from '@react-navigation/native';
 
-const API_URL = ((Constants.expoConfig?.extra?.API_URL as string) || '').replace(/\/+$/, '');
+type Props = { navigation: any };
 
-type Props = {
-  navigation: any;
+type ProfileVM = {
+  fullName: string;
+  photoUrl: string | null;
+  isProfessional: boolean;
 };
 
-type AppProfileCompact = {
-  roleId: number;
-  name: string;
-  photoUrl: string | null;
-  location: string;
-  rating: number;
-  jobsCompleted: number;
+type RowItem = {
+  key: string;
+  label: string;
+  leftIcon: keyof typeof Ionicons.glyphMap;
+  rightText?: string;
+  onPress?: () => void;
 };
 
 type StoredLocation = {
@@ -38,9 +38,10 @@ const LOCATIONS_KEY = '@app_locations';
 const SELECTED_LOCATION_ID_KEY = '@app_selected_location_id';
 const MAX_LOCATIONS = 4;
 
-export default function MyAccount({ navigation }: Props) {
-  const [profile, setProfile] = useState<AppProfileCompact | null>(null);
+export default function Account({ navigation }: Props) {
+  const [profile, setProfile] = useState<ProfileVM | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [locations, setLocations] = useState<StoredLocation[]>([]);
@@ -48,96 +49,22 @@ export default function MyAccount({ navigation }: Props) {
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [savingLocation, setSavingLocation] = useState(false);
 
-  // // ========= Cargar perfil compacto para la app =========
-  // useEffect(() => {
-  //   const loadProfile = async () => {
-  //     try {
-  //       setErrorMsg(null);
-  //       setLoadingProfile(true);
-
-  //       const token = await AsyncStorage.getItem('@token');
-  //       if (!token) {
-  //         setErrorMsg('No hay sesión activa. Volvé a iniciar sesión.');
-  //         return;
-  //       }
-
-  //       const res = await fetch(`${API_URL}/private/app/me`, {
-  //         headers: {
-  //           Authorization: `Bearer ${token}`,
-  //           'Content-Type': 'application/json',
-  //         },
-  //       });
-
-  //       const text = await res.text();
-  //       let data: any = {};
-  //       try {
-  //         data = text ? JSON.parse(text) : {};
-  //       } catch {
-  //         data = { raw: text };
-  //       }
-
-  //       console.log('✅ /private/app/me data:', data);
-
-  //       if (!res.ok) {
-  //         setErrorMsg(
-  //           data?.message || 'No se pudo cargar la información de la cuenta.',
-  //         );
-  //         return;
-  //       }
-
-  //       const compact: AppProfileCompact = {
-  //         roleId: data.roleId ?? 2,
-  //         name: data.name ?? 'Usuario',
-  //         photoUrl: data.photoUrl ?? null,
-  //         location: data.location ?? 'Montevideo, Uruguay',
-  //         rating: data.rating ?? 0,
-  //         jobsCompleted: data.jobsCompleted ?? 0,
-  //       };
-
-  //       console.log('✅ Perfil normalizado:', compact);
-  //       setProfile(compact);
-  //     } catch (err) {
-  //       console.log('Error load MyAccount', err);
-  //       setErrorMsg('Error de red al cargar la cuenta.');
-  //     } finally {
-  //       setLoadingProfile(false);
-  //     }
-  //   };
-
-  //   loadProfile();
-  // }, []);
-
   useEffect(() => {
     const loadProfile = async () => {
       try {
         const data = await getCurrentUser();
 
-        // export type UserResponse = {
-        //   activo: boolean;
-        //   apellido?: string;
-        //   nombre?: string;
-        //   telefono?: string;
-        //   email: string;
-        //   foto_url?: string;
-        //   id_rol: number;
-        // };
-
-        const compact: AppProfileCompact = {
-          roleId: data.id_rol ?? 2,
-          name: data.nombre ?? 'Usuario',
+        const profileVm: ProfileVM = {
+          fullName: `${data.nombre ?? 'Usuario'} ${data.apellido ?? ''}`.trim(),
           photoUrl: data.foto_url ?? null,
-          location: data.location ?? 'Montevideo, Uruguay',
-          rating: data.rating ?? 0,
-          jobsCompleted: data.jobsCompleted ?? 0,
+          isProfessional: data.id_rol === 1, // ajustá si cambia el mapping
         };
 
-        setProfile(compact);
+        setProfile(profileVm);
       } catch (err) {
-        console.error('Error cargando perfil en Home:', err);
-
-        // Si el error es 401, redirigir al login
+        console.error('Error cargando perfil en MyAccount:', err);
         if (err instanceof ApiError && err.status === 401) {
-          await AsyncStorage.removeItem('authToken');
+          await AsyncStorage.multiRemove(['@token', '@role', '@userId']);
           navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
         }
       } finally {
@@ -147,6 +74,71 @@ export default function MyAccount({ navigation }: Props) {
 
     loadProfile();
   }, [navigation]);
+
+  const handleLogout = async () => {
+    await AsyncStorage.multiRemove(['@token', '@role', '@userId']);
+    navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] });
+  };
+
+  const rows: RowItem[] = [
+    {
+      key: 'settings',
+      label: 'Configuración de la cuenta',
+      leftIcon: 'settings-outline',
+      onPress: () => navigation.navigate('AccountSettings' as never), // si no existe, cambiá a un placeholder
+    },
+    {
+      key: 'edit',
+      label: 'Editar perfil',
+      leftIcon: 'create-outline',
+      onPress: () => navigation.navigate('EditProfile' as never),
+    },
+    {
+      key: 'add-service',
+      label: 'Agregar servicio',
+      leftIcon: 'add-outline',
+      onPress: () => navigation.navigate('AddService' as never),
+    },
+    {
+      key: 'language',
+      label: 'Idioma',
+      leftIcon: 'globe-outline',
+      rightText: 'Español',
+      onPress: () => {}, // abrir modal más adelante
+    },
+    {
+      key: 'help',
+      label: 'Obtén ayuda',
+      leftIcon: 'help-circle-outline',
+      onPress: () => {},
+    },
+    {
+      key: 'privacy',
+      label: 'Privacidad',
+      leftIcon: require('../../assets/icons/privacidad.svg'),
+      onPress: () => {},
+    },
+  ];
+
+  if (loadingProfile) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={{ padding: 20 }}>
+          <Text>Cargando…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={{ padding: 20 }}>
+          <Text>No se pudo cargar la cuenta.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // ========= Cargar ubicaciones guardadas =========
   const loadLocations = useCallback(async () => {
@@ -270,16 +262,6 @@ export default function MyAccount({ navigation }: Props) {
     await persistLocations(newList, newSelected);
   };
 
-  // ========= Logout =========
-  const handleLogout = async () => {
-    await AsyncStorage.removeItem('@token');
-    await AsyncStorage.removeItem('@role');
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'Login' as never }],
-    });
-  };
-
   // ========= Sección de ubicaciones =========
   const renderLocationsSection = () => {
     return (
@@ -390,21 +372,50 @@ export default function MyAccount({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Header tipo tarjeta */}
-        <View style={styles.headerCard}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Header: título + campana */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Perfil</Text>
+
+          <TouchableOpacity activeOpacity={0.8} style={styles.bellBtn} onPress={() => {}}>
+            <Ionicons name="notifications-outline" size={20} color="#111827" />
+            <View style={styles.bellDot} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Card perfil */}
+        <View style={styles.profileCard}>
           {profile.photoUrl ? (
             <Image source={{ uri: profile.photoUrl }} style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarInitial}>{profile.name?.[0]?.toUpperCase() || 'U'}</Text>
+              <Text style={styles.avatarInitial}>{profile.fullName?.[0]?.toUpperCase() || 'U'}</Text>
             </View>
           )}
 
-          <Text style={styles.name}>{profile.name}</Text>
-          <Text style={styles.subtitle}>Professional</Text>
-          <Text style={styles.subtitle}>Member since Feb 2025</Text>
+          <Text style={styles.profileName}>{profile.fullName}</Text>
+
+          {profile.isProfessional && <Text style={styles.profileSub}>Profesional</Text>}
+
+          {/* Solo mostramos cuando exista realmente */}
+          {/* <Text style={styles.profileMeta}>Miembro desde …</Text> */}
         </View>
+
+        {/* Card promo */}
+        {!profile.isProfessional && (
+          <TouchableOpacity activeOpacity={0.9} style={styles.promoCard} onPress={() => {}}>
+            <View style={styles.promoIcon}>
+              <Ionicons name="briefcase-outline" size={20} color="#111827" />
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={styles.promoTitle}>Conviértete en profesional</Text>
+              <Text style={styles.promoText}>
+                Empieza a ofrecer tus servicios y genera ingresos adicionales, ¡es muy sencillo!
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* Acciones principales */}
         <View style={styles.section}>
@@ -446,22 +457,82 @@ export default function MyAccount({ navigation }: Props) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-          <Text style={styles.logoutText}>Log Out</Text>
-        </TouchableOpacity>
+        {/* Lista */}
+        <View style={styles.listCard}>
+          {rows.map((item, idx) => (
+            <View key={item.key}>
+              <TouchableOpacity activeOpacity={0.8} style={styles.row} onPress={item.onPress}>
+                <View style={styles.rowLeft}>
+                  <Ionicons name={item.leftIcon} size={22} color="#111827" />
+                </View>
+
+                <Text style={styles.rowText}>{item.label}</Text>
+
+                {item.rightText ? <Text style={styles.rowRightText}>{item.rightText}</Text> : null}
+
+                <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
+              </TouchableOpacity>
+
+              {idx !== rows.length - 1 ? <View style={styles.divider} /> : null}
+            </View>
+          ))}
+        </View>
+
+        {/* Logout como item */}
+        <View style={styles.logoutCard}>
+          <TouchableOpacity activeOpacity={0.8} style={styles.row} onPress={handleLogout}>
+            <View style={styles.rowLeft}>
+              <Ionicons name="log-out-outline" size={22} color="#111827" />
+            </View>
+            <Text style={styles.rowText}>Cerrar sesión</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 24 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f9fafb' },
+  screen: { flex: 1, backgroundColor: '#ffffff' },
+
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 40,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 30,
   },
-  headerCard: {
+
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111827',
+  },
+
+  bellBtn: {
+    position: 'relative',
+    padding: 8,
+  },
+  bellDot: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ef4444',
+  },
+  profileCard: {
     alignItems: 'center',
     paddingVertical: 24,
     borderRadius: 24,
@@ -489,19 +560,56 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#4b5563',
   },
-  name: {
+  profileName: {
     fontSize: 18,
     fontWeight: '700',
     color: '#111827',
   },
-  subtitle: {
+  profileSub: {
     fontSize: 12,
     color: '#6b7280',
     marginTop: 2,
   },
+  profileMeta: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 4,
+  },
+  promoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#f3f4f6',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  promoIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#e5e7eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  promoText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 4,
+  },
   section: {
     backgroundColor: '#fff',
-    borderRadius: 24,
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginBottom: 16,
@@ -516,6 +624,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
   },
   rowText: {
     fontSize: 14,
@@ -527,6 +637,114 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9ca3af',
   },
+  rowLeft: {  
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowRightText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginLeft: 8,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 8,
+  },
+  listCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  logoutCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+
+    elevation: 4,
+  },
+
+  headerCard: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    borderRadius: 24,
+    backgroundColor: '#fff',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  // avatar: {
+  //   width: 88,
+  //   height: 88,
+  //   borderRadius: 44,
+  //   marginBottom: 12,
+  // },
+  // avatarPlaceholder: {
+  //   backgroundColor: '#e5e7eb',
+  //   alignItems: 'center',
+  //   justifyContent: 'center',
+  // },
+  // avatarInitial: {
+  //   fontSize: 32,
+  //   fontWeight: '700',
+  //   color: '#4b5563',
+  // },
+  name: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  subtitle: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  // section: {
+  //   backgroundColor: '#fff',
+  //   borderRadius: 24,
+  //   paddingHorizontal: 16,
+  //   paddingVertical: 12,
+  //   marginBottom: 16,
+  // },
+  // sectionTitle: {
+  //   fontSize: 14,
+  //   fontWeight: '700',
+  //   color: '#111827',
+  //   marginBottom: 8,
+  // },
+  // row: {
+  //   flexDirection: 'row',
+  //   alignItems: 'center',
+  //   paddingVertical: 10,
+  // },
+  // rowText: {
+  //   fontSize: 14,
+  //   color: '#111827',
+  //   marginLeft: 10,
+  //   flex: 1,
+  // },
+  // rowSubText: {
+  //   fontSize: 12,
+  //   color: '#9ca3af',
+  // },
   helperText: {
     fontSize: 12,
     color: '#9ca3af',

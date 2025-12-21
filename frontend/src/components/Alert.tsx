@@ -9,24 +9,14 @@ type AppAlertProps = {
   style?: ViewStyle | ViewStyle[];
 };
 
-export const AppAlert: React.FC<AppAlertProps> = ({
-  type = 'success',
-  message,
-  style,
-}) => {
+export const Alert: React.FC<AppAlertProps> = ({ type = 'success', message, style }) => {
   const isSuccess = type === 'success';
 
   return (
     <View
-      style={[
-        styles.container,
-        isSuccess ? styles.successContainer : styles.errorContainer,
-        style,
-      ]}
+      style={[styles.container, isSuccess ? styles.successContainer : styles.errorContainer, style]}
     >
-      <Text style={isSuccess ? styles.successText : styles.errorText}>
-        {message}
-      </Text>
+      <Text style={isSuccess ? styles.successText : styles.errorText}>{message}</Text>
     </View>
   );
 };

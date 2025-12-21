@@ -5,9 +5,9 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import MapView, { Marker, MapPressEvent, Region } from 'react-native-maps';
 import * as ExpoLocation from 'expo-location';
 
-import { AppScreen } from '../components/AppScreen';
-import { AppInput } from '../components/AppInput';
-import { AppButton } from '../components/AppButton';
+import { AppScreen } from '../components/Screen';
+import { AppInput } from '../components/Input';
+import { Button } from '../components/Button';
 import { TopBar } from '../components/TopBar';
 import { COLORS, SPACING, RADII } from '../styles/theme';
 import { createLocation, updateLocation, LocationDto } from '../services/locations.client';
@@ -205,7 +205,7 @@ export default function LocationForm() {
           />
         </View>
 
-        <AppButton
+        <Button
           title={loading ? 'Guardando...' : isEditMode ? 'Guardar cambios' : 'Guardar ubicación'}
           onPress={handleSubmit}
           disabled={loading}

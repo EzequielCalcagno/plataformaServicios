@@ -9,17 +9,13 @@ type Props = {
   style?: ViewStyle | ViewStyle[];
 };
 
-export const AppScreen: React.FC<Props> = ({ children, style }) => {
-  return (
-    <SafeAreaView style={[styles.screen, style]}>
-      {children}
-    </SafeAreaView>
-  );
+export const Screen: React.FC<Props> = ({ children, style }) => {
+  return <SafeAreaView style={[styles.screen, style]}>{children}</SafeAreaView>;
 };
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bgScreen,
   },
 });

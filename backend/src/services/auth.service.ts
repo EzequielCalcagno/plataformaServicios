@@ -1,7 +1,11 @@
 // src/services/auth.service.ts
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { getUserByEmailRepository, createUserRepository } from '../repositories/users.repository';
+import {
+  getUserByEmailRepository,
+  createUserRepository,
+  updateLastLogin,
+} from '../repositories/users.repository';
 import { getNextClienteId, getNextProfesionalId } from '../repositories/id.repository';
 import { ROLES, RoleKey } from '../constants/roles';
 
@@ -20,6 +24,9 @@ export const loginService = async (email: string, password: string) => {
 
   const isValidPassword = await bcrypt.compare(password, user.contrasena_hash);
   if (!isValidPassword) throw new Error('Contraseña incorrecta');
+
+  if (!user.id) throw new Error('ID de usuario no definido');
+  await updateLastLogin(String(user.id));
 
   const token = jwt.sign(
     {
@@ -76,7 +83,8 @@ export const registerService = async ({
     apellido: apellido ?? null,
     email,
     contrasena_hash: passwordHash,
-    id_rol: rolId,
     telefono: telefono ?? null,
+    // foto_url: null,
+    id_rol: rolId,
   });
 };

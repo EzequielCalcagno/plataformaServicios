@@ -8,18 +8,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   Switch,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { register } from '../services/auth.client';
 
 // 🔹 Componentes genéricos
-import { AppScreen } from '../components/AppScreen';
-import { AppInput } from '../components/AppInput';
-import { AppAlert } from '../components/AppAlert';
-import { AppButton } from '../components/AppButton';
+import { Screen } from '../components/Screen';
+import { Input } from '../components/Input';
+import { Alert } from '../components/Alert';
+import { Button } from '../components/Button';
 import { SectionTitle } from '../components/SectionTitle';
-import { COLORS, SPACING, RADII } from '../styles/theme';
+import { COLORS, SPACING, RADII, TYPO } from '../styles/theme';
 
 interface RegisterProps {
   navigation?: any;
@@ -31,47 +30,43 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [telefono, setTelefono] = useState('');
-  const [rol, setRol] = useState<'cliente' | 'profesional'>('cliente');
-  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
 
-  const splitName = (full: string) => {
-    const parts = full.trim().split(/\s+/);
-    const nombre = parts.shift() || '';
-    const apellido = parts.join(' ') || '';
-    return { nombre, apellido };
-  };
-
   const handleSubmit = async () => {
     setAlertMsg(null);
     setOk(false);
 
-    if (!name.trim()) return setAlertMsg('Ingresá un nombre.');
-    if (!apellido.trim()) return setAlertMsg('Ingresá un apellido.');
+    if (!name.trim()) return setAlertMsg('Ingrese un nombre.');
+    if (!apellido.trim()) return setAlertMsg('Ingrese un apellido.');
 
-    if (!email.trim()) return setAlertMsg('Ingresá un email válido.');
+    if (!email.trim()) return setAlertMsg('Ingrese un email válido.');
+    if (email.indexOf('@') === -1 || email.indexOf('.') === -1) {
+      return setAlertMsg('Ingrese un email válido.');
+    }
+
     if (!password || password.length < 6) {
       return setAlertMsg('La contraseña debe tener al menos 6 caracteres.');
     }
 
     if (!telefono.trim()) {
-      return setAlertMsg('Ingresá un teléfono de contacto.');
+      return setAlertMsg('Ingrese un teléfono de contacto.');
+    }
+    if (!/^\d{8,9}$/.test(telefono)) {
+      return setAlertMsg('Ingrese un teléfono válido de Uruguay.');
     }
 
-    if (!termsAccepted) {
-      return setAlertMsg('Debés aceptar Términos y Privacidad.');
-    }
+    const telefonoNormalizado = telefono.replace(/^0+/, ''); // saca ceros iniciales
+    const telefonoCompleto = `+598${telefonoNormalizado}`;
 
     const payloadForApi = {
       email: email.trim(),
       password,
-      rol, // 'cliente' | 'profesional'
       nombre: name.trim(),
       apellido: apellido.trim(),
-      telefono: telefono.trim(),
+      telefono: telefonoCompleto,
     };
 
     try {
@@ -94,147 +89,105 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
   };
 
   return (
-    <AppScreen>
-      <SafeAreaView style={styles.safe}>
-        <KeyboardAvoidingView
-          style={styles.container}
-          behavior={Platform.select({ ios: 'padding', android: undefined })}
-        >
-          <View style={styles.content}>
-            {/* Logo */}
-            <Image
-              source={require('../../assets/images/fixo-logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
+    <Screen>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.select({ ios: 'padding', android: undefined })}
+      >
+        <View style={styles.content}>
+          {/* Logo */}
+          <Image
+            source={require('../../assets/images/fixo-logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
 
-            {/* Títulos */}
-            <SectionTitle style={styles.title}>Crea tu cuenta</SectionTitle>
-            <Text style={styles.subtitle}>
-              Encontrá técnicos confiables cerca de vos en Uruguay.
+          {/* Titulo */}
+          <Text style={[TYPO.h1, styles.title]}>Súmate a Fixo</Text>
+
+          {/* Subtitulo */}
+          <Text style={[TYPO.subtitle, styles.subtitle]}>
+            Buscá servicios o empezá a ofrecer los tuyos. Todo en un solo lugar.
+          </Text>
+
+          {/* Alertas */}
+          {alertMsg && (
+            <Alert
+              type={ok ? 'success' : 'error'}
+              message={alertMsg}
+              style={{ marginBottom: SPACING.sm }}
+            />
+          )}
+
+          {/* Nombre*/}
+          <Input
+            placeholder="Nombre"
+            value={name}
+            onChangeText={setName}
+            style={{ marginBottom: SPACING.sm }}
+          />
+
+          {/* Apellido */}
+          <Input
+            placeholder="Apellido"
+            value={apellido}
+            onChangeText={setApellido}
+            style={{ marginBottom: SPACING.sm }}
+          />
+
+          {/* Email */}
+          <Input
+            placeholder="Correo electrónico"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            style={{ marginBottom: SPACING.sm }}
+          />
+
+          {/* Contraseña */}
+          <Input
+            placeholder="Contraseña"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            style={{ marginBottom: SPACING.sm }}
+          />
+
+          {/* Teléfono */}
+          <Input
+            placeholder="99 123 123"
+            value={telefono}
+            onChangeText={(text) => setTelefono(text.replace(/[^0-9]/g, ''))}
+            keyboardType="phone-pad"
+            maxLength={8}
+            prefixText="+598"
+          />
+
+          {/* Botón Crear cuenta */}
+          <Button
+            title={loading ? 'Creando...' : 'Crear cuenta'}
+            onPress={handleSubmit}
+            disabled={loading}
+            variant="primary"
+            size="lg"
+          />
+
+          {/* Footer */}
+          <Text style={styles.footer}>
+            ¿Ya tenés cuenta?{' '}
+            <Text style={styles.footerLink} onPress={() => navigation?.navigate('Login')}>
+              Iniciar sesión
             </Text>
-
-            {/* Alertas */}
-            {alertMsg && (
-              <AppAlert
-                type={ok ? 'success' : 'error'}
-                message={alertMsg}
-                style={{ marginBottom: SPACING.sm }}
-              />
-            )}
-
-            {/* Nombre*/}
-            <AppInput
-              label="Nombre"
-              placeholder="Nombre"
-              value={name}
-              onChangeText={setName}
-              style={{ marginBottom: SPACING.sm }}
-            />
-
-            {/* Apellido */}
-            <AppInput
-              label="Apellido"
-              placeholder="Apellido"
-              value={apellido}
-              onChangeText={setApellido}
-              style={{ marginBottom: SPACING.sm }}
-            />
-
-            {/* Email */}
-            <AppInput
-              label="Email"
-              placeholder="correo@ejemplo.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              style={{ marginBottom: SPACING.sm }}
-            />
-
-            {/* Contraseña */}
-            <AppInput
-              label="Contraseña"
-              placeholder="Mínimo 6 caracteres"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              style={{ marginBottom: SPACING.sm }}
-            />
-
-            {/* Teléfono */}
-            <AppInput
-              label="Teléfono"
-              placeholder="+598 99 123 123"
-              value={telefono}
-              onChangeText={setTelefono}
-              keyboardType="phone-pad"
-              style={{ marginBottom: SPACING.sm }}
-            />
-
-            {/* Rol */}
-            <View style={styles.segmented}>
-              <AppButton
-                title="Cliente"
-                variant={rol === 'cliente' ? 'primary' : 'outline'}
-                onPress={() => setRol('cliente')}
-                style={{ flex: 1, marginRight: SPACING.xs }}
-              />
-              <AppButton
-                title="Profesional"
-                variant={rol === 'profesional' ? 'primary' : 'outline'}
-                onPress={() => setRol('profesional')}
-                style={{ flex: 1, marginLeft: SPACING.xs }}
-              />
-            </View>
-
-            {/* Términos */}
-            <View style={styles.termsRow}>
-              <Switch
-                value={termsAccepted}
-                onValueChange={setTermsAccepted}
-                trackColor={{ false: '#cbd5e1', true: COLORS.primary }}
-                thumbColor="#ffffff"
-                ios_backgroundColor="#cbd5e1"
-              />
-              <Text style={styles.termsText}>
-                Acepto los{' '}
-                <Text style={styles.link} onPress={() => Alert.alert('Términos', 'Pendiente.')}>
-                  Términos
-                </Text>{' '}
-                y la{' '}
-                <Text style={styles.link} onPress={() => Alert.alert('Privacidad', 'Pendiente.')}>
-                  Privacidad
-                </Text>
-                .
-              </Text>
-            </View>
-
-            {/* Botón Crear cuenta */}
-            <AppButton
-              title={loading ? 'Creando...' : 'Crear cuenta'}
-              onPress={handleSubmit}
-              disabled={loading}
-              style={styles.mainButton}
-            />
-
-            {/* Footer */}
-            <Text style={styles.footer}>
-              ¿Ya tenés cuenta?{' '}
-              <Text style={styles.footerLink} onPress={() => navigation?.navigate('Login')}>
-                Iniciar sesión
-              </Text>
-            </Text>
-          </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </AppScreen>
+          </Text>
+        </View>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 };
 
 export default Register;
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.bg },
   container: {
     flex: 1,
     backgroundColor: COLORS.bg,
@@ -249,47 +202,20 @@ const styles = StyleSheet.create({
   },
   logo: {
     width: 120,
-    height: 48,
+    height: 90,
     alignSelf: 'center',
-    marginTop: SPACING.md,
-    marginBottom: SPACING.sm,
+    marginBottom: 12,
   },
   title: {
     textAlign: 'center',
-    marginTop: SPACING.md,
-    marginBottom: SPACING.xs,
+    marginBottom: 10,
   },
   subtitle: {
     textAlign: 'center',
-    color: COLORS.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
-    marginHorizontal: 6,
-    marginBottom: SPACING.lg + SPACING.sm,
-  },
-  segmented: {
-    flexDirection: 'row',
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  termsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: SPACING.xs,
-    marginBottom: SPACING.xs,
-  },
-  termsText: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    flex: 1,
-    flexWrap: 'wrap',
-    marginLeft: SPACING.sm,
+    marginBottom: 26,
+    paddingHorizontal: 8,
   },
   link: { color: COLORS.primary, textDecorationLine: 'underline' },
-  mainButton: {
-    marginTop: SPACING.md,
-    borderRadius: RADII.md,
-  },
   footer: {
     textAlign: 'center',
     marginTop: SPACING.md,

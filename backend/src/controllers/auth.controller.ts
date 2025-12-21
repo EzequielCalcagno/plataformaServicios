@@ -17,10 +17,10 @@ export const login = async (req: Request, res: Response) => {
 };
 
 export const register = async (req: Request, res: Response) => {
-  const { email, password, rol, nombre, apellido, telefono } = req.body;
+  const { email, password, nombre, apellido, telefono } = req.body;
 
   try {
-    const rolCode = mapRolToRoleKey(rol); // 'cliente' | 'profesional' → 1 | 2
+    const rolCode = mapRolToRoleKey('CLIENTE');
 
     await registerService({
       email,

@@ -1,16 +1,11 @@
 // src/screens/Jobs.tsx
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Image,
-  TouchableOpacity,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_URL } from '../utils/api';
+import { Loading } from './Loading';
+import { Error } from './Error';
 
 type Props = {
   navigation: any;
@@ -77,29 +72,34 @@ export default function Jobs({ navigation }: Props) {
     loadWorks();
   }, []);
 
+  // ========= Renders principales =========
+  if (loading) {
+    return <Loading message="Cargando trabajos..." />;
+  }
+
+  if (!works) {
+    return (
+      <Error
+        title="No se pudo cargar tu información."
+        message="Volver a iniciar sesión para continuar."
+        actionLabel="Reintentar"
+        onAction={() => navigation.reset({ index: 0, routes: [{ name: 'Login' }] })}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       {/* TOP BAR con back */}
       <View style={styles.topBar}>
-        <TouchableOpacity
-          style={{ padding: 4 }}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity style={{ padding: 4 }} onPress={() => navigation.goBack()}>
           <Text style={{ fontSize: 18 }}>←</Text>
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>Jobs</Text>
         <View style={{ width: 24 }} />
       </View>
 
-      {loading ? (
-        <View style={{ padding: 16 }}>
-          <Text>Cargando trabajos...</Text>
-        </View>
-      ) : errorMsg ? (
-        <View style={{ padding: 16 }}>
-          <Text>{errorMsg}</Text>
-        </View>
-      ) : works.length === 0 ? (
+      {works.length === 0 ? (
         <View style={{ padding: 16 }}>
           <Text>No tenés trabajos registrados todavía.</Text>
         </View>
@@ -107,17 +107,12 @@ export default function Jobs({ navigation }: Props) {
         <ScrollView contentContainerStyle={styles.content}>
           {works.map((w) => {
             const firstImage = w.imagenes && w.imagenes[0];
-            const dateLabel = w.fecha
-              ? new Date(w.fecha).toLocaleDateString()
-              : 'Sin fecha';
+            const dateLabel = w.fecha ? new Date(w.fecha).toLocaleDateString() : 'Sin fecha';
 
             return (
               <View key={w.id} style={styles.card}>
                 {firstImage?.url ? (
-                  <Image
-                    source={{ uri: firstImage.url }}
-                    style={styles.cardImage}
-                  />
+                  <Image source={{ uri: firstImage.url }} style={styles.cardImage} />
                 ) : (
                   <View style={styles.cardImagePlaceholder}>
                     <Text style={{ color: '#9ca3af' }}>Sin imagen</Text>

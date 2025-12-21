@@ -8,7 +8,6 @@ export type LoginResponse = {
 type RegisterRequest = {
   email: string;
   password: string;
-  rol: 'cliente' | 'profesional' | 'admin';
   nombre?: string;
   apellido?: string;
   telefono?: string;
@@ -19,7 +18,7 @@ export async function login(email: string, password: string) {
     body: { email, password },
   });
 
-  return data; // { token }
+  return data.token;
 }
 
 export async function register(data: RegisterRequest) {

@@ -12,7 +12,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: {
-        id:  string;  
+        id: string;
         email: string;
         rolId: number;
       };
@@ -39,8 +39,11 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
 
     req.user = { id: payload.id, email: payload.email, rolId: payload.rolId };
     next();
-  } catch (err) {
+  } catch (err: any) {
     console.error('❌ Error en requireAuth (JWT verify):', err);
+    if (err?.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expirado' });
+    }
     return res.status(401).json({ error: 'Token inválido' });
   }
 };

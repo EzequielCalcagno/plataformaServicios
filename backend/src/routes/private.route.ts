@@ -4,12 +4,11 @@ import { requireRole } from '../middlewares/requireRole.middleware';
 // Controllers
 import { getCurrentUserController } from '../controllers/users.controller';
 import { searchServiciosController } from '../controllers/search.controller';
-import { getProfessionalProfileByIdController } from '../controllers/profiles.controller';
 import {
   getMyProfessionalProfileController,
+  getProfessionalProfileByIdController,
   createMyProfessionalProfileController,
   updateMyProfessionalProfileController,
-  getMyAppProfileController,
 } from '../controllers/profiles.controller';
 import {
   getMyLocationsController,
@@ -18,6 +17,12 @@ import {
   updateMyLocationController,
   deleteMyLocationController,
 } from '../controllers/locations.controller';
+import {
+  uploadWorkImageController,
+  uploadProfileImageController,
+} from '../controllers/uploads.controller';
+
+import { uploadImage } from '../uploads/imageUpload';
 
 const router = Router();
 
@@ -31,6 +36,7 @@ router.get('/currentUser', getCurrentUserController);
 
 // --------------- PROFILE ROUTES ---------------
 router.get('/profile', requireRole('PROFESIONAL'), getMyProfessionalProfileController); // Obtener perfil profesional del usuario autenticado
+router.get('/profile/:userId', getProfessionalProfileByIdController);
 router.post('/profile', requireRole('PROFESIONAL'), createMyProfessionalProfileController); // Crear perfil profesional del usuario autenticado
 router.patch('/profile', requireRole('PROFESIONAL'), updateMyProfessionalProfileController); // Actualizar perfil profesional del usuario autenticado
 
@@ -41,6 +47,21 @@ router.post('/locations', createMyLocationController); // Crear una nueva locaci
 router.patch('/locations/:id', updateMyLocationController); // Actualizar una locación existente
 router.delete('/locations/:id', deleteMyLocationController); // Eliminar una locación
 // --------------- WORK ROUTES ---------------
+
+// --------------- UPLOADS ROUTES ---------------
+router.post(
+  '/uploads/work-image',
+  requireRole('PROFESIONAL'),
+  uploadImage.single('image'),
+  uploadWorkImageController,
+);
+
+router.post(
+  '/uploads/profile-image',
+  requireRole('PROFESIONAL'),
+  uploadImage.single('image'),
+  uploadProfileImageController,
+);
 
 // --------------- WORKS (Servicios / trabajos) ---------------
 /**
@@ -119,7 +140,5 @@ router.get('/app/works', requireRole('PROFESIONAL'), async (_req: Request, res: 
 
 // GET /api/v1/search/servicios?lat=-34.9&lng=-56.1&q=pintura&radiusKm=10
 router.get('/search/servicios', searchServiciosController);
-
-router.get('/professionals/:userId', getProfessionalProfileByIdController);
 
 export default router;

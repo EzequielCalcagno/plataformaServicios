@@ -8,13 +8,14 @@ import { getCurrentUser, UserResponse } from '../services/user.client';
 import { ApiError } from '../utils/http';
 import { mapRolFromId } from '../utils/roles';
 
-// 🔹 Componentes genéricos
-import { MainMenu } from '../navigation/MainMenu';
-import { AppScreen } from '../components/AppScreen';
-import { AppCard } from '../components/AppCard';
-import { AppButton } from '../components/AppButton';
+// Componentes
+import { Screen } from '../components/Screen';
+import { Card } from '../components/Card';
+import { Button } from '../components/Button';
 import { SectionTitle } from '../components/SectionTitle';
 import { COLORS, SPACING, RADII } from '../styles/theme';
+import { Loading } from './Loading';
+import { Error } from './Error';
 
 export default function Home() {
   const navigation = useNavigation<any>();
@@ -46,47 +47,33 @@ export default function Home() {
     loadProfile();
   }, [navigation]);
 
-  // ===== ESTADOS ESPECIALES =====
-
+  // ========= Renders principales =========
   if (loading) {
-    return (
-      <AppScreen>
-        <View style={styles.center}>
-          <ActivityIndicator />
-          <Text style={styles.loadingText}>Cargando...</Text>
-        </View>
-      </AppScreen>
-    );
+    return <Loading message="Cargando..." />;
   }
 
   if (!profile) {
     return (
-      <AppScreen>
-        <View style={styles.center}>
-          <Text style={styles.errorText}>No se pudo cargar tu información.</Text>
-          <AppButton
-            title="Volver a iniciar sesión"
-            onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Login' }] })}
-            style={{ marginTop: SPACING.sm }}
-          />
-        </View>
-      </AppScreen>
+      <Error
+        title="No se pudo cargar tu información."
+        message="Volver a iniciar sesión para continuar."
+        actionLabel="Reintentar"
+        onAction={() => navigation.reset({ index: 0, routes: [{ name: 'Login' }] })}
+      />
     );
   }
 
-  // ===== RENDER PRINCIPAL =====
-
   return (
-    <AppScreen>
+    <Screen>
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         {/* HERO */}
-        <AppCard style={styles.heroCard} withShadow>
+        <Card style={styles.heroCard} withShadow>
           <Text style={styles.heroTitle}>
             Hi {firstName} 👋{'\n'}what needs fixing today?
           </Text>
           <Text style={styles.heroSubtitle}>Book with the professional today!</Text>
 
-          <AppButton
+          <Button
             title={isProfessional ? 'Ver solicitudes' : 'Ver profesionales disponibles'}
             onPress={() => {
               if (isProfessional) {
@@ -97,31 +84,29 @@ export default function Home() {
             }}
             style={styles.heroButton}
           />
-        </AppCard>
+        </Card>
 
         {/* MENÚ PRINCIPAL */}
         <SectionTitle>{isProfessional ? 'Tu panel' : '¿Qué querés hacer hoy?'}</SectionTitle>
-
-        <MainMenu role={isProfessional ? 'professional' : 'client'} />
 
         {/* RESUMEN PROFESIONAL */}
         {isProfessional && (
           <>
             <SectionTitle>Resumen rápido</SectionTitle>
             <View style={styles.summaryRow}>
-              <AppCard style={styles.summaryCard}>
-                <Text style={styles.summaryNumber}>{profile.jobsCompleted ?? 0}</Text>
+              <Card style={styles.summaryCard}>
+                {/* <Text style={styles.summaryNumber}>{profile.jobsCompleted ?? 0}</Text> */}
                 <Text style={styles.summaryLabel}>Trabajos completados</Text>
-              </AppCard>
-              <AppCard style={styles.summaryCard}>
-                <Text style={styles.summaryNumber}>{profile.rating?.toFixed(1) ?? '0.0'}</Text>
+              </Card>
+              <Card style={styles.summaryCard}>
+                {/* <Text style={styles.summaryNumber}>{profile.rating?.toFixed(1) ?? '0.0'}</Text> */}
                 <Text style={styles.summaryLabel}>Rating</Text>
-              </AppCard>
+              </Card>
             </View>
           </>
         )}
       </ScrollView>
-    </AppScreen>
+    </Screen>
   );
 }
 
@@ -197,7 +182,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bgScreen,
     paddingHorizontal: SPACING.lg,
   },
   loadingText: {
@@ -207,7 +192,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 14,
-    color: COLORS.danger,
+    color: COLORS.textMuted,
     marginBottom: 12,
     textAlign: 'center',
   },
