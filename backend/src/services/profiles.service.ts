@@ -8,6 +8,7 @@ import {
   UpdateProfessionalProfileSchema,
 } from '../schemas/profile.schema';
 import { getProfessionalPublicProfileByUserIdRepository } from '../repositories/profiles.repository';
+import { getServicesByProfessionalIdRepository } from '../repositories/profiles.repository';
 
 
 // Obtener el perfil profesional por ID de usuario
@@ -132,9 +133,16 @@ export const getProfessionalPublicProfileByUserIdService = async (
 
   if (!profile) return null;
 
+  // ✅ Traer servicios reales
+  const servicesDb = await getServicesByProfessionalIdRepository(userId);
+
+  // ✅ DEBUG útil (backend)
+  console.log('🧩 Public profile userId:', userId);
+  console.log('🧩 servicesDb count:', servicesDb?.length ?? 0);
+
   return {
     id: userId, // 👈 CLAVE: ESTE ES EL ID QUE FALTABA
-    name: 'Profesional', // después podés unir con users si querés
+    name: 'Profesional', // después podés unir con usuarios si querés
     photoUrl: profile.portada_url ?? null,
     specialty: profile.especialidad ?? null,
     location: 'Montevideo, Uruguay', // placeholder
@@ -142,7 +150,14 @@ export const getProfessionalPublicProfileByUserIdService = async (
     jobsCompleted: 0,
     positiveFeedback: null,
     about: profile.descripcion ?? null,
-    services: [], // luego se puede sumar
-    reviews: [],  // luego se puede sumar
+
+    // ✅ ahora sí devuelve servicios
+    services: (servicesDb ?? []).map((s: any) => ({
+      id: String(s.id),
+      title: String(s.titulo ?? ''),
+      category: String(s.categoria ?? ''),
+    })),
+
+    reviews: [], // luego lo sumamos
   };
 };

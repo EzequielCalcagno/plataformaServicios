@@ -3,8 +3,8 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
-import { AppScreen } from '../components/Screen';
-import { AppCard } from '../components/Card';
+import { Screen } from '../components/Screen';
+import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { TopBar } from '../components/TopBar';
 import { COLORS, SPACING, RADII } from '../styles/theme';
@@ -91,7 +91,7 @@ export default function LocationsScreen() {
     const isPrincipal = item.principal;
 
     return (
-      <AppCard style={styles.card} withShadow>
+      <Card style={styles.card} withShadow>
         <View style={styles.cardHeader}>
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{item.nombre_ubicacion || 'Sin nombre'}</Text>
@@ -126,12 +126,12 @@ export default function LocationsScreen() {
             onPress={() => handleDelete(item.id)}
           />
         </View>
-      </AppCard>
+      </Card>
     );
   };
 
   return (
-    <AppScreen>
+    <Screen>
       <TopBar
         title="Mis ubicaciones"
         showBack
@@ -180,7 +180,7 @@ export default function LocationsScreen() {
           />
         )}
       </View>
-    </AppScreen>
+    </Screen>
   );
 }
 

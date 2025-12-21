@@ -1,6 +1,7 @@
 // src/routes/private.route.ts
 import { Router, Request, Response } from 'express';
 import { requireRole } from '../middlewares/requireRole.middleware';
+
 // Controllers
 import { getCurrentUserController } from '../controllers/users.controller';
 import { searchServiciosController } from '../controllers/search.controller';
@@ -10,6 +11,7 @@ import {
   createMyProfessionalProfileController,
   updateMyProfessionalProfileController,
 } from '../controllers/profiles.controller';
+
 import {
   getMyLocationsController,
   getLocationByIdController,
@@ -23,6 +25,24 @@ import {
 } from '../controllers/uploads.controller';
 
 import { uploadImage } from '../uploads/imageUpload';
+
+import {
+  getReservationByIdController,
+  createReservationController,
+  listMyReservationsClienteController,
+  listMyReservationsProfesionalController,
+  profesionalAcceptReservationController,
+  profesionalProposeController,
+  profesionalCancelController,
+  profesionalFinishController,
+  clientAcceptProposalController,
+  clientRejectProposalController,
+
+  // ✅ NUEVOS controllers (tenés que crearlos/exportarlos en reservations.controller.ts)
+  requesterFinishController,
+  confirmFinishController,
+  rejectFinishController,
+} from '../controllers/reservations.controller';
 
 const router = Router();
 
@@ -41,12 +61,11 @@ router.post('/profile', requireRole('PROFESIONAL'), createMyProfessionalProfileC
 router.patch('/profile', requireRole('PROFESIONAL'), updateMyProfessionalProfileController); // Actualizar perfil profesional del usuario autenticado
 
 // --------------- LOCATION ROUTES ---------------
-router.get('/locations', getMyLocationsController); // Obtener todas las locaciones del usuario autenticado
-router.get('/locations/:id', getLocationByIdController); // Obtener una locación por ID
-router.post('/locations', createMyLocationController); // Crear una nueva locación
-router.patch('/locations/:id', updateMyLocationController); // Actualizar una locación existente
-router.delete('/locations/:id', deleteMyLocationController); // Eliminar una locación
-// --------------- WORK ROUTES ---------------
+router.get('/locations', getMyLocationsController);
+router.get('/locations/:id', getLocationByIdController);
+router.post('/locations', createMyLocationController);
+router.patch('/locations/:id', updateMyLocationController);
+router.delete('/locations/:id', deleteMyLocationController);
 
 // --------------- UPLOADS ROUTES ---------------
 router.post(
@@ -77,25 +96,20 @@ router.post(
  * }
  */
 router.post('/app/works', requireRole('PROFESIONAL'), async (req: Request, res: Response) => {
-  const { title, description, date, imageUrls } = req.body;
-
-  if (!title || !description) {
-    return res.status(400).json({ message: 'title y description son obligatorios' });
-  }
-
-  // TODO: guardar en la BD real.
-
   try {
+    const { title, description, date, imageUrls } = req.body;
+
+    if (!title || !description) {
+      return res.status(400).json({ message: 'title y description son obligatorios' });
+    }
+
     const newWork = {
-      id: Date.now(), // ID mock
+      id: Date.now(),
       titulo: title,
       descripcion: description,
       fecha: date || null,
       imagenes: Array.isArray(imageUrls)
-        ? imageUrls.map((url: string, index: number) => ({
-            url,
-            orden: index,
-          }))
+        ? imageUrls.map((url: string, index: number) => ({ url, orden: index }))
         : [],
     };
 
@@ -104,41 +118,42 @@ router.post('/app/works', requireRole('PROFESIONAL'), async (req: Request, res: 
     console.error('Error en POST /private/app/works', err);
     return res.status(500).json({ message: 'Error interno al crear el trabajo' });
   }
-
-  // TODO: acá más adelante vas a guardar en la BD real.
-  // Por ahora devolvemos un mock para que el frontend funcione.
-
-  // const newWork = {
-  //   id: Date.now(), // ID mock
-  //   titulo: title,
-  //   descripcion: description,
-  //   fecha: date || null,
-  //   imagenes: Array.isArray(imageUrls)
-  //     ? imageUrls.map((url: string, index: number) => ({
-  //       url,
-  //       orden: index,
-  //     }))
-  //     : [],
-  // };
-
-  //   return res.status(201).json(newWork);
-  // } catch (err) {
-  //   console.error('Error en POST /private/app/works', err);
-  //   return res.status(500).json({ message: 'Error interno al crear el trabajo' });
-  // }
 });
 
-/**
- * (Opcional) GET /api/v1/private/app/works
- * Para listar los trabajos del profesional en MyAccount / Profile.
- * Por ahora devuelve un array vacío o un mock.
- */
 router.get('/app/works', requireRole('PROFESIONAL'), async (_req: Request, res: Response) => {
-  // TODO: traer de la BD real
   return res.json([]);
 });
 
-// GET /api/v1/search/servicios?lat=-34.9&lng=-56.1&q=pintura&radiusKm=10
+// --------------- SEARCH ---------------
 router.get('/search/servicios', searchServiciosController);
+
+// --------------- RESERVATIONS (Sprint 4) ---------------
+
+// Cliente/solicitante: crea solicitud (cualquiera puede ser solicitante)
+router.post('/reservations', createReservationController);
+
+// Solicitante: listar mis reservas (tabs)
+router.get('/reservations/mine', listMyReservationsClienteController);
+
+// Prestador (profesional asignado): listar reservas que me llegan (tabs)
+router.get('/reservations/pro', requireRole('PROFESIONAL'), listMyReservationsProfesionalController);
+
+// Prestador: acciones
+router.patch('/reservations/:id/accept', requireRole('PROFESIONAL'), profesionalAcceptReservationController);
+router.patch('/reservations/:id/propose', requireRole('PROFESIONAL'), profesionalProposeController);
+router.patch('/reservations/:id/cancel', requireRole('PROFESIONAL'), profesionalCancelController);
+router.patch('/reservations/:id/finish', requireRole('PROFESIONAL'), profesionalFinishController);
+
+// Solicitante: responde a negociación (⚠️ NO requireRole)
+router.patch('/reservations/:id/accept-proposal', clientAcceptProposalController);
+router.patch('/reservations/:id/reject-proposal', clientRejectProposalController);
+
+// ✅ NUEVAS: finalizar por solicitante + confirmación del otro (⚠️ NO requireRole)
+router.patch('/reservations/:id/requester-finish', requesterFinishController);
+router.patch('/reservations/:id/confirm-finish', confirmFinishController);
+router.patch('/reservations/:id/reject-finish', rejectFinishController);
+
+// Detalle
+router.get('/reservations/:id', getReservationByIdController);
 
 export default router;

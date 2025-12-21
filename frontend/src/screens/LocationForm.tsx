@@ -5,8 +5,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import MapView, { Marker, MapPressEvent, Region } from 'react-native-maps';
 import * as ExpoLocation from 'expo-location';
 
-import { AppScreen } from '../components/Screen';
-import { AppInput } from '../components/Input';
+import { Screen } from '../components/Screen';
+import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { TopBar } from '../components/TopBar';
 import { COLORS, SPACING, RADII } from '../styles/theme';
@@ -139,7 +139,7 @@ export default function LocationForm() {
   };
 
   return (
-    <AppScreen>
+    <Screen>
       <TopBar
         title={isEditMode ? 'Editar ubicación' : 'Nueva ubicación'}
         showBack
@@ -171,7 +171,7 @@ export default function LocationForm() {
 
         {/* CAMPOS DE TEXTO */}
         <Text style={styles.label}>Nombre de la ubicación</Text>
-        <AppInput
+        <Input
           placeholder="Casa, Oficina..."
           value={nombre}
           onChangeText={setNombre}
@@ -179,7 +179,7 @@ export default function LocationForm() {
         />
 
         <Text style={styles.label}>Ciudad</Text>
-        <AppInput
+        <Input
           placeholder="Montevideo"
           value={ciudad}
           onChangeText={setCiudad}
@@ -187,7 +187,7 @@ export default function LocationForm() {
         />
 
         <Text style={styles.label}>Dirección</Text>
-        <AppInput
+        <Input
           placeholder="Ej: 18 de Julio 1234, apto 301"
           value={direccion}
           onChangeText={setDireccion}
@@ -212,7 +212,7 @@ export default function LocationForm() {
           style={{ marginTop: SPACING.lg }}
         />
       </View>
-    </AppScreen>
+    </Screen>
   );
 }
 

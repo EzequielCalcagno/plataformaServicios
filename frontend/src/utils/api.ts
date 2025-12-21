@@ -18,4 +18,52 @@ export const api = {
 
   delete: <T = any>(path: string, opts: WithoutMethod = {}) =>
     http<T>(path, { ...opts, method: 'DELETE' }),
+
+  /**
+   * ✅ Helpers para enviar JSON como body
+   * (asumiendo que tu http() soporta opts.body)
+   */
+  postJson: <T = any>(path: string, body: unknown, opts: WithoutMethod = {}) =>
+    http<T>(path, {
+      ...opts,
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(opts.headers || {}),
+      },
+    }),
+
+  putJson: <T = any>(path: string, body: unknown, opts: WithoutMethod = {}) =>
+    http<T>(path, {
+      ...opts,
+      method: 'PUT',
+      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(opts.headers || {}),
+      },
+    }),
+
+  patchJson: <T = any>(path: string, body: unknown, opts: WithoutMethod = {}) =>
+    http<T>(path, {
+      ...opts,
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(opts.headers || {}),
+      },
+    }),
+
+  deleteJson: <T = any>(path: string, body: unknown, opts: WithoutMethod = {}) =>
+    http<T>(path, {
+      ...opts,
+      method: 'DELETE',
+      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(opts.headers || {}),
+      },
+    }),
 };

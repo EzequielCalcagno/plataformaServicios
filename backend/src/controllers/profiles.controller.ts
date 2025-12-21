@@ -6,8 +6,10 @@ import {
   updateMyProfessionalProfileService,
 } from '../services/profiles.service';
 
-import { getProfessionalProfileByUserIdRepository } from '../repositories/profiles.repository';
+import { getProfessionalProfileByUserIdRepository,getServicesByProfessionalIdRepository } from '../repositories/profiles.repository';
 import { getProfessionalPublicProfileByUserIdService } from '../services/profiles.service';
+
+
 
 // ================= EXISTENTE =================
 
@@ -150,7 +152,9 @@ export const getProfessionalProfileByIdController = async (req: Request, res: Re
       return res.status(404).json({ error: 'Perfil profesional no encontrado' });
     }
 
-    return res.json(profile);
+console.log('✅ getProfessionalProfileByIdController response:', profile);
+
+return res.json(profile);
   } catch (error) {
     console.error('❌ Error en getProfessionalProfileByIdController:', error);
     return res.status(500).json({ error: 'Error al obtener perfil profesional' });

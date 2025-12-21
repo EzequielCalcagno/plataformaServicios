@@ -2,6 +2,10 @@
 import { api } from '../utils/api';
 
 export type UserResponse = {
+  //jobsCompleted: number;
+  rating: number;
+  location: string;
+  activo: boolean;
   apellido?: string;
   nombre?: string;
   telefono?: string;

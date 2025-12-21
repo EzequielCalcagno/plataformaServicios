@@ -12,7 +12,7 @@ import { SessionProvider } from './src/context/SessionContext';
 import Login from './src/screens/Login';
 import Register from './src/screens/Register';
 
-// Perfil “viejo” para ver otros profesionales
+// Perfil para ver otros profesionales
 import Profile from './src/screens/Profile';
 
 import AddService from './src/screens/AddService';
@@ -21,16 +21,28 @@ import LocationPicker from './src/screens/LocationPicker';
 import Locations from './src/screens/Locations'; // para Locations
 import LocationFormScreen from './src/screens/LocationForm'; // para LocationForm
 import MainTabs from './src/navigation/MainTabs';
+import Bookings from './src/screens/Bookings';
+import ReservationDetail from './src/screens/ReservationDetail';
 
+// ✅ NUEVO
+import CreateRequest from './src/screens/CreateRequest';
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   MainTabs: undefined;
+
   EditProfile: undefined;
   AddService: undefined;
-  ProfessionalProfile?: { professionalId?: number };
   LocationPicker: undefined;
   LocationForm: undefined;
+
+  // Perfil de otro profesional
+  ProfessionalProfile: { profesionalId: string };
+
+  // ✅ CreateRequest (solicitar servicio)
+  CreateRequest: { profesionalId: string };
+
+  ReservationDetail: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -75,8 +87,12 @@ export default function App() {
             <Stack.Screen name="LocationForm" component={LocationFormScreen} />
             <Stack.Screen name="LocationPicker" component={LocationPicker} />
 
-            {/* Perfil de otro profesional (usa el Profile viejo) */}
-            <Stack.Screen name="ProfessionalProfile" component={Profile as any} />
+            <Stack.Screen name="ReservationDetail" component={ReservationDetail as any} />
+          {/* Perfil público */}
+          <Stack.Screen name="ProfessionalProfile" component={Profile as any} />
+
+          {/* ✅ Solicitar servicio */}
+          <Stack.Screen name="CreateRequest" component={CreateRequest as any} />
           </Stack.Navigator>
         </SessionProvider>
       </NavigationContainer>

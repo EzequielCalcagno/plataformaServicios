@@ -1,3 +1,4 @@
+// src/screens/Profile.tsx
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -6,22 +7,18 @@ import {
   FlatList,
   ScrollView,
   Image,
+  TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 
-import {
-  getMyProfile,
-  getProfessionalProfileById,
-} from '../services/profile.client';
-
-// ✅ para llamar /private/profile (perfil profesional completo)
+import { getMyProfile, getProfessionalProfileById } from '../services/profile.client';
 import { api } from '../utils/api';
 
 // 🔹 Componentes
-import { AppScreen } from '../components/Screen';
+import { Screen } from '../components/Screen';
 import { TopBar } from '../components/TopBar';
-import { AppCard } from '../components/Card';
+import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { SectionTitle } from '../components/SectionTitle';
 import { COLORS, SPACING, RADII } from '../styles/theme';
@@ -30,10 +27,6 @@ type Props = {
   navigation: any;
   route: any;
 };
-
-/* ===========================
-   TIPOS
-=========================== */
 
 type ProfessionalProfile = {
   id: string;
@@ -45,11 +38,7 @@ type ProfessionalProfile = {
   jobsCompleted?: number | null;
   positiveFeedback?: number | null;
   about?: string | null;
-  services?: {
-    id: string;
-    title: string;
-    category: string;
-  }[];
+  services?: { id: string; title: string; category: string }[];
   reviews?: {
     id: string;
     clientName: string;
@@ -74,7 +63,6 @@ type ClientProfile = {
    HELPERS
 =========================== */
 
-// Normaliza respuestas del backend (por si vienen campos con otros nombres)
 function normalizeProfessionalProfile(input: any): ProfessionalProfile {
   const id = String(input?.id ?? input?.userId ?? input?.usuario_id ?? '');
   const name =
@@ -110,7 +98,7 @@ function normalizeProfessionalProfile(input: any): ProfessionalProfile {
           clientName: String(r?.clientName ?? r?.cliente ?? ''),
           timeAgo: String(r?.timeAgo ?? r?.time_ago ?? ''),
           rating: Number(r?.rating ?? 0),
-          comment: String(r?.comment ?? ''),
+          comment: String(r?.comment ?? r?.comentario ?? ''),
           likes: Number(r?.likes ?? 0),
           replies: Number(r?.replies ?? 0),
         }))
@@ -123,18 +111,18 @@ function mapCompactToClientProfile(compact: any): ClientProfile {
     photoUrl: (compact?.photoUrl ?? null) as string | null,
     name: String(compact?.name ?? 'Usuario'),
     location: (compact?.location ?? null) as string | null,
-    email: '', // todavía no viene en ProfileResponse (compacto)
-    phone: '', // todavía no viene en ProfileResponse (compacto)
+    email: '',
+    phone: '',
     pendingRequests: [],
   };
 }
 
 /* ===========================
-   COMPONENTE
+   COMPONENT
 =========================== */
 
 export default function Profile({ route, navigation }: Props) {
-  // 👉 si viene este param, estamos viendo OTRO profesional
+  // 👇 si viene este param, estamos viendo OTRO profesional
   const profesionalIdFromRoute = route?.params?.profesionalId ?? null;
   const isViewingOtherProfessional = !!profesionalIdFromRoute;
 
@@ -147,46 +135,35 @@ export default function Profile({ route, navigation }: Props) {
   const [professionalProfile, setProfessionalProfile] =
     useState<ProfessionalProfile | null>(null);
 
-  const [clientProfile, setClientProfile] =
-    useState<ClientProfile | null>(null);
+  const [clientProfile, setClientProfile] = useState<ClientProfile | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  /* ===========================
-     FETCH PROFILE
-  =========================== */
 
   const fetchProfile = useCallback(async () => {
     try {
       setErrorMsg(null);
       setLoading(true);
 
-      // Caso 1: ver perfil de OTRO profesional (público/visible)
+      // 1) Perfil de OTRO profesional
       if (isViewingOtherProfessional) {
         const data = await getProfessionalProfileById(profesionalIdFromRoute);
         const normalized = normalizeProfessionalProfile(data);
-        if (!normalized.id) {
-          throw new Error('Perfil profesional inválido (sin id)');
-        }
+        if (!normalized.id) throw new Error('Perfil profesional inválido (sin id)');
         setProfessionalProfile(normalized);
         setClientProfile(null);
         return;
       }
 
-      // Caso 2: mi perfil
+      // 2) Mi perfil
       if (isProfessional) {
-        // ✅ MI PERFIL PROFESIONAL COMPLETO (NO usar getMyProfile que es compacto)
         const data = await api.get<any>('/private/profile');
         const normalized = normalizeProfessionalProfile(data);
-        if (!normalized.id) {
-          // si tu backend devuelve sin "id", revisamos luego el endpoint
-          throw new Error('Tu perfil profesional llegó sin id');
-        }
+        if (!normalized.id) throw new Error('Tu perfil profesional llegó sin id');
         setProfessionalProfile(normalized);
         setClientProfile(null);
       } else {
-        // Caso 3: cliente (por ahora, el único endpoint disponible es compacto)
+        // 3) Cliente (compacto por ahora)
         const compact = await getMyProfile();
         setClientProfile(mapCompactToClientProfile(compact));
         setProfessionalProfile(null);
@@ -205,68 +182,70 @@ export default function Profile({ route, navigation }: Props) {
     }, [fetchProfile]),
   );
 
-  /* ===========================
-     LOGOUT
-  =========================== */
-
   const handleLogout = async () => {
     await AsyncStorage.multiRemove(['@token', '@user', '@role', '@userId']);
     navigation.replace('Login');
   };
 
-  /* ===========================
-     ESTADOS
-  =========================== */
-
   if (loading) {
     return (
-      <AppScreen>
+      <Screen>
         <View style={styles.center}>
           <Text>Cargando perfil…</Text>
         </View>
-      </AppScreen>
+      </Screen>
     );
   }
 
   if (errorMsg) {
     return (
-      <AppScreen>
+      <Screen>
         <View style={styles.center}>
           <Text>{errorMsg}</Text>
           {!isViewingOtherProfessional && (
             <Button title="Salir" onPress={handleLogout} />
           )}
         </View>
-      </AppScreen>
+      </Screen>
     );
   }
 
-  /* ===========================
-     RENDER
-  =========================== */
-
   return (
-    <AppScreen>
-      {/* HEADER */}
+    <Screen>
       <TopBar
         title="Perfil"
-        rightIcon={
+        rightNode={
           !isViewingOtherProfessional ? (
-            <Text style={{ fontSize: 20 }}>⚙️</Text>
+            <TouchableOpacity
+              onPress={() => setShowMenu((p) => !p)}
+              style={styles.rightIconBtn}
+              activeOpacity={0.8}
+            >
+              <Text style={{ fontSize: 20 }}>⚙️</Text>
+            </TouchableOpacity>
           ) : null
-        }
-        onPressRight={
-          !isViewingOtherProfessional
-            ? () => setShowMenu((p) => !p)
-            : undefined
         }
       />
 
-      {/* MENU */}
       {showMenu && !isViewingOtherProfessional && (
         <View style={styles.menu}>
-          <Text style={styles.menuItem}>Editar perfil</Text>
-          <Text style={[styles.menuItem, styles.danger]} onPress={handleLogout}>
+          <Text
+            style={styles.menuItem}
+            onPress={() => {
+              setShowMenu(false);
+              navigation.navigate('EditProfile');
+            }}
+          >
+            Editar perfil
+          </Text>
+
+          <Text
+            style={[styles.menuItem, styles.danger]}
+            onPress={async () => {
+              setShowMenu(false);
+              await handleLogout();
+            }}
+          >
             Cerrar sesión
           </Text>
         </View>
@@ -276,12 +255,9 @@ export default function Profile({ route, navigation }: Props) {
         {/* ================= PROFESIONAL ================= */}
         {professionalProfile && (
           <>
-            <AppCard style={styles.profileCard} withShadow>
+            <Card style={styles.profileCard} withShadow>
               {professionalProfile.photoUrl ? (
-                <Image
-                  source={{ uri: professionalProfile.photoUrl }}
-                  style={styles.avatar}
-                />
+                <Image source={{ uri: professionalProfile.photoUrl }} style={styles.avatar} />
               ) : (
                 <View style={styles.avatarPlaceholder} />
               )}
@@ -298,30 +274,23 @@ export default function Profile({ route, navigation }: Props) {
 
               <View style={styles.statsRow}>
                 <View style={styles.statCard}>
-                  <Text style={styles.statValue}>
-                    {professionalProfile.rating ?? 0}
-                  </Text>
+                  <Text style={styles.statValue}>{professionalProfile.rating ?? 0}</Text>
                   <Text style={styles.statLabel}>Rating</Text>
                 </View>
 
                 <View style={styles.statCard}>
-                  <Text style={styles.statValue}>
-                    {professionalProfile.jobsCompleted ?? 0}
-                  </Text>
+                  <Text style={styles.statValue}>{professionalProfile.jobsCompleted ?? 0}</Text>
                   <Text style={styles.statLabel}>Jobs</Text>
                 </View>
 
                 {professionalProfile.positiveFeedback != null && (
                   <View style={styles.statCard}>
-                    <Text style={styles.statValue}>
-                      {professionalProfile.positiveFeedback}%
-                    </Text>
+                    <Text style={styles.statValue}>{professionalProfile.positiveFeedback}%</Text>
                     <Text style={styles.statLabel}>Positive</Text>
                   </View>
                 )}
               </View>
 
-              {/* BOTÓN SOLO PARA PERFIL PÚBLICO */}
               {isViewingOtherProfessional && (
                 <Button
                   title="Request Service"
@@ -333,9 +302,8 @@ export default function Profile({ route, navigation }: Props) {
                   }
                 />
               )}
-            </AppCard>
+            </Card>
 
-            {/* ABOUT */}
             {!!professionalProfile.about && (
               <>
                 <SectionTitle>About</SectionTitle>
@@ -343,20 +311,18 @@ export default function Profile({ route, navigation }: Props) {
               </>
             )}
 
-            {/* SERVICES */}
             {!!professionalProfile.services?.length && (
               <>
                 <SectionTitle>Services</SectionTitle>
                 {professionalProfile.services.map((s) => (
-                  <AppCard key={s.id} style={styles.serviceCard}>
+                  <Card key={s.id} style={styles.serviceCard}>
                     <Text style={styles.serviceTitle}>{s.title}</Text>
                     <Text style={styles.serviceCategory}>{s.category}</Text>
-                  </AppCard>
+                  </Card>
                 ))}
               </>
             )}
 
-            {/* REVIEWS */}
             {!!professionalProfile.reviews?.length && (
               <>
                 <SectionTitle>Reviews</SectionTitle>
@@ -365,10 +331,10 @@ export default function Profile({ route, navigation }: Props) {
                   keyExtractor={(i) => i.id}
                   scrollEnabled={false}
                   renderItem={({ item }) => (
-                    <AppCard style={styles.reviewCard}>
+                    <Card style={styles.reviewCard}>
                       <Text style={styles.reviewName}>{item.clientName}</Text>
                       <Text style={styles.reviewText}>{item.comment}</Text>
-                    </AppCard>
+                    </Card>
                   )}
                 />
               </>
@@ -376,47 +342,38 @@ export default function Profile({ route, navigation }: Props) {
           </>
         )}
 
-        {/* ================= CLIENTE (placeholder limpio) ================= */}
+        {/* ================= CLIENTE (placeholder) ================= */}
         {!professionalProfile && clientProfile && (
-          <>
-            <AppCard style={styles.profileCard} withShadow>
-              {clientProfile.photoUrl ? (
-                <Image source={{ uri: clientProfile.photoUrl }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarPlaceholder} />
-              )}
+          <Card style={styles.profileCard} withShadow>
+            {clientProfile.photoUrl ? (
+              <Image source={{ uri: clientProfile.photoUrl }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatarPlaceholder} />
+            )}
 
-              <Text style={styles.name}>{clientProfile.name}</Text>
+            <Text style={styles.name}>{clientProfile.name}</Text>
+            {!!clientProfile.location && <Text style={styles.location}>{clientProfile.location}</Text>}
 
-              {!!clientProfile.location && (
-                <Text style={styles.location}>{clientProfile.location}</Text>
-              )}
-
-              <Text style={[styles.paragraph, { marginTop: SPACING.md }]}>
-                Perfil de cliente (en construcción).
-              </Text>
-            </AppCard>
-          </>
+            <Text style={[styles.paragraph, { marginTop: SPACING.md }]}>
+              Perfil de cliente (en construcción).
+            </Text>
+          </Card>
         )}
       </ScrollView>
-    </AppScreen>
+    </Screen>
   );
 }
 
-/* ===========================
-   STYLES
-=========================== */
-
 const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  content: { padding: SPACING.lg, paddingBottom: SPACING.xl },
+
+  rightIconBtn: {
+    padding: 6,
+    borderRadius: RADII.sm,
   },
-  content: {
-    padding: SPACING.lg,
-    paddingBottom: SPACING.xl,
-  },
+
   menu: {
     position: 'absolute',
     right: 16,
@@ -430,80 +387,36 @@ const styles = StyleSheet.create({
   menuItem: {
     paddingVertical: 8,
     paddingHorizontal: 12,
+    color: COLORS.text,
   },
-  danger: {
-    color: COLORS.danger,
-  },
-  profileCard: {
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  avatar: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    marginBottom: 8,
-  },
+  danger: { color: COLORS.danger },
+
+  profileCard: { alignItems: 'center', marginBottom: SPACING.md },
+
+  avatar: { width: 90, height: 90, borderRadius: 45, marginBottom: 8 },
   avatarPlaceholder: {
     width: 90,
     height: 90,
     borderRadius: 45,
     backgroundColor: COLORS.border,
   },
-  name: {
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-  specialty: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-  },
-  location: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    marginTop: 16,
-    width: '100%',
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  paragraph: {
-    fontSize: 14,
-    color: COLORS.text,
-    marginBottom: 12,
-  },
-  serviceCard: {
-    marginBottom: 8,
-  },
-  serviceTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  serviceCategory: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  reviewCard: {
-    marginBottom: 8,
-  },
-  reviewName: {
-    fontWeight: '700',
-  },
-  reviewText: {
-    fontSize: 13,
-    color: COLORS.text,
-  },
+
+  name: { fontSize: 20, fontWeight: '800', marginTop: 4, color: COLORS.text },
+  specialty: { fontSize: 14, color: COLORS.textMuted },
+  location: { fontSize: 13, color: COLORS.textMuted },
+
+  statsRow: { flexDirection: 'row', marginTop: 16, width: '100%' },
+  statCard: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  statLabel: { fontSize: 12, color: COLORS.textMuted },
+
+  paragraph: { fontSize: 14, color: COLORS.text, marginBottom: 12 },
+
+  serviceCard: { marginBottom: 8 },
+  serviceTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  serviceCategory: { fontSize: 12, color: COLORS.textMuted },
+
+  reviewCard: { marginBottom: 8 },
+  reviewName: { fontWeight: '700', color: COLORS.text },
+  reviewText: { fontSize: 13, color: COLORS.text },
 });

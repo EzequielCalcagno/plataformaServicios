@@ -93,3 +93,30 @@ export const getProfessionalPublicProfileByUserIdRepository = async (
 
   return data;
 };
+// ✅ NUEVO: traer servicios activos del profesional (para perfil público)
+export const getServicesByProfessionalIdRepository = async (
+  profesionalId: string,
+) => {
+  const { data, error } = await db
+    .from('servicios')
+    .select(
+      `
+      id,
+      profesional_id,
+      titulo,
+      categoria,
+      descripcion,
+      activo
+    `,
+    )
+    .eq('profesional_id', profesionalId)
+    .eq('activo', true)
+    .order('creado_en', { ascending: false });
+
+  if (error) {
+    console.error('❌ Error en getServicesByProfessionalIdRepository:', error);
+    return [];
+  }
+
+  return data ?? [];
+};
