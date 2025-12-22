@@ -21,7 +21,7 @@ export const COLORS = {
   // Figma colors
   bgScreen: '#FAFAFA',
   cardBg: '#FFFFFF',
-  borderCard: '#E9E9E9',
+  border: '#E9E9E9',
   textInput: '#4F7096',
   bgInput: '#FFFFFF',
   borderInput: '#E9E9E9',
@@ -48,6 +48,9 @@ export const COLORS = {
   buttonSocialBg: 'transparent',
   buttonSocialBorder: '#E9E9E9',
   buttonSocialText: '#0D141C',
+  graySoft: '#F3F4F6',  // gris suave tipo “pill/bg”
+  danger: '#EF4444',    // rojo de alerta (dot / warning)
+  bg: '#FAFAFA',        // alias práctico (igual a bgScreen)
 };
 
 export const RADII = {

@@ -15,10 +15,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
-import { AppScreen } from '../components/AppScreen';
+import { Screen } from '../components/Screen';
 import { TopBar } from '../components/TopBar';
-import { AppCard } from '../components/AppCard';
-import { AppButton } from '../components/AppButton';
+import { Card } from '../components/Card';
+import { Button } from '../components/Button';
 import { SectionTitle } from '../components/SectionTitle';
 import { COLORS, SPACING, RADII } from '../styles/theme';
 
@@ -372,7 +372,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
   };
 
   return (
-    <AppScreen>
+    <Screen>
       <TopBar title="Booking details" showBack />
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -386,7 +386,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
             <Text style={styles.pageTitle}>{`Booking #${item.id}`}</Text>
 
             {/* Service card (similar a referencia) */}
-            <AppCard withShadow style={styles.serviceCard}>
+            <Card withShadow style={styles.serviceCard}>
               <View style={styles.serviceRow}>
                 <View style={styles.serviceIconBox}>
                   <Ionicons name="hammer-outline" size={18} color={COLORS.text} />
@@ -412,10 +412,10 @@ export default function ReservationDetail({ navigation, route }: Props) {
                   </Text>
                 </View>
               </View>
-            </AppCard>
+            </Card>
 
             {/* Profesional / Solicitante section */}
-            <AppCard withShadow style={styles.personCard}>
+            <Card withShadow style={styles.personCard}>
               <Text style={styles.sectionLikeRef}>
                 {mySide === 'SOLICITANTE' ? 'Profesional' : 'Solicitante'}
               </Text>
@@ -458,10 +458,10 @@ export default function ReservationDetail({ navigation, route }: Props) {
               ) : !otherPhone ? (
                 <Text style={styles.help}>No hay teléfono registrado para este usuario.</Text>
               ) : null}
-            </AppCard>
+            </Card>
 
             {/* Status stepper */}
-            <AppCard withShadow style={styles.statusCard}>
+            <Card withShadow style={styles.statusCard}>
               <Text style={styles.sectionLikeRef}>Status</Text>
 
               <View style={styles.stepRow}>
@@ -476,17 +476,17 @@ export default function ReservationDetail({ navigation, route }: Props) {
                 <Ionicons name={statusStep >= 3 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />
                 <Text style={styles.stepText}>Service completed</Text>
               </View>
-            </AppCard>
+            </Card>
 
             {/* Confirmación finalización */}
             {canConfirmFinish && (
               <>
                 <SectionTitle>¿Terminaste el trabajo?</SectionTitle>
-                <AppCard style={styles.box}>
+                <Card style={styles.box}>
                   <Text style={styles.boxTitle}>La otra persona marcó como finalizado</Text>
                   <Text style={styles.help}>¿Confirmás que el servicio ya terminó?</Text>
 
-                  <AppButton title="✅ Confirmar finalización" onPress={onConfirmFinish} disabled={!canConfirmFinish} />
+                  <Button title="✅ Confirmar finalización" onPress={onConfirmFinish} disabled={!canConfirmFinish} />
                   <View style={{ height: 10 }} />
 
                   <Text style={styles.label}>Si no estás de acuerdo, dejá un mensaje</Text>
@@ -498,8 +498,8 @@ export default function ReservationDetail({ navigation, route }: Props) {
                     style={[styles.input, { minHeight: 70 }]}
                     multiline
                   />
-                  <AppButton title="❌ No, sigue en curso" onPress={onRejectFinish} disabled={!canRejectFinish} />
-                </AppCard>
+                  <Button title="❌ No, sigue en curso" onPress={onRejectFinish} disabled={!canRejectFinish} />
+                </Card>
               </>
             )}
 
@@ -509,14 +509,14 @@ export default function ReservationDetail({ navigation, route }: Props) {
                 <SectionTitle>Acciones (Prestador)</SectionTitle>
 
                 {(item.estado === 'PENDIENTE' || item.estado === 'EN_NEGOCIACION') && (
-                  <AppCard style={styles.box}>
+                  <Card style={styles.box}>
                     <Text style={styles.boxTitle}>Aceptar</Text>
-                    <AppButton title="Aceptar solicitud" onPress={onProviderAccept} disabled={!canProviderAccept} />
-                  </AppCard>
+                    <Button title="Aceptar solicitud" onPress={onProviderAccept} disabled={!canProviderAccept} />
+                  </Card>
                 )}
 
                 {(item.estado === 'PENDIENTE' || item.estado === 'EN_NEGOCIACION') && (
-                  <AppCard style={styles.box}>
+                  <Card style={styles.box}>
                     <Text style={styles.boxTitle}>Negociar</Text>
 
                     <View style={styles.twoCols}>
@@ -559,12 +559,12 @@ export default function ReservationDetail({ navigation, route }: Props) {
                       multiline
                     />
 
-                    <AppButton title="Enviar propuesta" onPress={onProviderPropose} disabled={!canProviderAccept} />
-                  </AppCard>
+                    <Button title="Enviar propuesta" onPress={onProviderPropose} disabled={!canProviderAccept} />
+                  </Card>
                 )}
 
                 {(item.estado === 'PENDIENTE' || item.estado === 'EN_NEGOCIACION') && (
-                  <AppCard style={styles.box}>
+                  <Card style={styles.box}>
                     <Text style={styles.boxTitle}>Cancelar</Text>
                     <TextInput
                       value={cancelReason}
@@ -574,15 +574,15 @@ export default function ReservationDetail({ navigation, route }: Props) {
                       style={[styles.input, { minHeight: 70 }]}
                       multiline
                     />
-                    <AppButton title="Cancelar reserva" onPress={onProviderCancel} disabled={!canProviderAccept} />
-                  </AppCard>
+                    <Button title="Cancelar reserva" onPress={onProviderCancel} disabled={!canProviderAccept} />
+                  </Card>
                 )}
 
                 {item.estado === 'EN_PROCESO' && (
-                  <AppCard style={styles.box}>
+                  <Card style={styles.box}>
                     <Text style={styles.boxTitle}>Finalizar</Text>
-                    <AppButton title="Marcar como finalizado" onPress={onProviderFinish} disabled={!canProviderFinish} />
-                  </AppCard>
+                    <Button title="Marcar como finalizado" onPress={onProviderFinish} disabled={!canProviderFinish} />
+                  </Card>
                 )}
               </>
             )}
@@ -592,7 +592,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
               <>
                 <SectionTitle>Acciones (Solicitante)</SectionTitle>
 
-                <AppCard style={styles.box}>
+                <Card style={styles.box}>
                   <Text style={styles.boxTitle}>Propuesta del prestador</Text>
                   <Text style={styles.meta}>
                     {item.fechaHoraPropuesta ? fmtDate(item.fechaHoraPropuesta) : 'Sin fecha propuesta'}
@@ -600,7 +600,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
 
                   {!!item.mensajePropuesta && <Text style={styles.paragraph}>{item.mensajePropuesta}</Text>}
 
-                  <AppButton title="Aceptar propuesta" onPress={onRequesterAcceptProposal} disabled={!canRequesterAccept} />
+                  <Button title="Aceptar propuesta" onPress={onRequesterAcceptProposal} disabled={!canRequesterAccept} />
                   <View style={{ height: 10 }} />
 
                   <Text style={styles.label}>Si querés, dejá un mensaje al rechazar</Text>
@@ -613,8 +613,8 @@ export default function ReservationDetail({ navigation, route }: Props) {
                     multiline
                   />
 
-                  <AppButton title="Rechazar propuesta" onPress={onRequesterRejectProposal} disabled={!canRequesterAccept} />
-                </AppCard>
+                  <Button title="Rechazar propuesta" onPress={onRequesterRejectProposal} disabled={!canRequesterAccept} />
+                </Card>
               </>
             )}
 
@@ -622,17 +622,17 @@ export default function ReservationDetail({ navigation, route }: Props) {
             {canRequesterFinish && (
               <>
                 <SectionTitle>Servicio</SectionTitle>
-                <AppCard style={styles.box}>
+                <Card style={styles.box}>
                   <Text style={styles.boxTitle}>Finalizar</Text>
-                  <AppButton title="Solicitar finalización" onPress={onRequesterFinish} disabled={!canRequesterFinish} />
+                  <Button title="Solicitar finalización" onPress={onRequesterFinish} disabled={!canRequesterFinish} />
                   <Text style={styles.help}>Al finalizar, le llegará una notificación al otro usuario para confirmar.</Text>
-                </AppCard>
+                </Card>
               </>
             )}
           </>
         )}
       </ScrollView>
-    </AppScreen>
+    </Screen>
   );
 }
 

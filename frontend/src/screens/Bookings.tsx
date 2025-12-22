@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { AppScreen } from '../components/AppScreen';
+import { Screen } from '../components/Screen';
 import { TopBar } from '../components/TopBar';
 import { COLORS, SPACING, RADII } from '../styles/theme';
 
@@ -24,7 +24,7 @@ import {
 } from '../services/reservations.client';
 
 import { decodeJwtPayload } from '../utils/jwt';
-import { mapRolFromId, AppRole } from '../utils/roles';
+import { mapRolFromId, Role } from '../utils/roles';
 
 type Props = { navigation: any; route: any };
 
@@ -38,8 +38,8 @@ const TAB_LABELS: Record<TabKey, string> = {
   COMPLETADAS: 'Completadas',
 };
 
-function appRoleToRoleUI(appRole: string | null | undefined): RoleUI {
-  const v = String(appRole ?? '').trim().toLowerCase();
+function appRoleToRoleUI(Role: string | null | undefined): RoleUI {
+  const v = String(Role ?? '').trim().toLowerCase();
   if (v === 'profesional' || v === 'professional' || v === 'pro' || v === '2') return 'PROFESIONAL';
   return 'CLIENTE';
 }
@@ -74,8 +74,8 @@ export default function Bookings({ navigation, route }: Props) {
     const token = await AsyncStorage.getItem('@token');
     if (token) {
       const decoded = decodeJwtPayload(token);
-      const appRole: AppRole = mapRolFromId(decoded?.rolId);
-      return appRoleToRoleUI(appRole);
+      const role: Role = mapRolFromId(decoded?.rolId);
+      return appRoleToRoleUI(role);
     }
 
     return 'CLIENTE';
@@ -204,7 +204,7 @@ export default function Bookings({ navigation, route }: Props) {
   };
 
   return (
-    <AppScreen>
+    <Screen>
       <TopBar title="Bookings" rightNode={null} />
 
       {/* Header like ref */}
@@ -274,7 +274,7 @@ export default function Bookings({ navigation, route }: Props) {
         }
         renderItem={renderItem}
       />
-    </AppScreen>
+    </Screen>
   );
 }
 

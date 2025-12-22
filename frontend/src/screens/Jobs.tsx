@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { API_URL } from '../utils/api';
+import { api } from '../utils/api';
 import { Loading } from './Loading';
 import { Error } from './Error';
 
@@ -44,8 +44,8 @@ export default function Jobs({ navigation }: Props) {
           return;
         }
 
-        // API_URL ya incluye /api/v1
-        const res = await fetch(`${API_URL}/profiles/${userId}/works`, {
+        // api ya incluye /api/v1
+        const res = await fetch(`${api}/profiles/${userId}/works`, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',

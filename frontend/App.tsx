@@ -41,7 +41,7 @@ export type RootStackParamList = {
 
   // ✅ CreateRequest (solicitar servicio)
   CreateRequest: { profesionalId: string };
-
+  Bookings: undefined;
   ReservationDetail: undefined;
 };
 
