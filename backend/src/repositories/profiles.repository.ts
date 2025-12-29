@@ -12,7 +12,6 @@ export const getProfessionalProfileByUserIdRepository = async (userId: string) =
       descripcion,
       especialidad,
       experiencia,
-      portada_url,
       rating_promedio,
       fecha_actualizacion
     `,
@@ -51,7 +50,6 @@ export const upsertProfessionalProfileRepository = async (
       descripcion,
       especialidad,
       experiencia,
-      portada_url,
       rating_promedio,
       fecha_actualizacion
     `,
@@ -65,9 +63,7 @@ export const upsertProfessionalProfileRepository = async (
 
   return data;
 };
-export const getProfessionalPublicProfileByUserIdRepository = async (
-  userId: string,
-) => {
+export const getProfessionalPublicProfileByUserIdRepository = async (userId: string) => {
   const { data, error } = await db
     .from('perfiles_profesionales')
     .select(
@@ -76,7 +72,6 @@ export const getProfessionalPublicProfileByUserIdRepository = async (
       descripcion,
       especialidad,
       experiencia,
-      portada_url,
       rating_promedio
     `,
     )
@@ -84,19 +79,14 @@ export const getProfessionalPublicProfileByUserIdRepository = async (
     .single();
 
   if (error) {
-    console.error(
-      '❌ Error en getProfessionalPublicProfileByUserIdRepository:',
-      error,
-    );
+    console.error('❌ Error en getProfessionalPublicProfileByUserIdRepository:', error);
     return null;
   }
 
   return data;
 };
 // ✅ NUEVO: traer servicios activos del profesional (para perfil público)
-export const getServicesByProfessionalIdRepository = async (
-  profesionalId: string,
-) => {
+export const getServicesByProfessionalIdRepository = async (profesionalId: string) => {
   const { data, error } = await db
     .from('servicios')
     .select(

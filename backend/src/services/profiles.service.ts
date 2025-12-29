@@ -10,7 +10,6 @@ import {
 import { getProfessionalPublicProfileByUserIdRepository } from '../repositories/profiles.repository';
 import { getServicesByProfessionalIdRepository } from '../repositories/profiles.repository';
 
-
 // Obtener el perfil profesional por ID de usuario
 export const getProfessionalProfileByUserIdService = async (userId: string) => {
   const professional = await getProfessionalProfileByUserIdRepository(userId);
@@ -23,10 +22,7 @@ export const getProfessionalProfileByUserIdService = async (userId: string) => {
 //__________________CAMBIOS ELIAS _______________________________
 
 // Crear perfil profesional del usuario
-export const createMyProfessionalProfileService = async (
-  userId: string,
-  payload: unknown,
-) => {
+export const createMyProfessionalProfileService = async (userId: string, payload: unknown) => {
   // 1) Validar body con Zod (mismo schema del update)
   const parsed = UpdateProfessionalProfileSchema.parse(payload);
 
@@ -43,7 +39,6 @@ export const createMyProfessionalProfileService = async (
     descripcion: parsed.descripcion,
     especialidad: parsed.especialidad,
     experiencia: parsed.experiencia,
-    portada_url: parsed.portadaUrl ?? null,
     fecha_actualizacion: new Date().toISOString(),
   };
 
@@ -54,10 +49,7 @@ export const createMyProfessionalProfileService = async (
 };
 
 // Editar / crear perfil profesional del usuario
-export const updateMyProfessionalProfileService = async (
-  userId: string,
-  payload: unknown,
-) => {
+export const updateMyProfessionalProfileService = async (userId: string, payload: unknown) => {
   // 1) Validamos body con Zod
   const parsed = UpdateProfessionalProfileSchema.parse(payload);
 
@@ -67,7 +59,6 @@ export const updateMyProfessionalProfileService = async (
     descripcion: parsed.descripcion,
     especialidad: parsed.especialidad,
     experiencia: parsed.experiencia,
-    portada_url: parsed.portadaUrl ?? null,
     fecha_actualizacion: new Date().toISOString(),
   };
 
@@ -91,10 +82,7 @@ export const getAppProfileByUserService = async (authUser: any) => {
   try {
     professionalProfile = await getProfessionalProfileByUserIdService(userId);
   } catch (e) {
-    console.error(
-      '⚠️ Error leyendo perfil profesional en getAppProfileByUserService:',
-      e,
-    );
+    console.error('⚠️ Error leyendo perfil profesional en getAppProfileByUserService:', e);
   }
 
   const fullName =
@@ -104,17 +92,13 @@ export const getAppProfileByUserService = async (authUser: any) => {
     'Usuario';
 
   const rawRoleId = authUser.rolId ?? authUser.id_rol ?? 2;
-  const roleId =
-    typeof rawRoleId === 'string' ? Number(rawRoleId) : Number(rawRoleId);
+  const roleId = typeof rawRoleId === 'string' ? Number(rawRoleId) : Number(rawRoleId);
 
   // 👇 PRIORIDAD de la foto:
   // 1) portadaUrl del perfil profesional
   // 2) foto_url / avatar_url del usuario
   const photoUrl =
-    professionalProfile?.portadaUrl ??
-    authUser.foto_url ??
-    authUser.avatar_url ??
-    null;
+    professionalProfile?.portadaUrl ?? authUser.foto_url ?? authUser.avatar_url ?? null;
 
   return {
     roleId: roleId || 2,
@@ -124,11 +108,8 @@ export const getAppProfileByUserService = async (authUser: any) => {
     rating: 0, // placeholder
     jobsCompleted: 0, // placeholder
   };
-  
 };
-export const getProfessionalPublicProfileByUserIdService = async (
-  userId: string,
-) => {
+export const getProfessionalPublicProfileByUserIdService = async (userId: string) => {
   const profile = await getProfessionalPublicProfileByUserIdRepository(userId);
 
   if (!profile) return null;
@@ -143,7 +124,6 @@ export const getProfessionalPublicProfileByUserIdService = async (
   return {
     id: userId, // 👈 CLAVE: ESTE ES EL ID QUE FALTABA
     name: 'Profesional', // después podés unir con usuarios si querés
-    photoUrl: profile.portada_url ?? null,
     specialty: profile.especialidad ?? null,
     location: 'Montevideo, Uruguay', // placeholder
     rating: profile.rating_promedio ?? 0,

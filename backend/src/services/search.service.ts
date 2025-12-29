@@ -1,5 +1,6 @@
 // src/services/search.service.ts
 import { searchServiciosRepository } from '../repositories/search.repository';
+import type { User } from '../schemas/user.schema';
 
 export const searchServiciosService = async (input: {
   lat: number;
@@ -9,6 +10,6 @@ export const searchServiciosService = async (input: {
   limit?: number;
   offset?: number;
 }) => {
-  // si querés después: validar con Zod (schema)
-  return searchServiciosRepository(input);
+  const data = await searchServiciosRepository(input);
+  return data;
 };
