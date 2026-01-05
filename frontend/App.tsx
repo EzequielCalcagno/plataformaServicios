@@ -14,6 +14,8 @@ import Register from './src/screens/Register';
 
 // Perfil para ver otros profesionales
 import Profile from './src/screens/Profile';
+import Reviews from './src/screens/Reviews';
+
 
 import AddService from './src/screens/AddService';
 import EditProfile from './src/screens/EditProfile';
@@ -23,6 +25,7 @@ import LocationFormScreen from './src/screens/LocationForm'; // para LocationFor
 import MainTabs from './src/navigation/MainTabs';
 import Bookings from './src/screens/Bookings';
 import ReservationDetail from './src/screens/ReservationDetail';
+import RateReservation from './src/screens/RateReservation';
 
 // ✅ NUEVO
 import CreateRequest from './src/screens/CreateRequest';
@@ -30,12 +33,12 @@ export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   MainTabs: undefined;
-
+Reviews: undefined;
   EditProfile: undefined;
   AddService: undefined;
   LocationPicker: undefined;
   LocationForm: undefined;
-
+  Locations: undefined;
   // Perfil de otro profesional
   ProfessionalProfile: { profesionalId: string };
 
@@ -43,6 +46,7 @@ export type RootStackParamList = {
   CreateRequest: { profesionalId: string };
   Bookings: undefined;
   ReservationDetail: undefined;
+  RateReservation: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -82,6 +86,8 @@ export default function App() {
             {/* Pantallas auxiliares que se abren desde tabs */}
             <Stack.Screen name="EditProfile" component={EditProfile} />
             <Stack.Screen name="AddService" component={AddService} />
+            <Stack.Screen name="Locations" component={Locations} />
+
 
             {/* Pantallas de Locations */}
             <Stack.Screen name="LocationForm" component={LocationFormScreen} />
@@ -90,9 +96,13 @@ export default function App() {
             <Stack.Screen name="ReservationDetail" component={ReservationDetail as any} />
           {/* Perfil público */}
           <Stack.Screen name="ProfessionalProfile" component={Profile as any} />
+          <Stack.Screen name="Reviews" component={Reviews} />
 
           {/* ✅ Solicitar servicio */}
           <Stack.Screen name="CreateRequest" component={CreateRequest as any} />
+
+          <Stack.Screen name="RateReservation" component={RateReservation as any} />
+
           </Stack.Navigator>
         </SessionProvider>
       </NavigationContainer>

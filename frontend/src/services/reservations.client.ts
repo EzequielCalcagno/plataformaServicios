@@ -18,6 +18,9 @@ export type ReservationListItem = {
   servicioTitulo?: string | null;
   servicioCategoria?: string | null;
 
+  // ✅ NUEVO: precio base
+  servicioPrecioBase?: number | null;
+
   profesionalId: string;
   profesionalNombre?: string | null;
   profesionalApellido?: string | null;
@@ -41,14 +44,25 @@ export type ReservationListItem = {
   canceladoPor?: 'CLIENTE' | 'PROFESIONAL' | null;
   motivoCancelacion?: string | null;
 
+  // ✅ flags de calificación
   clienteCalifico?: boolean;
   profesionalCalifico?: boolean;
 
+  // ✅ NUEVO: ratings (el backend puede devolverlos en null hasta que ambos califiquen)
+  clientePuntaje?: number | null;
+  clienteComentario?: string | null;
+
+  profesionalPuntaje?: number | null;
+  profesionalComentario?: string | null;
+
+  // ✅ NUEVO: helper del backend
+  canSeeRatings?: boolean;
+
   creadoEn?: string | null;
   actualizadoEn?: string | null;
+
   profesionalTelefono?: string | null;
   clienteTelefono?: string | null;
-  servicioPrecioBase?: number | null;
 };
 
 export type CreateReservationPayload = {
@@ -70,12 +84,16 @@ export async function getReservationById(id: number) {
 
 // --- Listados (Mine / Pro) ---
 export async function listMyReservationsMine(tab: 'waiting' | 'active' | 'done') {
-  const r = await api.get<{ results: ReservationListItem[] }>(`/private/reservations/mine?tab=${tab}`);
+  const r = await api.get<{ results: ReservationListItem[] }>(
+    `/private/reservations/mine?tab=${tab}`,
+  );
   return r?.results ?? [];
 }
 
 export async function listMyReservationsPro(tab: 'pending' | 'active' | 'done') {
-  const r = await api.get<{ results: ReservationListItem[] }>(`/private/reservations/pro?tab=${tab}`);
+  const r = await api.get<{ results: ReservationListItem[] }>(
+    `/private/reservations/pro?tab=${tab}`,
+  );
   return r?.results ?? [];
 }
 
@@ -86,7 +104,7 @@ export async function proAcceptReservation(id: number) {
 
 export async function proProposeReservation(
   id: number,
-  payload: { fechaHoraPropuesta: string; mensajePropuesta?: string }
+  payload: { fechaHoraPropuesta: string; mensajePropuesta?: string },
 ) {
   return await api.patch<ReservationListItem>(`/private/reservations/${id}/propose`, {
     body: payload,
@@ -105,7 +123,9 @@ export async function proFinishReservation(id: number) {
 
 // --- Acciones CLIENTE (negociación) ---
 export async function clientAcceptProposal(id: number) {
-  return await api.patch<ReservationListItem>(`/private/reservations/${id}/accept-proposal`, { body: {} });
+  return await api.patch<ReservationListItem>(`/private/reservations/${id}/accept-proposal`, {
+    body: {},
+  });
 }
 
 export async function clientRejectProposal(id: number, payload: { mensaje?: string }) {
@@ -113,17 +133,37 @@ export async function clientRejectProposal(id: number, payload: { mensaje?: stri
     body: payload,
   });
 }
+
 // --- Finalización por solicitante y confirmación ---
 export async function requesterFinish(id: number) {
-  return await api.patch<ReservationListItem>(`/private/reservations/${id}/requester-finish`, { body: {} });
+  return await api.patch<ReservationListItem>(`/private/reservations/${id}/requester-finish`, {
+    body: {},
+  });
 }
 
 export async function confirmFinish(id: number) {
-  return await api.patch<ReservationListItem>(`/private/reservations/${id}/confirm-finish`, { body: {} });
+  return await api.patch<ReservationListItem>(`/private/reservations/${id}/confirm-finish`, {
+    body: {},
+  });
 }
 
 export async function rejectFinish(id: number, payload: { mensaje?: string }) {
   return await api.patch<ReservationListItem>(`/private/reservations/${id}/reject-finish`, {
+    body: payload,
+  });
+}
+
+// ✅ NUEVO: calificar (cliente o profesional, según quién esté logueado)
+export type RateReservationPayload = {
+  puntaje: number; // 1..5
+  comentario?: string;
+};
+
+export async function rateReservation(
+  id: number,
+  payload: { puntaje: number; comentario?: string }
+) {
+  return await api.patch<ReservationListItem>(`/private/reservations/${id}/rate`, {
     body: payload,
   });
 }

@@ -1,5 +1,5 @@
 // src/screens/ReservationDetail.tsx
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import { TopBar } from '../components/TopBar';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { SectionTitle } from '../components/SectionTitle';
+import { RateReservationSheet } from '../components/RateReservationSheet';
 import { COLORS, SPACING, RADII } from '../styles/theme';
 
 import {
@@ -34,10 +35,11 @@ import {
   requesterFinish,
   confirmFinish,
   rejectFinish,
+  // ✅ ratings
+  rateReservation,
 } from '../services/reservations.client';
 
 type Props = { navigation: any; route: any };
-
 type Side = 'SOLICITANTE' | 'PRESTADOR' | 'UNKNOWN';
 
 function toISO(dateStr: string, timeStr: string) {
@@ -99,6 +101,13 @@ export default function ReservationDetail({ navigation, route }: Props) {
   const [cancelReason, setCancelReason] = useState('');
   const [rejectMsg, setRejectMsg] = useState('');
 
+  // ✅ bottom sheet rating
+  const [showRateSheet, setShowRateSheet] = useState<boolean>(false);
+  const [ratingSending, setRatingSending] = useState<boolean>(false);
+
+  // ✅ para evitar abrir el sheet muchas veces en re-renders
+  const didAutoOpenForThisClose = useRef<string | null>(null);
+
   const fetchDetail = useCallback(async () => {
     try {
       setLoading(true);
@@ -114,6 +123,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
       const r = await getReservationById(reservationId);
       setItem(r);
 
+      // precarga si ya había propuesta
       if (r?.fechaHoraPropuesta) {
         const dt = new Date(r.fechaHoraPropuesta);
         if (!Number.isNaN(dt.getTime())) {
@@ -135,7 +145,11 @@ export default function ReservationDetail({ navigation, route }: Props) {
     }
   }, [reservationId]);
 
-  useFocusEffect(useCallback(() => { fetchDetail(); }, [fetchDetail]));
+  useFocusEffect(
+    useCallback(() => {
+      fetchDetail();
+    }, [fetchDetail]),
+  );
 
   const mySide: Side = useMemo(() => {
     if (!item || !myUserId) return 'UNKNOWN';
@@ -198,13 +212,14 @@ export default function ReservationDetail({ navigation, route }: Props) {
     return item.estado === 'EN_NEGOCIACION';
   }, [item, mySide]);
 
-  const canProviderAccept = !!item && mySide === 'PRESTADOR' && (item.estado === 'PENDIENTE' || item.estado === 'EN_NEGOCIACION');
+  const canProviderAccept =
+    !!item && mySide === 'PRESTADOR' && (item.estado === 'PENDIENTE' || item.estado === 'EN_NEGOCIACION');
   const canProviderFinish = !!item && mySide === 'PRESTADOR' && item.estado === 'EN_PROCESO';
 
   const canRequesterAccept = !!item && mySide === 'SOLICITANTE' && item.estado === 'EN_NEGOCIACION';
   const canRequesterFinish = !!item && mySide === 'SOLICITANTE' && item.estado === 'EN_PROCESO';
 
-  // ✅ YA NO DA ERROR: comparamos accionRequeridaPor con myActionKey
+  // ✅ confirmación de finalización
   const canConfirmFinish =
     !!item && item.estado === 'FINALIZADO' && !!myActionKey && item.accionRequeridaPor === myActionKey;
   const canRejectFinish = canConfirmFinish;
@@ -216,11 +231,91 @@ export default function ReservationDetail({ navigation, route }: Props) {
 
   const statusStep = useMemo(() => {
     if (!item) return 0;
-    if (item.estado === 'PENDIENTE' || item.estado === 'EN_NEGOCIACION') return 1; // confirmación en proceso
+    if (item.estado === 'PENDIENTE' || item.estado === 'EN_NEGOCIACION') return 1;
     if (item.estado === 'EN_PROCESO') return 2;
     if (item.estado === 'FINALIZADO' || item.estado === 'CERRADO') return 3;
     return 1;
   }, [item]);
+
+  // ✅ Rating: reglas
+  const isClosed = !!item && item.estado === 'CERRADO';
+
+  const iAmRequester = mySide === 'SOLICITANTE';
+  const iAmProvider = mySide === 'PRESTADOR';
+
+  const iAlreadyRated = useMemo(() => {
+    if (!item) return false;
+    if (iAmRequester) return !!item.clienteCalifico;
+    if (iAmProvider) return !!item.profesionalCalifico;
+    return false;
+  }, [item, iAmRequester, iAmProvider]);
+
+  const otherAlreadyRated = useMemo(() => {
+    if (!item) return false;
+    if (iAmRequester) return !!item.profesionalCalifico;
+    if (iAmProvider) return !!item.clienteCalifico;
+    return false;
+  }, [item, iAmRequester, iAmProvider]);
+
+  const canRateNow = useMemo(() => {
+    if (!item) return false;
+    if (!isClosed) return false;
+    if (mySide === 'UNKNOWN') return false;
+    return !iAlreadyRated;
+  }, [item, isClosed, mySide, iAlreadyRated]);
+
+  const ratingTitle = useMemo(() => {
+    if (mySide === 'SOLICITANTE') return 'Califica al profesional';
+    if (mySide === 'PRESTADOR') return 'Califica al solicitante';
+    return 'Calificar';
+  }, [mySide]);
+
+  const ratingQuestion = useMemo(() => {
+    const name = otherName || 'la otra persona';
+    return `Como fue tu experiencia con\n${name}?`;
+  }, [otherName]);
+
+  const ratingPlaceholder = useMemo(() => {
+    return mySide === 'SOLICITANTE'
+      ? 'Describe tu experiencia con el profesional...'
+      : 'Describe tu experiencia con el solicitante...';
+  }, [mySide]);
+
+  const canSeeRatings = useMemo(() => {
+    if (!item) return false;
+    if (typeof (item as any).canSeeRatings === 'boolean') return (item as any).canSeeRatings;
+    return !!item.clienteCalifico && !!item.profesionalCalifico;
+  }, [item]);
+
+  // ✅ AUTO-OPEN: cuando pasa a CERRADO, se abre el sheet si te toca calificar
+  useEffect(() => {
+    if (!item) return;
+
+    if (item.estado !== 'CERRADO') {
+      // si vuelve a estados previos, habilita a futuro volver a abrir al cerrar
+      didAutoOpenForThisClose.current = null;
+      return;
+    }
+
+    if (!canRateNow) return;
+
+    const key = `${item.id}-CERRADO-${myUserId}-${mySide}`;
+    if (didAutoOpenForThisClose.current === key) return;
+
+    didAutoOpenForThisClose.current = key;
+    setShowRateSheet(true);
+  }, [item?.estado, item?.id, canRateNow, myUserId, mySide, item]);
+
+  const renderStarsStatic = (value: number) => {
+    const v = Math.max(0, Math.min(5, Number(value || 0)));
+    return (
+      <View style={styles.starsRow}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <Ionicons key={n} name={n <= v ? 'star' : 'star-outline'} size={22} color="#F7B500" />
+        ))}
+      </View>
+    );
+  };
 
   // --- Handlers ---
   const onProviderAccept = async () => {
@@ -352,6 +447,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
     try {
       await confirmFinish(item.id);
       Alert.alert('Confirmado', 'La finalización fue confirmada.');
+      // ✅ al refrescar, si queda CERRADO y canRateNow=true, el useEffect lo abre solo
       fetchDetail();
     } catch (e) {
       console.log('❌ confirmFinish error', e);
@@ -371,6 +467,25 @@ export default function ReservationDetail({ navigation, route }: Props) {
     }
   };
 
+  // ✅ submit desde el bottom sheet
+  const onSubmitRating = async (data: { puntaje: number; comentario?: string }) => {
+    if (!item) return;
+    if (!canRateNow) return;
+
+    try {
+      setRatingSending(true);
+      await rateReservation(item.id, { puntaje: data.puntaje, comentario: data.comentario });
+      setShowRateSheet(false);
+      Alert.alert('¡Gracias!', 'Tu calificación fue enviada.');
+      fetchDetail();
+    } catch (e) {
+      console.log('❌ rateReservation error', e);
+      Alert.alert('Error', 'No se pudo enviar la calificación.');
+    } finally {
+      setRatingSending(false);
+    }
+  };
+
   return (
     <Screen>
       <TopBar title="Booking details" showBack />
@@ -382,10 +497,9 @@ export default function ReservationDetail({ navigation, route }: Props) {
           <Text style={styles.muted}>No se pudo cargar la reserva.</Text>
         ) : (
           <>
-            {/* Header */}
             <Text style={styles.pageTitle}>{`Booking #${item.id}`}</Text>
 
-            {/* Service card (similar a referencia) */}
+            {/* Service card */}
             <Card withShadow style={styles.serviceCard}>
               <View style={styles.serviceRow}>
                 <View style={styles.serviceIconBox}>
@@ -396,9 +510,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
                   {!!item.servicioCategoria && <Text style={styles.serviceSub}>{item.servicioCategoria}</Text>}
                 </View>
 
-                {!!item.servicioPrecioBase && (
-                  <Text style={styles.price}>{moneyUYU(item.servicioPrecioBase)}</Text>
-                )}
+                {!!item.servicioPrecioBase && <Text style={styles.price}>{moneyUYU(item.servicioPrecioBase)}</Text>}
               </View>
 
               <View style={styles.metaRow}>
@@ -407,32 +519,29 @@ export default function ReservationDetail({ navigation, route }: Props) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.metaLabel}>Scheduled time</Text>
-                  <Text style={styles.metaValue}>
-                    {fmtDate(getScheduledISO(item)) || 'Sin fecha'}
-                  </Text>
+                  <Text style={styles.metaValue}>{fmtDate(getScheduledISO(item)) || 'Sin fecha'}</Text>
                 </View>
               </View>
             </Card>
 
             {/* Profesional / Solicitante section */}
             <Card withShadow style={styles.personCard}>
-              <Text style={styles.sectionLikeRef}>
-                {mySide === 'SOLICITANTE' ? 'Profesional' : 'Solicitante'}
-              </Text>
+              <Text style={styles.sectionLikeRef}>{mySide === 'SOLICITANTE' ? 'Profesional' : 'Solicitante'}</Text>
 
               <View style={styles.personRow}>
                 {otherPhotoUrl ? (
                   <Image source={{ uri: otherPhotoUrl }} style={styles.avatar} />
                 ) : (
-                  <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                  <Text style={[styles.avatar, styles.avatarPlaceholder] as any}>
                     <Ionicons name="person" size={18} color="#fff" />
-                  </View>
+                  </Text>
                 )}
 
-                <View style={{ flex: 1 }}>
+                <Text style={{ flex: 1 } as any}>
                   <Text style={styles.personName}>{otherName || '—'}</Text>
-                  <Text style={styles.personMeta}>4.8 · 123 reviews</Text>
-                </View>
+                  {'\n'}
+                  <Text style={styles.personMeta}>—</Text>
+                </Text>
 
                 <TouchableOpacity
                   activeOpacity={0.9}
@@ -443,10 +552,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
                       `Hola! Te escribo por la reserva #${item.id} (${item.servicioTitulo ?? 'servicio'}).`,
                     )
                   }
-                  style={[
-                    styles.waMini,
-                    (!whatsappEnabled || !otherPhone) ? styles.waMiniDisabled : null,
-                  ]}
+                  style={[styles.waMini, (!whatsappEnabled || !otherPhone) ? styles.waMiniDisabled : null]}
                 >
                   <Ionicons name="logo-whatsapp" size={16} color="#25D366" />
                   <Text style={styles.waMiniText}>WhatsApp</Text>
@@ -464,19 +570,60 @@ export default function ReservationDetail({ navigation, route }: Props) {
             <Card withShadow style={styles.statusCard}>
               <Text style={styles.sectionLikeRef}>Status</Text>
 
-              <View style={styles.stepRow}>
-                <Ionicons name={statusStep >= 1 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />
+              <Text style={styles.stepRow as any}>
+                <Ionicons name={statusStep >= 1 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />{' '}
                 <Text style={styles.stepText}>Booking confirmed</Text>
-              </View>
-              <View style={styles.stepRow}>
-                <Ionicons name={statusStep >= 2 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />
+              </Text>
+
+              <Text style={styles.stepRow as any}>
+                <Ionicons name={statusStep >= 2 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />{' '}
                 <Text style={styles.stepText}>En proceso</Text>
-              </View>
-              <View style={styles.stepRow}>
-                <Ionicons name={statusStep >= 3 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />
+              </Text>
+
+              <Text style={styles.stepRow as any}>
+                <Ionicons name={statusStep >= 3 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />{' '}
                 <Text style={styles.stepText}>Service completed</Text>
-              </View>
+              </Text>
             </Card>
+
+            {/* ✅ Vista de calificaciones (solo cuando ambos calificaron) */}
+            {isClosed && !canRateNow && (
+              <Card withShadow style={styles.rateCardInfo}>
+                <Text style={styles.rateInfoTitle}>Calificación</Text>
+
+                {iAlreadyRated && !otherAlreadyRated ? (
+                  <Text style={styles.help}>
+                    Ya enviaste tu calificación. Cuando la otra persona también califique, podrán verlas.
+                  </Text>
+                ) : canSeeRatings ? (
+                  <>
+                    <Text style={styles.help}>Ambos calificaron ✅</Text>
+
+                    {(item as any).clientePuntaje ? (
+                      <Text style={styles.rateResultRow as any}>
+                        <Text style={styles.rateResultLabel}>Solicitante</Text>
+                        {renderStarsStatic(Number((item as any).clientePuntaje))}
+                        {!!(item as any).clienteComentario && (
+                          <Text style={styles.rateResultComment}>{String((item as any).clienteComentario)}</Text>
+                        )}
+                      </Text>
+                    ) : null}
+
+                    {(item as any).profesionalPuntaje ? (
+                      <Text style={styles.rateResultRow as any}>
+                        <Text style={styles.rateResultLabel}>Prestador</Text>
+                        {renderStarsStatic(Number((item as any).profesionalPuntaje))}
+                        {!!(item as any).profesionalComentario && (
+                          <Text style={styles.rateResultComment}>{String((item as any).profesionalComentario)}</Text>
+                        )}
+                      </Text>
+                    ) : null}
+                  </>
+                ) : (
+                  <Text style={styles.help}>Por ahora no hay calificaciones para mostrar.</Text>
+                )}
+              </Card>
+            )}
 
             {/* Confirmación finalización */}
             {canConfirmFinish && (
@@ -487,7 +634,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
                   <Text style={styles.help}>¿Confirmás que el servicio ya terminó?</Text>
 
                   <Button title="✅ Confirmar finalización" onPress={onConfirmFinish} disabled={!canConfirmFinish} />
-                  <View style={{ height: 10 }} />
+                  <Text style={{ height: 10 } as any} />
 
                   <Text style={styles.label}>Si no estás de acuerdo, dejá un mensaje</Text>
                   <TextInput
@@ -519,9 +666,10 @@ export default function ReservationDetail({ navigation, route }: Props) {
                   <Card style={styles.box}>
                     <Text style={styles.boxTitle}>Negociar</Text>
 
-                    <View style={styles.twoCols}>
-                      <View style={{ flex: 1 }}>
+                    <Text style={styles.twoCols as any}>
+                      <Text style={{ flex: 1 } as any}>
                         <Text style={styles.label}>Fecha</Text>
+                        {'\n'}
                         <TextInput
                           value={proposeDate}
                           onChangeText={setProposeDate}
@@ -529,10 +677,13 @@ export default function ReservationDetail({ navigation, route }: Props) {
                           placeholderTextColor="#9ca3af"
                           style={styles.input}
                         />
-                      </View>
-                      <View style={{ width: 12 }} />
-                      <View style={{ flex: 1 }}>
+                      </Text>
+
+                      <Text style={{ width: 12 } as any} />
+
+                      <Text style={{ flex: 1 } as any}>
                         <Text style={styles.label}>Hora</Text>
+                        {'\n'}
                         <TextInput
                           value={proposeTime}
                           onChangeText={setProposeTime}
@@ -540,8 +691,8 @@ export default function ReservationDetail({ navigation, route }: Props) {
                           placeholderTextColor="#9ca3af"
                           style={styles.input}
                         />
-                      </View>
-                    </View>
+                      </Text>
+                    </Text>
 
                     {!!proposalIsoPreview && (
                       <Text style={styles.preview}>
@@ -601,7 +752,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
                   {!!item.mensajePropuesta && <Text style={styles.paragraph}>{item.mensajePropuesta}</Text>}
 
                   <Button title="Aceptar propuesta" onPress={onRequesterAcceptProposal} disabled={!canRequesterAccept} />
-                  <View style={{ height: 10 }} />
+                  <Text style={{ height: 10 } as any} />
 
                   <Text style={styles.label}>Si querés, dejá un mensaje al rechazar</Text>
                   <TextInput
@@ -625,13 +776,26 @@ export default function ReservationDetail({ navigation, route }: Props) {
                 <Card style={styles.box}>
                   <Text style={styles.boxTitle}>Finalizar</Text>
                   <Button title="Solicitar finalización" onPress={onRequesterFinish} disabled={!canRequesterFinish} />
-                  <Text style={styles.help}>Al finalizar, le llegará una notificación al otro usuario para confirmar.</Text>
+                  <Text style={styles.help}>
+                    Al finalizar, le llegará una notificación al otro usuario para confirmar.
+                  </Text>
                 </Card>
               </>
             )}
           </>
         )}
       </ScrollView>
+
+      {/* ✅ Bottom sheet: aparece automáticamente al quedar CERRADO */}
+      <RateReservationSheet
+        visible={showRateSheet}
+        loading={ratingSending}
+        titleTop={ratingTitle}
+        title={ratingQuestion}
+        placeholder={ratingPlaceholder}
+        onClose={() => setShowRateSheet(false)}
+        onSubmit={onSubmitRating}
+      />
     </Screen>
   );
 }
@@ -645,15 +809,26 @@ const styles = StyleSheet.create({
   serviceCard: { marginBottom: SPACING.md },
   serviceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   serviceIconBox: {
-    width: 34, height: 34, borderRadius: 10, backgroundColor: '#eef2ff',
-    alignItems: 'center', justifyContent: 'center',
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#eef2ff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   serviceTitle: { fontSize: 14, fontWeight: '900', color: COLORS.text },
   serviceSub: { marginTop: 2, fontSize: 12, color: COLORS.textMuted },
   price: { fontSize: 14, fontWeight: '900', color: COLORS.text },
 
   metaRow: { flexDirection: 'row', gap: 10, marginTop: 14, alignItems: 'center' },
-  metaIcon: { width: 28, height: 28, borderRadius: 10, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' },
+  metaIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   metaLabel: { fontSize: 11, color: COLORS.textMuted, fontWeight: '800' },
   metaValue: { marginTop: 2, fontSize: 12, color: COLORS.text, fontWeight: '800' },
 
@@ -666,10 +841,15 @@ const styles = StyleSheet.create({
   personMeta: { marginTop: 2, fontSize: 11, color: COLORS.textMuted },
 
   waMini: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 999, backgroundColor: '#eafff2',
-    borderWidth: 1, borderColor: '#b7f7cf',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#eafff2',
+    borderWidth: 1,
+    borderColor: '#b7f7cf',
   },
   waMiniDisabled: { opacity: 0.5 },
   waMiniText: { fontSize: 12, fontWeight: '900', color: '#16a34a' },
@@ -677,6 +857,14 @@ const styles = StyleSheet.create({
   statusCard: { marginBottom: SPACING.md },
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   stepText: { fontSize: 12, fontWeight: '800', color: COLORS.text },
+
+  // rating view
+  rateCardInfo: { marginBottom: SPACING.md },
+  rateInfoTitle: { fontSize: 13, fontWeight: '900', color: COLORS.text, marginBottom: 8 },
+  rateResultRow: { borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10 },
+  rateResultLabel: { fontSize: 12, fontWeight: '900', color: COLORS.text, marginBottom: 6 },
+  starsRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 6, marginBottom: 10 },
+  rateResultComment: { marginTop: 6, fontSize: 12, color: COLORS.textMuted, lineHeight: 16 },
 
   help: { marginTop: 8, fontSize: 11, color: COLORS.textMuted },
   paragraph: { marginTop: 10, color: COLORS.text, fontSize: 13, lineHeight: 18 },
@@ -689,8 +877,13 @@ const styles = StyleSheet.create({
   boxTitle: { fontSize: 13, fontWeight: '900', marginBottom: 10, color: COLORS.text },
   label: { fontSize: 12, fontWeight: '700', color: COLORS.textMuted, marginBottom: 6, marginTop: 6 },
   input: {
-    borderWidth: 1, borderColor: COLORS.border, borderRadius: RADII.lg,
-    padding: 10, backgroundColor: '#fff', color: COLORS.text, fontSize: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADII.lg,
+    padding: 10,
+    backgroundColor: '#fff',
+    color: COLORS.text,
+    fontSize: 14,
   },
   twoCols: { flexDirection: 'row', marginBottom: 10 },
 });

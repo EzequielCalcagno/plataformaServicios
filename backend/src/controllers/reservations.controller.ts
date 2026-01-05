@@ -14,12 +14,16 @@ import {
   requesterFinishService,
   confirmFinishService,
   rejectFinishService,
+  listProfessionalReviewsService,
+  rateReservationService
 } from '../services/reservations.service';
+
 
 function getAuthUserId(req: Request) {
   const u: any = (req as any).user;
   return String(u?.id ?? '');
 }
+
 
 export const createReservationController = async (req: Request, res: Response) => {
   try {
@@ -205,3 +209,31 @@ export const rejectFinishController = async (req: Request, res: Response) => {
     return res.status(400).json({ error: error.message ?? 'Error rechazando' });
   }
 };
+export const rateReservationController = async (req: Request, res: Response) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) return res.status(401).json({ error: 'No autenticado' });
+
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+
+    const updated = await rateReservationService(userId, id, req.body);
+    return res.json(updated);
+  } catch (error: any) {
+    console.error('❌ rateReservationController:', error);
+    return res.status(400).json({ error: error.message ?? 'Error calificando' });
+  }
+};
+// ✅ NUEVO: GET /public/professionals/:id/reviews
+export async function listProfessionalReviewsController(req: any, res: any) {
+  try {
+    const profesionalId = String(req.params.id ?? '');
+    if (!profesionalId) return res.status(400).json({ message: 'profesionalId requerido' });
+
+    const data = await listProfessionalReviewsService(profesionalId, req.query);
+    return res.json(data);
+  } catch (e) {
+    console.log('❌ listProfessionalReviewsController error', e);
+    return res.status(500).json({ message: 'Error obteniendo reviews' });
+  }
+}

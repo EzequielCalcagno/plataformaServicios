@@ -2,38 +2,32 @@
 import {
   getProfessionalProfileByUserIdRepository,
   upsertProfessionalProfileRepository,
+  getProfessionalPublicProfileByUserIdRepository,
+  getServicesByProfessionalIdRepository,
+  getUserBasicByIdRepository,
+  getProfessionalRatingSummaryRepository,
+  listProfessionalReviewsRepository,
 } from '../repositories/profiles.repository';
+
 import {
   ProfessionalProfileSchema,
   UpdateProfessionalProfileSchema,
 } from '../schemas/profile.schema';
-import { getProfessionalPublicProfileByUserIdRepository } from '../repositories/profiles.repository';
-import { getServicesByProfessionalIdRepository } from '../repositories/profiles.repository';
 
-// Obtener el perfil profesional por ID de usuario
+// Obtener perfil profesional (privado)
 export const getProfessionalProfileByUserIdService = async (userId: string) => {
   const professional = await getProfessionalProfileByUserIdRepository(userId);
-
   if (!professional) return null;
-
   return ProfessionalProfileSchema.parse(professional);
 };
 
-//__________________CAMBIOS ELIAS _______________________________
-
-// Crear perfil profesional del usuario
+// Crear perfil profesional
 export const createMyProfessionalProfileService = async (userId: string, payload: unknown) => {
-  // 1) Validar body con Zod (mismo schema del update)
   const parsed = UpdateProfessionalProfileSchema.parse(payload);
 
-  // 2) Verificar si YA existe
   const existing = await getProfessionalProfileByUserIdRepository(userId);
+  if (existing) throw new Error('Ya tenés un perfil profesional creado');
 
-  if (existing) {
-    throw new Error('Ya tenés un perfil profesional creado');
-  }
-
-  // 3) Crear (upsert con solo crear)
   const dbPayload = {
     usuario_id: userId,
     descripcion: parsed.descripcion,
@@ -43,17 +37,13 @@ export const createMyProfessionalProfileService = async (userId: string, payload
   };
 
   await upsertProfessionalProfileRepository(dbPayload);
-
-  // 4) Retornar el perfil completo
   return getProfessionalProfileByUserIdService(userId);
 };
 
-// Editar / crear perfil profesional del usuario
+// Update perfil profesional
 export const updateMyProfessionalProfileService = async (userId: string, payload: unknown) => {
-  // 1) Validamos body con Zod
   const parsed = UpdateProfessionalProfileSchema.parse(payload);
 
-  // 2) Mapeamos nombres del schema -> columnas DB
   const dbPayload = {
     usuario_id: userId,
     descripcion: parsed.descripcion,
@@ -63,27 +53,16 @@ export const updateMyProfessionalProfileService = async (userId: string, payload
   };
 
   await upsertProfessionalProfileRepository(dbPayload);
-
-  // 3) Devolvemos el perfil completo (igual que el GET /profile)
   return getProfessionalProfileByUserIdService(userId);
 };
 
 /**
- * 🔹 Servicio específico para la APP (Home / MyAccount)
- * Usa:
- *  - datos básicos del usuario (req.user)
- *  - perfil profesional (perfiles_profesionales) para obtener portadaUrl
+ * ✅ Perfil para la APP (private/profile)
+ * - devuelve datos del authUser + rating real + jobs real
+ * - SIN portada_url
  */
 export const getAppProfileByUserService = async (authUser: any) => {
   const userId = String(authUser.id);
-
-  // Intentamos leer el perfil profesional (puede no existir aún)
-  let professionalProfile: any = null;
-  try {
-    professionalProfile = await getProfessionalProfileByUserIdService(userId);
-  } catch (e) {
-    console.error('⚠️ Error leyendo perfil profesional en getAppProfileByUserService:', e);
-  }
 
   const fullName =
     `${authUser.nombre ?? ''} ${authUser.apellido ?? ''}`.trim() ||
@@ -94,50 +73,88 @@ export const getAppProfileByUserService = async (authUser: any) => {
   const rawRoleId = authUser.rolId ?? authUser.id_rol ?? 2;
   const roleId = typeof rawRoleId === 'string' ? Number(rawRoleId) : Number(rawRoleId);
 
-  // 👇 PRIORIDAD de la foto:
-  // 1) portadaUrl del perfil profesional
-  // 2) foto_url / avatar_url del usuario
-  const photoUrl =
-    professionalProfile?.portadaUrl ?? authUser.foto_url ?? authUser.avatar_url ?? null;
+  // Intentamos leer perfil profesional (puede no existir)
+  let professionalProfile: any = null;
+  try {
+    professionalProfile = await getProfessionalProfileByUserIdRepository(userId);
+  } catch {}
+
+  // rating real (si existe RPC)
+  const ratingSummary = await getProfessionalRatingSummaryRepository(userId);
+
+  // ✅ Foto: priorizamos foto del usuario (o avatar_url), NO portada_url
+  const photoUrl = authUser.foto_url ?? authUser.avatar_url ?? null;
 
   return {
     roleId: roleId || 2,
+    id: userId,
     name: fullName,
-    photoUrl, // 👈 ESTA es la que usa MyAccount
-    location: 'Montevideo, Uruguay', // placeholder por ahora
-    rating: 0, // placeholder
-    jobsCompleted: 0, // placeholder
+    photoUrl,
+    // ✅ sin coverUrl
+    coverUrl: null,
+    location: 'Montevideo, Uruguay',
+    professionalProfile: professionalProfile
+      ? {
+          descripcion: professionalProfile.descripcion ?? null,
+          especialidad: professionalProfile.especialidad ?? null,
+          experiencia: professionalProfile.experiencia ?? null,
+        }
+      : null,
+    stats: {
+      ratingAvg: Number(ratingSummary?.rating_avg ?? 0),
+      reviewsCount: Number(ratingSummary?.reviews_count ?? 0),
+      jobsCompleted: Number(ratingSummary?.jobs_completed ?? 0),
+      starDist: ratingSummary?.star_dist ?? { '5': 0, '4': 0, '3': 0, '2': 0, '1': 0 },
+    },
   };
 };
+
+/**
+ * ✅ Perfil público del profesional (public/professionals/:id/profile)
+ * - SIN portada_url
+ */
 export const getProfessionalPublicProfileByUserIdService = async (userId: string) => {
   const profile = await getProfessionalPublicProfileByUserIdRepository(userId);
-
   if (!profile) return null;
 
-  // ✅ Traer servicios reales
+  const user = await getUserBasicByIdRepository(userId);
   const servicesDb = await getServicesByProfessionalIdRepository(userId);
+  const ratingSummary = await getProfessionalRatingSummaryRepository(userId);
+  const reviews = await listProfessionalReviewsRepository(userId, 10, 0);
 
-  // ✅ DEBUG útil (backend)
-  console.log('🧩 Public profile userId:', userId);
-  console.log('🧩 servicesDb count:', servicesDb?.length ?? 0);
+  const name = `${user?.nombre ?? ''} ${user?.apellido ?? ''}`.trim() || 'Profesional';
 
   return {
-    id: userId, // 👈 CLAVE: ESTE ES EL ID QUE FALTABA
-    name: 'Profesional', // después podés unir con usuarios si querés
+    id: userId,
+    name,
+    photoUrl: user?.foto_url ?? null,
+    // ✅ sin coverUrl
+    coverUrl: null,
+
     specialty: profile.especialidad ?? null,
-    location: 'Montevideo, Uruguay', // placeholder
-    rating: profile.rating_promedio ?? 0,
-    jobsCompleted: 0,
-    positiveFeedback: null,
+    location: 'Montevideo, Uruguay',
     about: profile.descripcion ?? null,
 
-    // ✅ ahora sí devuelve servicios
     services: (servicesDb ?? []).map((s: any) => ({
       id: String(s.id),
       title: String(s.titulo ?? ''),
       category: String(s.categoria ?? ''),
     })),
 
-    reviews: [], // luego lo sumamos
+    stats: {
+      ratingAvg: Number(ratingSummary?.rating_avg ?? 0),
+      reviewsCount: Number(ratingSummary?.reviews_count ?? 0),
+      jobsCompleted: Number(ratingSummary?.jobs_completed ?? 0),
+      starDist: ratingSummary?.star_dist ?? { '5': 0, '4': 0, '3': 0, '2': 0, '1': 0 },
+    },
+
+    latestReviews: (reviews ?? []).map((r: any) => ({
+      id: String(r.id),
+      authorName: `${r.cliente_nombre ?? ''} ${r.cliente_apellido ?? ''}`.trim() || 'Usuario',
+      timeAgo: r.created_at ? new Date(r.created_at).toISOString() : '',
+      rating: Number(r.rating ?? 0),
+      comment: r.comment ?? '',
+      authorPhotoUrl: r.cliente_foto_url ?? null,
+    })),
   };
 };

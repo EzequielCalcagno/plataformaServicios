@@ -8,9 +8,10 @@ import {
   ProProposeSchema,
   ReservationDtoSchema,
   ReservationStatus,
-  RequesterFinishSchema, 
-  ConfirmFinishSchema, 
-  RejectFinishSchema
+  RequesterFinishSchema,
+  ConfirmFinishSchema,
+  RejectFinishSchema,
+  RateReservationSchema,
 } from '../schemas/reservation.schema';
 
 import {
@@ -21,15 +22,28 @@ import {
   listReservationsForProfesionalRepository,
   updateReservationByIdRepository,
   getReservationByIdWithJoinsRepository,
+  listProfessionalReviewsRepository, type ReviewSort,
 } from '../repositories/reservations.repository';
 
 /**
  * Normaliza filas del repo (con joins) a DTO amigable FE
- * ✅ nombres alineados al frontend
+ *
+ * ✅ Soporta “visibilidad de calificaciones”:
+ * - si NO calificaron ambos => cada uno ve solo SU calificación (si la hizo)
+ * - si calificaron ambos => ven ambas
  */
-function toReservationDto(row: any) {
-  // soporta ambas formas por si el repo devuelve `servicios:` o `servicio:`
+function toReservationDto(row: any, viewerUserId?: string) {
   const servicio = row.servicio ?? row.servicios ?? null;
+
+
+  const clienteCalifico = row.cliente_califico ?? false;
+  const profesionalCalifico = row.profesional_califico ?? false;
+  const canSeeRatings = !!clienteCalifico && !!profesionalCalifico;
+
+  const viewerIsCliente =
+    !!viewerUserId && String(row.cliente_id) === String(viewerUserId);
+  const viewerIsPro =
+    !!viewerUserId && String(row.profesional_id) === String(viewerUserId);
 
   const dto = {
     id: Number(row.id),
@@ -41,12 +55,14 @@ function toReservationDto(row: any) {
     profesionalId: String(row.profesional_id),
     profesionalNombre: row.profesional?.nombre ?? null,
     profesionalApellido: row.profesional?.apellido ?? null,
-    profesionalPhotoUrl: row.profesional?.foto_url ?? null,
+    profesionalFotoUrl: row.profesional?.foto_url ?? null,
+    profesionalTelefono: row.profesional?.telefono ?? null,
 
     clienteId: String(row.cliente_id),
     clienteNombre: row.cliente?.nombre ?? null,
     clienteApellido: row.cliente?.apellido ?? null,
-    clientePhotoUrl: row.cliente?.foto_url ?? null,
+    clienteFotoUrl: row.cliente?.foto_url ?? null,
+    clienteTelefono: row.cliente?.telefono ?? null,
 
     estado: row.estado as ReservationStatus,
 
@@ -61,40 +77,69 @@ function toReservationDto(row: any) {
     canceladoPor: row.cancelado_por ?? null,
     motivoCancelacion: row.motivo_cancelacion ?? null,
 
-    clienteCalifico: row.cliente_califico ?? false,
-    profesionalCalifico: row.profesional_califico ?? false,
+    // flags FE
+    clienteCalifico,
+    profesionalCalifico,
+
+    // ✅ ratings (visibilidad controlada)
+    clientePuntaje:
+      canSeeRatings
+        ? row.cliente_puntaje ?? null
+        : viewerIsCliente
+        ? row.cliente_puntaje ?? null
+        : null,
+    clienteComentario:
+      canSeeRatings
+        ? row.cliente_comentario ?? null
+        : viewerIsCliente
+        ? row.cliente_comentario ?? null
+        : null,
+
+    profesionalPuntaje:
+      canSeeRatings
+        ? row.profesional_puntaje ?? null
+        : viewerIsPro
+        ? row.profesional_puntaje ?? null
+        : null,
+    profesionalComentario:
+      canSeeRatings
+        ? row.profesional_comentario ?? null
+        : viewerIsPro
+        ? row.profesional_comentario ?? null
+        : null,
+
+    canSeeRatings,
 
     creadoEn: row.creado_en ? new Date(row.creado_en).toISOString() : null,
     actualizadoEn: row.actualizado_en ? new Date(row.actualizado_en).toISOString() : null,
 
-    profesionalTelefono: row.profesional?.telefono ?? null,
-    clienteTelefono: row.cliente?.telefono ?? null,
-    servicioPrecioBase: row.servicio?.precio_base ?? null,
+    // ✅ FIX: usar la variable `servicio` (no row.servicio)
+    servicioPrecioBase: servicio?.precio_base ?? null,
   };
 
   return ReservationDtoSchema.parse(dto);
 }
 
 /**
- * ✅ DETALLE con permisos:
- * - solo puede ver si es cliente_id o profesional_id
- * (esto es lo que tu controller está intentando llamar)
+ * ✅ DETALLE con permisos
  */
 export async function getReservationByIdForUserService(userId: string, reservationId: number) {
   const row = await getReservationByIdWithJoinsRepository(reservationId);
   if (!row) return null;
 
-  if (String(row.cliente_id) !== String(userId) && String(row.profesional_id) !== String(userId)) {
+  if (
+    String(row.cliente_id) !== String(userId) &&
+    String(row.profesional_id) !== String(userId)
+  ) {
     throw new Error('No autorizado');
   }
 
-  return toReservationDto(row);
+  return toReservationDto(row, userId);
 }
 
 /**
  * Crear reserva:
- * requester = cliente_id (independiente del rol real del usuario)
- * Estado inicial: PENDIENTE + accion_requerida_por=PROFESIONAL
+ * requester = cliente_id (independiente del rol)
  */
 export async function createReservationService(clienteId: string, payload: unknown) {
   const parsed = CreateReservationSchema.parse(payload);
@@ -116,16 +161,12 @@ export async function createReservationService(clienteId: string, payload: unkno
     accion_requerida_por: 'PROFESIONAL',
   });
 
-  // ✅ devolvemos detalle completo con joins (evita nulls y faltantes en FE)
   const row = await getReservationByIdWithJoinsRepository(Number(created.id));
-  return toReservationDto(row ?? created);
+  return toReservationDto(row ?? created, clienteId);
 }
 
 /**
- * Tabs requester (cliente):
- * waiting: PENDIENTE + EN_NEGOCIACION
- * active: EN_PROCESO
- * done: FINALIZADO + CERRADO
+ * Tabs requester (cliente)
  */
 export async function listMyReservationsAsClienteService(clienteId: string, tab: string) {
   const estados: ReservationStatus[] =
@@ -138,14 +179,11 @@ export async function listMyReservationsAsClienteService(clienteId: string, tab:
       : ['PENDIENTE', 'EN_NEGOCIACION'];
 
   const rows = await listReservationsForClienteRepository(clienteId, estados);
-  return rows.map(toReservationDto);
+  return rows.map((r) => toReservationDto(r, clienteId));
 }
 
 /**
- * Tabs profesional (recibidas):
- * pending: PENDIENTE + EN_NEGOCIACION
- * active: EN_PROCESO
- * done: FINALIZADO + CERRADO
+ * Tabs profesional (recibidas)
  */
 export async function listMyReservationsAsProfesionalService(profesionalId: string, tab: string) {
   const estados: ReservationStatus[] =
@@ -158,12 +196,11 @@ export async function listMyReservationsAsProfesionalService(profesionalId: stri
       : ['PENDIENTE', 'EN_NEGOCIACION'];
 
   const rows = await listReservationsForProfesionalRepository(profesionalId, estados);
-  return rows.map(toReservationDto);
+  return rows.map((r) => toReservationDto(r, profesionalId));
 }
 
 /**
- * PROFESIONAL acepta:
- * PENDIENTE | EN_NEGOCIACION -> EN_PROCESO
+ * PROFESIONAL acepta
  */
 export async function profesionalAcceptReservationService(profesionalId: string, reservationId: number) {
   const reservation = await getReservationByIdRepository(reservationId);
@@ -180,13 +217,11 @@ export async function profesionalAcceptReservationService(profesionalId: string,
   });
 
   const row = await getReservationByIdWithJoinsRepository(reservationId);
-  return toReservationDto(row ?? updated);
+  return toReservationDto(row ?? updated, profesionalId);
 }
 
 /**
- * PROFESIONAL propone:
- * PENDIENTE | EN_NEGOCIACION -> EN_NEGOCIACION
- * accion_requerida_por -> CLIENTE (requester)
+ * PROFESIONAL propone
  */
 export async function profesionalProposeService(
   profesionalId: string,
@@ -211,14 +246,17 @@ export async function profesionalProposeService(
   });
 
   const row = await getReservationByIdWithJoinsRepository(reservationId);
-  return toReservationDto(row ?? updated);
+  return toReservationDto(row ?? updated, profesionalId);
 }
 
 /**
- * PROFESIONAL cancela:
- * PENDIENTE | EN_NEGOCIACION -> CANCELADO
+ * PROFESIONAL cancela
  */
-export async function profesionalCancelService(profesionalId: string, reservationId: number, payload: unknown) {
+export async function profesionalCancelService(
+  profesionalId: string,
+  reservationId: number,
+  payload: unknown,
+) {
   const parsed = ProCancelSchema.parse(payload);
 
   const reservation = await getReservationByIdRepository(reservationId);
@@ -237,15 +275,17 @@ export async function profesionalCancelService(profesionalId: string, reservatio
   });
 
   const row = await getReservationByIdWithJoinsRepository(reservationId);
-  return toReservationDto(row ?? updated);
+  return toReservationDto(row ?? updated, profesionalId);
 }
 
 /**
- * PROFESIONAL finaliza:
- * EN_PROCESO -> FINALIZADO
- * accion_requerida_por -> CLIENTE (requester) para confirmar/calificar
+ * PROFESIONAL finaliza
  */
-export async function profesionalFinishService(profesionalId: string, reservationId: number, _payload: unknown) {
+export async function profesionalFinishService(
+  profesionalId: string,
+  reservationId: number,
+  _payload: unknown,
+) {
   ProFinishSchema.parse(_payload);
 
   const reservation = await getReservationByIdRepository(reservationId);
@@ -262,12 +302,11 @@ export async function profesionalFinishService(profesionalId: string, reservatio
   });
 
   const row = await getReservationByIdWithJoinsRepository(reservationId);
-  return toReservationDto(row ?? updated);
+  return toReservationDto(row ?? updated, profesionalId);
 }
 
 /**
- * REQUESTER (cliente_id) acepta propuesta:
- * EN_NEGOCIACION -> EN_PROCESO
+ * REQUESTER acepta propuesta
  */
 export async function requesterAcceptProposalService(userId: string, reservationId: number) {
   ClientAcceptProposalSchema.parse({});
@@ -287,15 +326,17 @@ export async function requesterAcceptProposalService(userId: string, reservation
   });
 
   const row = await getReservationByIdWithJoinsRepository(reservationId);
-  return toReservationDto(row ?? updated);
+  return toReservationDto(row ?? updated, userId);
 }
 
 /**
- * REQUESTER (cliente_id) rechaza propuesta:
- * EN_NEGOCIACION -> PENDIENTE
- * accion_requerida_por -> PROFESIONAL
+ * REQUESTER rechaza propuesta
  */
-export async function requesterRejectProposalService(userId: string, reservationId: number, payload: unknown) {
+export async function requesterRejectProposalService(
+  userId: string,
+  reservationId: number,
+  payload: unknown,
+) {
   const parsed = ClientRejectProposalSchema.parse(payload);
 
   const reservation = await getReservationByIdRepository(reservationId);
@@ -314,9 +355,12 @@ export async function requesterRejectProposalService(userId: string, reservation
   });
 
   const row = await getReservationByIdWithJoinsRepository(reservationId);
-  return toReservationDto(row ?? updated);
+  return toReservationDto(row ?? updated, userId);
 }
-// requester = cliente_id (independiente del rol real del usuario)
+
+/**
+ * REQUESTER finaliza (cliente_id)
+ */
 export async function requesterFinishService(userId: string, reservationId: number) {
   RequesterFinishSchema.parse({});
 
@@ -329,14 +373,13 @@ export async function requesterFinishService(userId: string, reservationId: numb
     throw new Error(`No se puede finalizar desde estado ${reservation.estado}`);
   }
 
-  // ✅ el solicitante finaliza => el otro (PROFESIONAL) debe confirmar
   const updated = await updateReservationByIdRepository(reservationId, {
     estado: 'FINALIZADO',
     accion_requerida_por: 'PROFESIONAL',
   });
 
   const row = await getReservationByIdWithJoinsRepository(reservationId);
-  return toReservationDto(row ?? updated);
+  return toReservationDto(row ?? updated, userId);
 }
 
 export async function confirmFinishService(userId: string, reservationId: number) {
@@ -345,7 +388,6 @@ export async function confirmFinishService(userId: string, reservationId: number
   const reservation = await getReservationByIdRepository(reservationId);
   if (!reservation) throw new Error('Reserva no encontrada');
 
-  // solo pueden confirmar el “otro lado” cuando accion_requerida_por lo pide
   const isCliente = String(reservation.cliente_id) === String(userId);
   const isPro = String(reservation.profesional_id) === String(userId);
   if (!isCliente && !isPro) throw new Error('No autorizado');
@@ -359,14 +401,13 @@ export async function confirmFinishService(userId: string, reservationId: number
     throw new Error('No tenés acción pendiente para confirmar');
   }
 
-  // ✅ confirmación final => CERRADO
   const updated = await updateReservationByIdRepository(reservationId, {
     estado: 'CERRADO',
     accion_requerida_por: null,
   });
 
   const row = await getReservationByIdWithJoinsRepository(reservationId);
-  return toReservationDto(row ?? updated);
+  return toReservationDto(row ?? updated, userId);
 }
 
 export async function rejectFinishService(userId: string, reservationId: number, payload: unknown) {
@@ -388,14 +429,78 @@ export async function rejectFinishService(userId: string, reservationId: number,
     throw new Error('No tenés acción pendiente para rechazar');
   }
 
-  // ✅ vuelve a EN_PROCESO y deja un mensaje
   const updated = await updateReservationByIdRepository(reservationId, {
     estado: 'EN_PROCESO',
     accion_requerida_por: null,
-    // reutilizamos mensaje_propuesta como "nota" (si querés, creamos columna nueva después)
     mensaje_propuesta: parsed.mensaje ?? reservation.mensaje_propuesta ?? null,
   });
 
   const row = await getReservationByIdWithJoinsRepository(reservationId);
-  return toReservationDto(row ?? updated);
+  return toReservationDto(row ?? updated, userId);
+}
+
+/**
+ * ✅ NUEVO: CALIFICAR
+ * - Solo cuando estado = CERRADO
+ * - Cliente califica al profesional / profesional califica al cliente
+ * - Visibilidad: se muestran ambas cuando ambos calificaron, sino cada uno ve la suya
+ */
+export async function rateReservationService(userId: string, reservationId: number, payload: unknown) {
+  const parsed = RateReservationSchema.parse(payload);
+
+  const reservation = await getReservationByIdRepository(reservationId);
+  if (!reservation) throw new Error('Reserva no encontrada');
+
+  const isCliente = String(reservation.cliente_id) === String(userId);
+  const isPro = String(reservation.profesional_id) === String(userId);
+  if (!isCliente && !isPro) throw new Error('No autorizado');
+
+  if (reservation.estado !== 'CERRADO') {
+    throw new Error('Solo podés calificar cuando el servicio esté cerrado');
+  }
+
+  // evita doble calificación
+  if (isCliente && reservation.cliente_califico) throw new Error('Ya calificaste esta reserva');
+  if (isPro && reservation.profesional_califico) throw new Error('Ya calificaste esta reserva');
+
+  const patch: any = isCliente
+    ? {
+        cliente_puntaje: parsed.puntaje,
+        cliente_comentario: parsed.comentario ?? null,
+        cliente_califico: true,
+        cliente_califico_en: new Date().toISOString(),
+      }
+    : {
+        profesional_puntaje: parsed.puntaje,
+        profesional_comentario: parsed.comentario ?? null,
+        profesional_califico: true,
+        profesional_califico_en: new Date().toISOString(),
+      };
+
+  await updateReservationByIdRepository(reservationId, patch);
+
+  const row = await getReservationByIdWithJoinsRepository(reservationId);
+  if (!row) throw new Error('Reserva no encontrada');
+
+  return toReservationDto(row, userId);
+}
+// ✅ NUEVO: listar reviews públicas de un profesional
+export async function listProfessionalReviewsService(profesionalId: string, query: any) {
+  const sortRaw = String(query?.sort ?? 'recent');
+  const sort: ReviewSort =
+    sortRaw === 'best' || sortRaw === 'worst' || sortRaw === 'recent'
+      ? (sortRaw as ReviewSort)
+      : 'recent';
+
+  const rating = Number(query?.rating ?? 0);
+  const limit = Math.min(Math.max(Number(query?.limit ?? 10), 1), 50);
+  const offset = Math.max(Number(query?.offset ?? 0), 0);
+
+  return await listProfessionalReviewsRepository({
+    profesionalId: String(profesionalId),
+    sort,
+    rating: Number.isFinite(rating) ? rating : 0,
+    limit,
+    offset,
+  });
 }

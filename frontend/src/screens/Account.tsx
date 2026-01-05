@@ -1,5 +1,5 @@
 // src/screens/Account.tsx
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -25,7 +25,7 @@ import { COLORS } from '../styles/theme';
 import { formatMemberSince } from '../utils/date';
 
 interface Props {
-  navigation: any; // Replace 'any' with the correct type if available (e.g., StackNavigationProp)
+  navigation: any;
 }
 
 interface ProfileVM {
@@ -56,7 +56,7 @@ export default function Account({ navigation }: Props) {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
-  const rows = React.useMemo<RowItem[]>(
+  const rows = useMemo<RowItem[]>(
     () => [
       {
         key: 'settings',
@@ -72,19 +72,35 @@ export default function Account({ navigation }: Props) {
         rightIcon: require('../../assets/icons/cuenta/flechaDerecha.png'),
         onPress: () => navigation.navigate('EditProfile'),
       },
+
+      // ✅ NUEVO: Ubicaciones
       {
-        key: 'add-service',
-        label: 'Agregar servicio',
-        leftIcon: require('../../assets/icons/cuenta/crear.png'),
+        key: 'locations',
+        label: 'Mis ubicaciones',
+        leftIcon: require('../../assets/icons/cuenta/ubicacion.png'), // ⬅️ asegurate de tener este asset
         rightIcon: require('../../assets/icons/cuenta/flechaDerecha.png'),
-        onPress: () => navigation.navigate('AddService'),
+        onPress: () => navigation.navigate('Locations'), // ⬅️ debe coincidir con tu navigator
       },
+
+      // Si querés que "Agregar servicio" sea solo para profesionales:
+      ...(profile?.isProfessional
+        ? [
+            {
+              key: 'add-service',
+              label: 'Agregar servicio',
+              leftIcon: require('../../assets/icons/cuenta/crear.png'),
+              rightIcon: require('../../assets/icons/cuenta/flechaDerecha.png'),
+              onPress: () => navigation.navigate('AddService'),
+            } as RowItem,
+          ]
+        : []),
+
       {
         key: 'language',
         label: 'Idioma',
         leftIcon: require('../../assets/icons/cuenta/idioma.png'),
         rightText: 'Español',
-        onPress: () => {}, // abrir modal más adelante
+        onPress: () => {},
       },
       {
         key: 'help',
@@ -101,43 +117,48 @@ export default function Account({ navigation }: Props) {
         onPress: () => setShowPrivacyModal(true),
       },
     ],
-    [],
+    [navigation, profile?.isProfessional],
   );
 
   useFocusEffect(
     useCallback(() => {
+      let mounted = true;
+
       const loadProfile = async () => {
         try {
+          setLoadingProfile(true);
           const data = await getCurrentUser();
 
           const profileVm: ProfileVM = {
             fullName: `${data.nombre ?? 'Usuario'} ${data.apellido ?? ''}`.trim(),
             photoUrl: data.foto_url ?? null,
-            isProfessional: data.id_rol === 1, // ajustá si cambia el mapping
+            isProfessional: data.id_rol === 1,
             isVerified: data.verificado,
             registerDate: data.fecha_registro,
           };
 
-          setProfile(profileVm);
+          if (mounted) setProfile(profileVm);
         } catch (err) {
           console.error('Error cargando perfil en Account:', err);
           if (err instanceof ApiError && err.status === 401) {
-            // manejar error de no autorizado si es necesario
+            // opcional: navegación a login
           }
         } finally {
-          setLoadingProfile(false);
+          if (mounted) setLoadingProfile(false);
         }
       };
 
       loadProfile();
-    }, [navigation]),
+      return () => {
+        mounted = false;
+      };
+    }, []),
   );
 
   const handleLogout = async () => {
     await logout();
   };
 
-  // ========= Renders principales =========
   if (loadingProfile) {
     return <Loading message="Cargando tu cuenta…" />;
   }
@@ -156,7 +177,7 @@ export default function Account({ navigation }: Props) {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Header: título + campana */}
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Perfil</Text>
 
@@ -180,9 +201,7 @@ export default function Account({ navigation }: Props) {
             <Image source={{ uri: profile.photoUrl }} style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarInitial}>
-                {profile.fullName?.[0]?.toUpperCase() || 'U'}
-              </Text>
+              <Text style={styles.avatarInitial}>{profile.fullName?.[0]?.toUpperCase() || 'U'}</Text>
             </View>
           )}
 
@@ -195,7 +214,6 @@ export default function Account({ navigation }: Props) {
 
         {/* Card promo */}
         {!profile.isProfessional && (
-          // TODO: HACER EL REGISTRO PARA PROFESIONALES
           <Card
             style={styles.convertirseContainer}
             withShadow
@@ -218,7 +236,7 @@ export default function Account({ navigation }: Props) {
 
         {/* Lista */}
         <View style={styles.listCard}>
-          {rows.map((item, idx) => (
+          {rows.map((item) => (
             <View key={item.key}>
               <TouchableOpacity activeOpacity={0.8} style={styles.row} onPress={item.onPress}>
                 <View style={styles.rowLeft}>
@@ -241,7 +259,7 @@ export default function Account({ navigation }: Props) {
 
         <Divider />
 
-        {/* Logout como item */}
+        {/* Logout */}
         <View style={styles.row}>
           <TouchableOpacity activeOpacity={0.8} style={styles.row} onPress={handleLogout}>
             <View style={styles.rowLeft}>
@@ -434,35 +452,5 @@ const styles = StyleSheet.create({
   rightIcon: {
     width: 16,
     height: 16,
-  },
-
-  // Location styles
-  locationsList: {
-    marginTop: 8,
-  },
-  locationItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  locationChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#f3f4f6',
-    flexShrink: 1,
-  },
-  locationChipSelected: {
-    backgroundColor: '#dbeafe',
-  },
-  locationChipText: {
-    fontSize: 12,
-    color: '#374151',
-  },
-  locationDeleteBtn: {
-    marginLeft: 8,
-    padding: 4,
   },
 });

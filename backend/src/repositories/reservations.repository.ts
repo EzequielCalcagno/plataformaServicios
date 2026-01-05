@@ -21,8 +21,18 @@ type UpdateReservationDbPayload = Partial<{
   cancelado_por: 'CLIENTE' | 'PROFESIONAL' | null;
   motivo_cancelacion: string | null;
 
+  // flags
   cliente_califico: boolean;
   profesional_califico: boolean;
+
+  // ✅ ratings
+  cliente_puntaje: number | null;
+  cliente_comentario: string | null;
+  cliente_califico_en: string | null;
+
+  profesional_puntaje: number | null;
+  profesional_comentario: string | null;
+  profesional_califico_en: string | null;
 
   actualizado_en: string;
 }>;
@@ -30,7 +40,7 @@ type UpdateReservationDbPayload = Partial<{
 export async function getServicioByIdRepository(servicioId: number) {
   const { data, error } = await db
     .from('servicios')
-    .select(`id, profesional_id, titulo, categoria, activo`)
+    .select(`id, profesional_id, titulo, categoria, activo, precio_base`)
     .eq('id', servicioId)
     .single();
 
@@ -101,9 +111,7 @@ export async function updateReservationByIdRepository(id: number, patch: UpdateR
 
 /**
  * Listados para tabs (cliente / profesional)
- * ✅ Incluye joins correctos (servicio + usuario)
- *
- * OJO: los "usuarios!reservations_*_fkey" dependen del nombre real del FK.
+ * ✅ Incluye joins (servicio + usuario)
  */
 export async function listReservationsForClienteRepository(
   clienteId: string,
@@ -125,22 +133,32 @@ export async function listReservationsForClienteRepository(
       accion_requerida_por,
       cancelado_por,
       motivo_cancelacion,
+
       cliente_califico,
       profesional_califico,
+      cliente_puntaje,
+      cliente_comentario,
+      cliente_califico_en,
+      profesional_puntaje,
+      profesional_comentario,
+      profesional_califico_en,
+
       creado_en,
       actualizado_en,
 
       servicio:servicios!reservations_servicio_id_fkey (
         id,
         titulo,
-        categoria
+        categoria,
+        precio_base
       ),
 
       profesional:usuarios!reservations_profesional_id_fkey (
         id,
         nombre,
         apellido,
-        foto_url
+        foto_url,
+        telefono
       )
     `,
     )
@@ -176,22 +194,32 @@ export async function listReservationsForProfesionalRepository(
       accion_requerida_por,
       cancelado_por,
       motivo_cancelacion,
+
       cliente_califico,
       profesional_califico,
+      cliente_puntaje,
+      cliente_comentario,
+      cliente_califico_en,
+      profesional_puntaje,
+      profesional_comentario,
+      profesional_califico_en,
+
       creado_en,
       actualizado_en,
 
       servicio:servicios!reservations_servicio_id_fkey (
         id,
         titulo,
-        categoria
+        categoria,
+        precio_base
       ),
 
       cliente:usuarios!reservations_cliente_id_fkey (
         id,
         nombre,
         apellido,
-        foto_url
+        foto_url,
+        telefono
       )
     `,
     )
@@ -206,6 +234,10 @@ export async function listReservationsForProfesionalRepository(
 
   return data || [];
 }
+
+/**
+ * Detalle con joins (servicio + profesional + cliente)
+ */
 export async function getReservationByIdWithJoinsRepository(id: number) {
   const { data, error } = await db
     .from('reservations')
@@ -223,18 +255,27 @@ export async function getReservationByIdWithJoinsRepository(id: number) {
       accion_requerida_por,
       cancelado_por,
       motivo_cancelacion,
+
       cliente_califico,
       profesional_califico,
+      cliente_puntaje,
+      cliente_comentario,
+      cliente_califico_en,
+      profesional_puntaje,
+      profesional_comentario,
+      profesional_califico_en,
+
       creado_en,
       actualizado_en,
 
-      servicios:servicio_id (
+      servicio:servicios!reservations_servicio_id_fkey (
         id,
         titulo,
-        categoria
+        categoria,
+        precio_base
       ),
 
-      profesional:profesional_id (
+      profesional:usuarios!reservations_profesional_id_fkey (
         id,
         nombre,
         apellido,
@@ -242,14 +283,14 @@ export async function getReservationByIdWithJoinsRepository(id: number) {
         telefono
       ),
 
-      cliente:cliente_id (
+      cliente:usuarios!reservations_cliente_id_fkey (
         id,
         nombre,
         apellido,
         foto_url,
         telefono
       )
-    `
+    `,
     )
     .eq('id', id)
     .single();
@@ -260,4 +301,87 @@ export async function getReservationByIdWithJoinsRepository(id: number) {
   }
 
   return data || null;
+}
+// ✅ NUEVO: Reviews del profesional (las calificaciones del cliente)
+export type ReviewSort = 'recent' | 'best' | 'worst';
+
+export async function listProfessionalReviewsRepository(params: {
+  profesionalId: string;
+  sort: ReviewSort;
+  rating: number; // 0..5 (0 = sin filtro)
+  limit: number;
+  offset: number;
+}) {
+  const { profesionalId, sort, rating, limit, offset } = params;
+
+  const limitPlus = limit + 1;
+  const from = offset;
+  const to = offset + limitPlus - 1;
+
+  let q = db
+    .from('reservations')
+    .select(
+      `
+      id,
+      creado_en,
+      actualizado_en,
+      cliente_puntaje,
+      cliente_comentario,
+
+      cliente:usuarios!reservations_cliente_id_fkey (
+        id,
+        nombre,
+        apellido,
+        foto_url
+      )
+    `,
+    )
+    .eq('profesional_id', profesionalId)
+    .eq('estado', 'CERRADO')
+    .eq('cliente_califico', true)
+    .not('cliente_puntaje', 'is', null);
+
+  // filtro por rating (1..5)
+  if (rating >= 1 && rating <= 5) {
+    q = q.eq('cliente_puntaje', rating);
+  }
+
+  // sort
+  if (sort === 'best') {
+    q = q.order('cliente_puntaje', { ascending: false }).order('actualizado_en', { ascending: false });
+  } else if (sort === 'worst') {
+    q = q.order('cliente_puntaje', { ascending: true }).order('actualizado_en', { ascending: false });
+  } else {
+    q = q.order('actualizado_en', { ascending: false });
+  }
+
+  const { data, error } = await q.range(from, to);
+
+  if (error) {
+    console.error('❌ Error listProfessionalReviewsRepository:', error);
+    throw error;
+  }
+
+  const rows = data ?? [];
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+
+  const results = page.map((r: any) => {
+    const authorName =
+      `${r?.cliente?.nombre ?? ''} ${r?.cliente?.apellido ?? ''}`.trim() || 'Usuario';
+
+    return {
+      id: String(r.id),
+      authorName,
+      authorPhotoUrl: r?.cliente?.foto_url ?? null,
+      createdAt: (r.actualizado_en ?? r.creado_en ?? new Date().toISOString()) as string,
+      rating: Number(r.cliente_puntaje ?? 0),
+      comment: (r.cliente_comentario ?? null) as string | null,
+    };
+  });
+
+  return {
+    results,
+    nextOffset: hasMore ? offset + limit : null,
+  };
 }

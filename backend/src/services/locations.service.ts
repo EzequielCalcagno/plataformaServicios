@@ -1,78 +1,119 @@
 // src/services/locations.service.ts
 import {
-  getLocationsByUserIdRepository,
-  getLocationByIdRepository,
-  countActiveFixedLocationsRepository,
-  unsetOtherPrincipalLocationsRepository,
+  listLocationsByUserRepository,
+  getLocationByIdForUserRepository,
+  deleteLocationForUserRepository,
   createLocationRepository,
-  updateLocationRepository,
-  softDeleteLocationRepository,
+  updateLocationForUserRepository,
+  
+  clearPrincipalForUserRepository,
 } from '../repositories/locations.repository';
 
-export async function getMyLocationsService(userId: string) {
-  return getLocationsByUserIdRepository(userId);
+type GeoPoint = { type: 'Point'; coordinates: [number, number] }; // [lng, lat]
+
+function geoPointToEWKT(p?: GeoPoint | null): string | null {
+  if (!p) return null;
+  if (p.type !== 'Point') return null;
+  const [lng, lat] = p.coordinates ?? [];
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  // ✅ geography expects SRID + POINT(lng lat)
+  return `SRID=4326;POINT(${lng} ${lat})`;
 }
 
-export async function getMyLocationByIdService(userId: string, id: number) {
-  const loc = await getLocationByIdRepository(userId, id);
-  if (!loc) {
-    throw new Error('Ubicación no encontrada');
-  }
-  return loc;
+function toLocationDto(row: any) {
+  return {
+    id: Number(row.id),
+    usuario_id: row.usuario_id ?? null,
+    nombre_ubicacion: row.nombre_ubicacion ?? null,
+    ciudad: row.ciudad ?? null,
+    direccion: row.direccion ?? null,
+
+    // Si tu SELECT no trae coordenadas no pasa nada
+    coordenadas: row.coordenadas ?? null,
+
+    tipo: row.tipo ?? null,
+    activa: row.activa ?? null,
+    fecha_registro: row.fecha_registro ?? null,
+
+    // ✅ generated columns (solo lectura)
+    lat: row.lat ?? null,
+    lng: row.lng ?? null,
+
+    principal: !!row.principal,
+  };
 }
 
-type CreateLocationInput = {
-  nombre_ubicacion?: string;
-  ciudad?: string;
-  direccion?: string;
-  lat?: number;
-  lng?: number;
-  principal?: boolean;
-};
+export async function listMyLocationsService(userId: string) {
+  const rows = await listLocationsByUserRepository(userId);
+  return rows.map(toLocationDto);
+}
 
-export async function createMyLocationService(userId: string, input: CreateLocationInput) {
-  const count = await countActiveFixedLocationsRepository(userId);
-  if (count >= 2) {
-    throw new Error('Solo podés tener hasta 2 ubicaciones fijas');
+
+
+export async function updateMyLocationService(userId: string, locationId: number, payload: any) {
+  if (payload?.principal === true) {
+    await clearPrincipalForUserRepository(userId);
   }
 
-  if (input.principal) {
-    await unsetOtherPrincipalLocationsRepository(userId);
+  const ewkt =
+    payload?.coordenadas != null ? geoPointToEWKT(payload.coordenadas) : undefined;
+
+  const updated = await updateLocationForUserRepository(userId, locationId, {
+    nombre_ubicacion: payload?.nombre_ubicacion ?? undefined,
+    ciudad: payload?.ciudad ?? undefined,
+    direccion: payload?.direccion ?? undefined,
+
+    // ✅ si viene coordenadas, la actualizamos (EWKT); si no viene, no tocamos
+    coordenadas: ewkt,
+
+    tipo: payload?.tipo ?? undefined,
+    activa: typeof payload?.activa === 'boolean' ? payload.activa : undefined,
+    principal: typeof payload?.principal === 'boolean' ? payload.principal : undefined,
+  });
+
+  return toLocationDto(updated);
+}
+
+export async function deleteMyLocationService(userId: string, locationId: number) {
+  const exists = await getLocationByIdForUserRepository(userId, locationId);
+  if (!exists) throw new Error('Ubicación no encontrada');
+
+  await deleteLocationForUserRepository(userId, locationId);
+  return true;
+}
+export async function createMyLocationService(userId: string, payload: any) {
+  const makePrincipal = !!payload?.principal;
+
+  // ✅ 1. LIMPIAR ANTES (clave para evitar el error 23505)
+  if (makePrincipal) {
+    await clearPrincipalForUserRepository(userId);
   }
 
-  return createLocationRepository({
+  // ✅ 2. convertir coordenadas a EWKT si vienen
+  const ewkt =
+    payload?.coordenadas?.type === 'Point'
+      ? `SRID=4326;POINT(${payload.coordenadas.coordinates[0]} ${payload.coordenadas.coordinates[1]})`
+      : null;
+
+  const created = await createLocationRepository({
     usuario_id: userId,
-    nombre_ubicacion: input.nombre_ubicacion,
-    ciudad: input.ciudad,
-    direccion: input.direccion,
-    lat: input.lat,
-    lng: input.lng,
-    tipo: 'fija',
-    principal: !!input.principal,
+    nombre_ubicacion: payload?.nombre_ubicacion ?? null,
+    ciudad: payload?.ciudad ?? null,
+    direccion: payload?.direccion ?? null,
+    coordenadas: ewkt,
+    tipo: payload?.tipo ?? null,
+    principal: makePrincipal,
     activa: true,
   });
-}
 
-export async function updateMyLocationService(
-  userId: string,
-  id: number,
-  input: CreateLocationInput,
-) {
-  if (input.principal) {
-    await unsetOtherPrincipalLocationsRepository(userId);
-  }
-
-  return updateLocationRepository(userId, id, {
-    usuario_id: userId,
-    nombre_ubicacion: input.nombre_ubicacion,
-    ciudad: input.ciudad,
-    direccion: input.direccion,
-    lat: input.lat,
-    lng: input.lng,
-    principal: input.principal,
-  });
-}
-
-export async function deleteMyLocationService(userId: string, id: number) {
-  await softDeleteLocationRepository(userId, id);
+  return {
+    id: Number(created.id),
+    usuario_id: created.usuario_id,
+    nombre_ubicacion: created.nombre_ubicacion,
+    ciudad: created.ciudad,
+    direccion: created.direccion,
+    lat: created.lat ?? null,
+    lng: created.lng ?? null,
+    principal: !!created.principal,
+  };
 }

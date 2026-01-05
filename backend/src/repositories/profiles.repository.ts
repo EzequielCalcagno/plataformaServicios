@@ -1,7 +1,7 @@
 // src/repositories/profiles.repository.ts
 import db from '../config/db';
 
-// Obtener el perfil profesional por ID de usuario
+// Perfil profesional (privado)
 export const getProfessionalProfileByUserIdRepository = async (userId: string) => {
   const { data, error } = await db
     .from('perfiles_profesionales')
@@ -32,14 +32,11 @@ type UpdateProfessionalProfileDbPayload = {
   descripcion?: string;
   especialidad?: string;
   experiencia?: string;
-  portada_url?: string | null;
   fecha_actualizacion?: string;
 };
 
-// Crear o actualizar el perfil profesional
-export const upsertProfessionalProfileRepository = async (
-  payload: UpdateProfessionalProfileDbPayload,
-) => {
+// Upsert perfil profesional (sin portada_url)
+export const upsertProfessionalProfileRepository = async (payload: UpdateProfessionalProfileDbPayload) => {
   const { data, error } = await db
     .from('perfiles_profesionales')
     .upsert(payload, { onConflict: 'usuario_id' })
@@ -63,6 +60,8 @@ export const upsertProfessionalProfileRepository = async (
 
   return data;
 };
+
+// Perfil público (básico) - sin portada_url
 export const getProfessionalPublicProfileByUserIdRepository = async (userId: string) => {
   const { data, error } = await db
     .from('perfiles_profesionales')
@@ -83,9 +82,26 @@ export const getProfessionalPublicProfileByUserIdRepository = async (userId: str
     return null;
   }
 
-  return data;
+  return data || null;
 };
-// ✅ NUEVO: traer servicios activos del profesional (para perfil público)
+
+// Usuario base (para nombre/foto)
+export const getUserBasicByIdRepository = async (userId: string) => {
+  const { data, error } = await db
+    .from('usuarios')
+    .select(`id, nombre, apellido, foto_url`)
+    .eq('id', userId)
+    .single();
+
+  if (error) {
+    console.error('❌ Error en getUserBasicByIdRepository:', error);
+    return null;
+  }
+
+  return data || null;
+};
+
+// Servicios activos del profesional
 export const getServicesByProfessionalIdRepository = async (profesionalId: string) => {
   const { data, error } = await db
     .from('servicios')
@@ -96,7 +112,8 @@ export const getServicesByProfessionalIdRepository = async (profesionalId: strin
       titulo,
       categoria,
       descripcion,
-      activo
+      activo,
+      creado_en
     `,
     )
     .eq('profesional_id', profesionalId)
@@ -105,6 +122,36 @@ export const getServicesByProfessionalIdRepository = async (profesionalId: strin
 
   if (error) {
     console.error('❌ Error en getServicesByProfessionalIdRepository:', error);
+    return [];
+  }
+
+  return data ?? [];
+};
+
+// ✅ rating summary (RPC)
+export const getProfessionalRatingSummaryRepository = async (profesionalId: string) => {
+  const { data, error } = await db.rpc('get_professional_rating_summary', {
+    p_profesional_id: profesionalId,
+  });
+
+  if (error) {
+    console.error('❌ Error en getProfessionalRatingSummaryRepository:', error);
+    return null;
+  }
+
+  return Array.isArray(data) ? data[0] : data;
+};
+
+// ✅ reviews (RPC)
+export const listProfessionalReviewsRepository = async (profesionalId: string, limit = 10, offset = 0) => {
+  const { data, error } = await db.rpc('list_professional_reviews', {
+    p_profesional_id: profesionalId,
+    p_limit: limit,
+    p_offset: offset,
+  });
+
+  if (error) {
+    console.error('❌ Error en listProfessionalReviewsRepository:', error);
     return [];
   }
 

@@ -10,11 +10,12 @@ import {
   getProfessionalProfileByIdController,
   createMyProfessionalProfileController,
   updateMyProfessionalProfileController,
+  
 } from '../controllers/profiles.controller';
-
+import { rateReservationController } from '../controllers/reservations.controller';
+import { listProfessionalReviewsController } from '../controllers/reservations.controller';
 import {
   getMyLocationsController,
-  getLocationByIdController,
   createMyLocationController,
   updateMyLocationController,
   deleteMyLocationController,
@@ -61,8 +62,8 @@ router.post('/profile', requireRole('PROFESIONAL'), createMyProfessionalProfileC
 router.patch('/profile', requireRole('PROFESIONAL'), updateMyProfessionalProfileController); // Actualizar perfil profesional del usuario autenticado
 
 // --------------- LOCATION ROUTES ---------------
+
 router.get('/locations', getMyLocationsController);
-router.get('/locations/:id', getLocationByIdController);
 router.post('/locations', createMyLocationController);
 router.patch('/locations/:id', updateMyLocationController);
 router.delete('/locations/:id', deleteMyLocationController);
@@ -155,5 +156,7 @@ router.patch('/reservations/:id/reject-finish', rejectFinishController);
 
 // Detalle
 router.get('/reservations/:id', getReservationByIdController);
-
+//Calificacion
+router.patch('/reservations/:id/rate', rateReservationController);
+router.get('/professionals/:id/reviews', listProfessionalReviewsController);
 export default router;

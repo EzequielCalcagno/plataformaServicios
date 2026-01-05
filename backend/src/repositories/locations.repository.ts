@@ -7,164 +7,141 @@ export type LocationRow = {
   nombre_ubicacion: string | null;
   ciudad: string | null;
   direccion: string | null;
-  coordenadas: any; // PostGIS Geometry Point
-  tipo: string;
+  coordenadas: any | null; // geography(Point, 4326)
+  tipo: string | null;
   principal: boolean;
   activa: boolean;
-  fecha_registro: string;
+  fecha_registro: string | null;
+
+  // generated columns
   lat?: number | null;
   lng?: number | null;
 };
 
-type LocationPayload = {
+export type CreateLocationDbPayload = {
   usuario_id: string;
-  nombre_ubicacion?: string;
-  ciudad?: string;
-  direccion?: string;
-  lat?: number;
-  lng?: number;
-  tipo?: string;
+  nombre_ubicacion?: string | null;
+  ciudad?: string | null;
+  direccion?: string | null;
+  coordenadas?: any | null; // EWKT string recomendado
+  tipo?: string | null;
   principal?: boolean;
   activa?: boolean;
 };
 
-const BASE_SELECT =
-  'id,usuario_id,nombre_ubicacion,ciudad,direccion,tipo,principal,activa,fecha_registro,coordenadas,lat,lng';
+export type UpdateLocationDbPayload = Partial<{
+  nombre_ubicacion: string | null;
+  ciudad: string | null;
+  direccion: string | null;
+  coordenadas: any | null; // EWKT
+  tipo: string | null;
+  principal: boolean;
+  activa: boolean;
+}>;
 
-// Listar ubicaciones activas del usuario
-export async function getLocationsByUserIdRepository(userId: string): Promise<LocationRow[]> {
+const SELECT_FIELDS = `
+  id,
+  usuario_id,
+  nombre_ubicacion,
+  ciudad,
+  direccion,
+  coordenadas,
+  tipo,
+  principal,
+  activa,
+  fecha_registro,
+  lat,
+  lng
+`;
+
+export async function listLocationsByUserRepository(userId: string) {
   const { data, error } = await db
     .from('ubicaciones')
-    .select(BASE_SELECT as any) // 👈 importante
+    .select(SELECT_FIELDS)
     .eq('usuario_id', userId)
-    .eq('activa', true)
-    .order('principal', { ascending: false });
+    .order('principal', { ascending: false })
+    .order('fecha_registro', { ascending: false });
 
-  if (error) {
-    console.error('❌ Error getLocationsByUserIdRepository:', error);
-    throw error;
-  }
-
-  return (data as any as LocationRow[]) || [];
+  if (error) throw error;
+  return (data ?? []) as LocationRow[];
 }
 
-// Obtener una ubicación concreta (validando que sea del user)
-export async function getLocationByIdRepository(
-  userId: string,
-  id: number,
-): Promise<LocationRow | null> {
+// ✅ ESTE es el que te falta (service lo importa)
+export async function getLocationByIdForUserRepository(userId: string, id: number) {
   const { data, error } = await db
     .from('ubicaciones')
-    .select(BASE_SELECT as any)
-    .eq('usuario_id', userId)
+    .select(SELECT_FIELDS)
     .eq('id', id)
-    .maybeSingle();
-
-  if (error) {
-    console.error('❌ Error getLocationByIdRepository:', error);
-    throw error;
-  }
-
-  return (data as any as LocationRow) || null;
-}
-
-// Crear ubicación
-export async function createLocationRepository(payload: LocationPayload): Promise<LocationRow> {
-  const { lat, lng, ...rest } = payload;
-
-  const insertObj: any = {
-    ...rest,
-  };
-
-  if (lat != null && lng != null) {
-    insertObj.coordenadas = `SRID=4326;POINT(${lng} ${lat})`;
-  }
-
-  const { data, error } = await db
-    .from('ubicaciones')
-    .insert(insertObj)
-    .select(BASE_SELECT as any) // 👈
+    .eq('usuario_id', userId)
     .single();
 
-  if (error) {
-    console.error('❌ Error createLocationRepository:', error);
-    throw error;
-  }
-
-  return data as any as LocationRow;
+  if (error) return null;
+  return (data ?? null) as LocationRow | null;
 }
 
-// Actualizar ubicación
-export async function updateLocationRepository(
-  userId: string,
-  id: number,
-  payload: LocationPayload,
-): Promise<LocationRow> {
-  const { lat, lng, ...rest } = payload;
-
-  const updateObj: any = { ...rest };
-
-  if (lat != null && lng != null) {
-    updateObj.coordenadas = `SRID=4326;POINT(${lng} ${lat})`;
-  }
-
+export async function createLocationRepository(payload: CreateLocationDbPayload) {
   const { data, error } = await db
     .from('ubicaciones')
-    .update(updateObj)
-    .eq('usuario_id', userId)
-    .eq('id', id)
-    .select(BASE_SELECT as any) // 👈
+    .insert({
+      usuario_id: payload.usuario_id,
+      nombre_ubicacion: payload.nombre_ubicacion ?? null,
+      ciudad: payload.ciudad ?? null,
+      direccion: payload.direccion ?? null,
+
+      // ✅ NO mandes lat/lng (son generated)
+      coordenadas: payload.coordenadas ?? null,
+
+      tipo: payload.tipo ?? null,
+      principal: payload.principal ?? false,
+      activa: payload.activa ?? true,
+    })
+    .select(SELECT_FIELDS)
     .single();
 
-  if (error) {
-    console.error('❌ Error updateLocationRepository:', error);
-    throw error;
-  }
-
-  return data as any as LocationRow;
+  if (error) throw error;
+  return data as LocationRow;
 }
 
-// Contar cuántas ubicaciones fijas activas tiene el user
-export async function countActiveFixedLocationsRepository(userId: string): Promise<number> {
-  const { count, error } = await db
+export async function updateLocationForUserRepository(
+  userId: string,
+  id: number,
+  patch: UpdateLocationDbPayload,
+) {
+  const { data, error } = await db
     .from('ubicaciones')
-    .select('*', { count: 'exact', head: true })
+    .update({
+      ...patch,
+      // ✅ NO mandes lat/lng
+    })
+    .eq('id', id)
     .eq('usuario_id', userId)
-    .eq('tipo', 'fija')
-    .eq('activa', true);
+    .select(SELECT_FIELDS)
+    .single();
 
-  if (error) {
-    console.error('❌ Error countActiveFixedLocationsRepository:', error);
-    throw error;
-  }
-
-  return count ?? 0;
+  if (error) throw error;
+  return data as LocationRow;
 }
 
-// Setear principal=false al resto
-export async function unsetOtherPrincipalLocationsRepository(userId: string) {
+// ✅ ESTE es el que te falta (service lo importa)
+export async function deleteLocationForUserRepository(userId: string, id: number) {
+  const { error } = await db
+    .from('ubicaciones')
+    .delete()
+    .eq('id', id)
+    .eq('usuario_id', userId);
+
+  if (error) throw error;
+  return true;
+}
+
+// ✅ helper: deja en false la principal anterior del usuario
+export async function clearPrincipalForUserRepository(userId: string) {
   const { error } = await db
     .from('ubicaciones')
     .update({ principal: false })
     .eq('usuario_id', userId)
     .eq('principal', true);
 
-  if (error) {
-    console.error('❌ Error unsetOtherPrincipalLocationsRepository:', error);
-    throw error;
-  }
-}
-
-// Eliminar (soft delete)
-export async function softDeleteLocationRepository(userId: string, id: number): Promise<void> {
-  const { error } = await db
-    .from('ubicaciones')
-    .update({ activa: false, principal: false })
-    .eq('usuario_id', userId)
-    .eq('id', id);
-
-  if (error) {
-    console.error('❌ Error softDeleteLocationRepository:', error);
-    throw error;
-  }
+  if (error) throw error;
+  return true;
 }
