@@ -12,6 +12,14 @@ import {
   ConfirmFinishSchema,
   RejectFinishSchema,
   RateReservationSchema,
+
+  // ✅ NUEVO
+  CreateVisitSchema,
+  UpdateVisitSchema,
+  VisitDtoSchema,
+  UpsertServiceDetailsSchema,
+  ServiceDetailsDtoSchema,
+  VisitStatus,
 } from '../schemas/reservation.schema';
 
 import {
@@ -23,6 +31,15 @@ import {
   updateReservationByIdRepository,
   getReservationByIdWithJoinsRepository,
   listProfessionalReviewsRepository, type ReviewSort,
+
+  // ✅ NUEVO
+  listReservationVisitsRepository,
+  createReservationVisitRepository,
+  getReservationVisitByIdRepository,
+  updateReservationVisitRepository,
+  deleteReservationVisitRepository,
+  getReservationServiceDetailsRepository,
+  upsertReservationServiceDetailsRepository,
 } from '../repositories/reservations.repository';
 
 /**
@@ -34,7 +51,6 @@ import {
  */
 function toReservationDto(row: any, viewerUserId?: string) {
   const servicio = row.servicio ?? row.servicios ?? null;
-
 
   const clienteCalifico = row.cliente_califico ?? false;
   const profesionalCalifico = row.profesional_califico ?? false;
@@ -440,10 +456,7 @@ export async function rejectFinishService(userId: string, reservationId: number,
 }
 
 /**
- * ✅ NUEVO: CALIFICAR
- * - Solo cuando estado = CERRADO
- * - Cliente califica al profesional / profesional califica al cliente
- * - Visibilidad: se muestran ambas cuando ambos calificaron, sino cada uno ve la suya
+ * ✅ CALIFICAR
  */
 export async function rateReservationService(userId: string, reservationId: number, payload: unknown) {
   const parsed = RateReservationSchema.parse(payload);
@@ -459,7 +472,6 @@ export async function rateReservationService(userId: string, reservationId: numb
     throw new Error('Solo podés calificar cuando el servicio esté cerrado');
   }
 
-  // evita doble calificación
   if (isCliente && reservation.cliente_califico) throw new Error('Ya calificaste esta reserva');
   if (isPro && reservation.profesional_califico) throw new Error('Ya calificaste esta reserva');
 
@@ -484,7 +496,8 @@ export async function rateReservationService(userId: string, reservationId: numb
 
   return toReservationDto(row, userId);
 }
-// ✅ NUEVO: listar reviews públicas de un profesional
+
+// ✅ listar reviews públicas de un profesional
 export async function listProfessionalReviewsService(profesionalId: string, query: any) {
   const sortRaw = String(query?.sort ?? 'recent');
   const sort: ReviewSort =
@@ -503,4 +516,146 @@ export async function listProfessionalReviewsService(profesionalId: string, quer
     limit,
     offset,
   });
+}
+
+/* ============================================================
+   ✅ NUEVO: VISITAS + DETALLES (en el MISMO service)
+   Reglas:
+   - Acceso: solo cliente o profesional de la reserva
+   - Visitas: solo si estado en ['EN_PROCESO','FINALIZADO','CERRADO']
+   - Detalles: solo upsert si estado en ['FINALIZADO','CERRADO']
+   ============================================================ */
+
+function assertReservationAccess(reservation: any, userId: string) {
+  if (!reservation) throw new Error('Reserva no encontrada');
+  const isCliente = String(reservation.cliente_id) === String(userId);
+  const isPro = String(reservation.profesional_id) === String(userId);
+  if (!isCliente && !isPro) throw new Error('No autorizado');
+  return { isCliente, isPro };
+}
+
+function toVisitDto(row: any) {
+  return VisitDtoSchema.parse({
+    id: Number(row.id),
+    reservationId: Number(row.reservation_id),
+    createdBy: String(row.created_by),
+    visitAt: new Date(row.visit_at).toISOString(),
+    status: row.status as VisitStatus,
+    notes: row.notes ?? null,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
+  });
+}
+
+function toDetailsDto(row: any) {
+  return ServiceDetailsDtoSchema.parse({
+    reservationId: Number(row.reservation_id),
+    updatedBy: String(row.updated_by),
+    finalPrice: row.final_price ?? null,
+    durationMinutes: row.duration_minutes ?? null,
+    materialsUsed: row.materials_used ?? null,
+    finalNotes: row.final_notes ?? null,
+    updatedAt: new Date(row.updated_at).toISOString(),
+  });
+}
+
+export async function listReservationVisitsService(userId: string, reservationId: number) {
+  const reservation = await getReservationByIdRepository(reservationId);
+  assertReservationAccess(reservation, userId);
+
+  if (!['EN_PROCESO', 'FINALIZADO', 'CERRADO'].includes(reservation.estado)) {
+    return [];
+  }
+
+  const rows = await listReservationVisitsRepository(reservationId);
+  return rows.map(toVisitDto);
+}
+
+export async function createReservationVisitService(userId: string, reservationId: number, payload: unknown) {
+  const parsed = CreateVisitSchema.parse(payload);
+
+  const reservation = await getReservationByIdRepository(reservationId);
+  assertReservationAccess(reservation, userId);
+
+  if (!['EN_PROCESO', 'FINALIZADO', 'CERRADO'].includes(reservation.estado)) {
+    throw new Error('Solo podés registrar visitas cuando el servicio esté en proceso o finalizado.');
+  }
+
+  const created = await createReservationVisitRepository({
+    reservation_id: reservationId,
+    created_by: userId,
+    visit_at: parsed.visitAt,
+    status: (parsed.status ?? 'REALIZADA') as VisitStatus,
+    notes: parsed.notes ?? null,
+  });
+
+  return toVisitDto(created);
+}
+
+export async function updateReservationVisitService(
+  userId: string,
+  reservationId: number,
+  visitId: number,
+  payload: unknown,
+) {
+  const parsed = UpdateVisitSchema.parse(payload);
+
+  const reservation = await getReservationByIdRepository(reservationId);
+  assertReservationAccess(reservation, userId);
+
+  const visit = await getReservationVisitByIdRepository(visitId);
+  if (!visit || Number(visit.reservation_id) !== Number(reservationId)) {
+    throw new Error('Visita no encontrada');
+  }
+
+  const updated = await updateReservationVisitRepository(visitId, {
+    visit_at: parsed.visitAt ?? undefined,
+    status: (parsed.status as any) ?? undefined,
+    notes: parsed.notes === undefined ? undefined : (parsed.notes ?? null),
+  });
+
+  return toVisitDto(updated);
+}
+
+export async function deleteReservationVisitService(userId: string, reservationId: number, visitId: number) {
+  const reservation = await getReservationByIdRepository(reservationId);
+  assertReservationAccess(reservation, userId);
+
+  const visit = await getReservationVisitByIdRepository(visitId);
+  if (!visit || Number(visit.reservation_id) !== Number(reservationId)) {
+    throw new Error('Visita no encontrada');
+  }
+
+  await deleteReservationVisitRepository(visitId);
+  return true;
+}
+
+export async function getReservationServiceDetailsService(userId: string, reservationId: number) {
+  const reservation = await getReservationByIdRepository(reservationId);
+  assertReservationAccess(reservation, userId);
+
+  const row = await getReservationServiceDetailsRepository(reservationId);
+  return row ? toDetailsDto(row) : null;
+}
+
+export async function upsertReservationServiceDetailsService(userId: string, reservationId: number, payload: unknown) {
+  const parsed = UpsertServiceDetailsSchema.parse(payload);
+
+  const reservation = await getReservationByIdRepository(reservationId);
+  assertReservationAccess(reservation, userId);
+
+  if (!['FINALIZADO', 'CERRADO'].includes(reservation.estado)) {
+    throw new Error('Solo podés guardar detalles finales cuando el servicio esté finalizado o cerrado.');
+  }
+
+  const upserted = await upsertReservationServiceDetailsRepository({
+    reservation_id: reservationId,
+    updated_by: userId,
+    final_price: parsed.finalPrice ?? null,
+    duration_minutes: parsed.durationMinutes ?? null,
+    materials_used: parsed.materialsUsed ?? null,
+    final_notes: parsed.finalNotes ?? null,
+  });
+
+  return toDetailsDto(upserted);
 }

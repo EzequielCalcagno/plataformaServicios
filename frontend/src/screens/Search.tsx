@@ -75,6 +75,8 @@ type GroupedPin = {
   }>;
 };
 
+type SearchMode = 'all' | 'category' | 'worked';
+
 const FOLLOW_LIVE_KEY = '@app_follow_live_enabled';
 const FOLLOW_LIVE_ID = 'follow_live';
 
@@ -85,6 +87,7 @@ const TOKEN_KEY = '@token';
 
 // ====== RUBROS ======
 const POPULAR_RUBROS = ['Plomería', 'Electricidad', 'Pintura', 'Carpintería', 'Gas', 'Limpieza'];
+const ALL_RUBROS = ['Plomería', 'Electricidad', 'Pintura', 'Carpintería', 'Gas', 'Limpieza'];
 
 // ====== ÍCONO POR CATEGORÍA ======
 const getCategoryIcon = (category: string) => {
@@ -188,9 +191,40 @@ export default function Search({ navigation }: any) {
   const [radarPhase, setRadarPhase] = useState(0); // 0..1
   const isFollowing = selectedLocation?.id === FOLLOW_LIVE_ID;
 
+  // ====== Nuevo: “Qué estás buscando hoy” ======
+  const [searchMode, setSearchMode] = useState<SearchMode | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [introVisible, setIntroVisible] = useState(true); // antes de cargar el mapa
+
   // ====== Helpers ======
   const openLocationModal = () => setLocationModalVisible(true);
   const closeLocationModal = () => setLocationModalVisible(false);
+
+  const openIntro = () => setIntroVisible(true);
+  const closeIntro = () => setIntroVisible(false);
+
+  const pickModeAll = () => {
+    setSearchMode('all');
+    setSelectedCategory(null);
+    setQuery('');
+    closeIntro();
+  };
+
+  const pickModeWorked = () => {
+    setSearchMode('worked');
+    setSelectedCategory(null);
+    setQuery('');
+    closeIntro();
+  };
+
+  const pickModeCategory = (cat?: string) => {
+    setSearchMode('category');
+    const c = cat?.trim() || null;
+    setSelectedCategory(c);
+    // opcional: si querés completar el input con la categoría:
+    // setQuery(c || '');
+    closeIntro();
+  };
 
   const selectedLabel = useMemo(() => {
     return selectedLocation?.label || (loadingLocations ? 'Cargando…' : 'Sin ubicación');
@@ -202,6 +236,13 @@ export default function Search({ navigation }: any) {
 
   const fullName = (p: { profesionalNombre?: string; profesionalApellido?: string }) =>
     `${p.profesionalNombre || ''} ${p.profesionalApellido || ''}`.trim() || 'Profesional';
+
+  const modeLabel = useMemo(() => {
+    if (!searchMode) return 'Elegir';
+    if (searchMode === 'all') return 'Ver todo';
+    if (searchMode === 'worked') return 'Trabajé';
+    return selectedCategory || 'Categorías';
+  }, [searchMode, selectedCategory]);
 
   // ====== Radar interval ======
   useEffect(() => {
@@ -315,8 +356,6 @@ export default function Search({ navigation }: any) {
 
       // ✅ PRIORIDAD 1: seguir activo
       if (follow) {
-        // si no está corriendo el watch, lo arrancamos
-        // (si ya está, no pasa nada)
         try {
           await startFollowing();
         } catch {}
@@ -350,24 +389,18 @@ export default function Search({ navigation }: any) {
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadLocations();
+      // al entrar por primera vez (si no eligió modo aún), mostrar intro
+      if (!searchMode) setIntroVisible(true);
     });
     loadLocations();
     return () => unsubscribe();
-  }, [navigation, loadLocations]);
-
-  // 🔥 al salir de la screen, no cortes el watch (opcional).
-  // Si querés que SIEMPRE se corte al salir, descomentá:
-  // useEffect(() => {
-  //   const unsubBlur = navigation.addListener('blur', () => stopFollowing());
-  //   return () => unsubBlur();
-  // }, [navigation, stopFollowing]);
+  }, [navigation, loadLocations, searchMode]);
 
   // ====== Recentrar mapa al cambiar ubicación (NO follow, porque follow ya recenteriza solo) ======
   useEffect(() => {
     if (!selectedLocation || !mapRef.current) return;
 
     if (selectedLocation.id === FOLLOW_LIVE_ID) {
-      // follow recenteriza desde el watch
       return;
     }
 
@@ -466,6 +499,12 @@ export default function Search({ navigation }: any) {
 
     if (lat == null || lng == null) return;
 
+    // 🔥 NO buscar si no eligió modo
+    if (!searchMode) return;
+
+    // Si está en categorías y todavía no eligió una, no busques (salvo que escriba algo)
+    if (searchMode === 'category' && !selectedCategory && !q) return;
+
     try {
       setSearchError(null);
       setLoadingSearch(true);
@@ -481,7 +520,21 @@ export default function Search({ navigation }: any) {
       params.set('lat', String(lat));
       params.set('lng', String(lng));
       params.set('radiusKm', String(radius));
+
       if (q) params.set('q', q);
+
+      // ✅ Modo: categoría
+      if (searchMode === 'category' && selectedCategory) {
+        // Ideal si backend soporta category
+        params.set('category', selectedCategory);
+        // Si NO lo soporta, alternativa:
+        // params.set('q', selectedCategory);
+      }
+
+      // ✅ Modo: trabajé con ellos (requiere soporte backend)
+      if (searchMode === 'worked') {
+        params.set('workedWith', '1');
+      }
 
       const url = `${API_URL}/private/search/servicios?${params.toString()}`;
       const res = await fetch(url, {
@@ -509,10 +562,10 @@ export default function Search({ navigation }: any) {
       const list: any[] = Array.isArray(data)
         ? data
         : Array.isArray(data?.results)
-        ? data.results
-        : Array.isArray(data?.items)
-        ? data.items
-        : [];
+          ? data.results
+          : Array.isArray(data?.items)
+            ? data.items
+            : [];
 
       const normalized: Service[] = list
         .map((it: any) => {
@@ -537,8 +590,8 @@ export default function Search({ navigation }: any) {
             typeof it.distanceKm === 'number'
               ? it.distanceKm
               : typeof it.distance_km === 'number'
-              ? it.distance_km
-              : undefined;
+                ? it.distance_km
+                : undefined;
 
           if (
             (dist == null || Number.isNaN(dist)) &&
@@ -564,15 +617,29 @@ export default function Search({ navigation }: any) {
             ubicacionNombre,
           };
         })
-        .filter(
-          (s) =>
+        .filter((s) => {
+          const okBase =
             s.id &&
             s.title &&
             s.category &&
             s.profesionalId &&
             Number.isFinite(s.latitude) &&
-            Number.isFinite(s.longitude),
-        )
+            Number.isFinite(s.longitude);
+
+          if (!okBase) return false;
+
+          // 🔥 anti “me trae USA”: filtro duro por radio en frontend
+          const d = Number(s.distanceKm);
+          if (!Number.isFinite(d)) return false;
+          if (d > radius + 0.2) return false;
+
+          // refuerzo: si searchMode category y hay selectedCategory, asegurar match
+          if (searchMode === 'category' && selectedCategory) {
+            if (String(s.category).toLowerCase() !== String(selectedCategory).toLowerCase()) return false;
+          }
+
+          return true;
+        })
         .sort((a, b) => a.distanceKm - b.distanceKm);
 
       setResults(normalized);
@@ -584,16 +651,28 @@ export default function Search({ navigation }: any) {
     } finally {
       setLoadingSearch(false);
     }
-  }, [selectedLocation?.latitude, selectedLocation?.longitude, query, radiusKm]);
+  }, [
+    selectedLocation?.latitude,
+    selectedLocation?.longitude,
+    query,
+    radiusKm,
+    searchMode,
+    selectedCategory,
+  ]);
 
-  // Debounce
+  // Debounce (y NO busca hasta elegir modo)
   useEffect(() => {
     if (!selectedLocation) return;
+    if (!searchMode) return;
+
+    if (searchMode === 'category' && !selectedCategory && !query.trim()) return;
+
     const t = setTimeout(() => {
       fetchServicios();
     }, 250);
+
     return () => clearTimeout(t);
-  }, [selectedLocation?.id, query, radiusKm, fetchServicios]);
+  }, [selectedLocation?.id, query, radiusKm, searchMode, selectedCategory, fetchServicios]);
 
   // ====== Agrupar pines ======
   const groupedPins = useMemo<GroupedPin[]>(() => {
@@ -641,7 +720,15 @@ export default function Search({ navigation }: any) {
 
   // ====== Handlers ======
   const handleSearchChange = (text: string) => setQuery(text);
-  const handleRubrosChipPress = (rubro: string) => setQuery(rubro);
+  const handleRubrosChipPress = (rubro: string) => {
+    // si estás en modo categorías, esto también selecciona categoría
+    if (searchMode === 'category') {
+      setSelectedCategory(rubro);
+      // opcional: setQuery(rubro);
+      return;
+    }
+    setQuery(rubro);
+  };
 
   // ====== Región inicial ======
   const initialRegion: Region = {
@@ -686,84 +773,90 @@ export default function Search({ navigation }: any) {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.container}>
-        {/* MAPA */}
-        <MapView
-          ref={mapRef}
-          style={styles.map}
-          initialRegion={initialRegion}
-          onPress={() => closePinCard()}
-        >
-          {/* Radio + Radar */}
-          {selectedLocation && (
-            <>
-              {/* Radar verde cuando sigue */}
-              {isFollowing && (
-                <>
-                  <Circle
-                    center={{ latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }}
-                    radius={radarR1}
-                    strokeColor={`rgba(34,197,94,${radarOpacity + 0.25})`}
-                    fillColor={`rgba(34,197,94,${radarOpacity})`}
-                  />
-                  <Circle
-                    center={{ latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }}
-                    radius={radarR2}
-                    strokeColor={`rgba(34,197,94,${radarOpacity + 0.18})`}
-                    fillColor={`rgba(34,197,94,${radarOpacity * 0.7})`}
-                  />
-                </>
-              )}
+        {/* MAPA (solo después de elegir “qué estás buscando hoy”) */}
+        {searchMode ? (
+          <MapView
+            ref={mapRef}
+            style={styles.map}
+            initialRegion={initialRegion}
+            onPress={() => closePinCard()}
+          >
+            {/* Radio + Radar */}
+            {selectedLocation && (
+              <>
+                {/* Radar verde cuando sigue */}
+                {isFollowing && (
+                  <>
+                    <Circle
+                      center={{ latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }}
+                      radius={radarR1}
+                      strokeColor={`rgba(34,197,94,${radarOpacity + 0.25})`}
+                      fillColor={`rgba(34,197,94,${radarOpacity})`}
+                    />
+                    <Circle
+                      center={{ latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }}
+                      radius={radarR2}
+                      strokeColor={`rgba(34,197,94,${radarOpacity + 0.18})`}
+                      fillColor={`rgba(34,197,94,${radarOpacity * 0.7})`}
+                    />
+                  </>
+                )}
 
-              {/* Radio de búsqueda */}
-              <Circle
-                center={{
-                  latitude: selectedLocation.latitude,
-                  longitude: selectedLocation.longitude,
-                }}
-                radius={radiusDraft * 1000}
-                strokeColor={isFollowing ? 'rgba(34,197,94,0.55)' : 'rgba(56,189,248,0.70)'}
-                fillColor={isFollowing ? 'rgba(34,197,94,0.10)' : 'rgba(56,189,248,0.18)'}
-              />
+                {/* Radio de búsqueda */}
+                <Circle
+                  center={{
+                    latitude: selectedLocation.latitude,
+                    longitude: selectedLocation.longitude,
+                  }}
+                  radius={radiusDraft * 1000}
+                  strokeColor={isFollowing ? 'rgba(34,197,94,0.55)' : 'rgba(56,189,248,0.70)'}
+                  fillColor={isFollowing ? 'rgba(34,197,94,0.10)' : 'rgba(56,189,248,0.18)'}
+                />
 
-              {/* Pin ubicación seleccionada */}
+                {/* Pin ubicación seleccionada */}
+                <Marker
+                  coordinate={{
+                    latitude: selectedLocation.latitude,
+                    longitude: selectedLocation.longitude,
+                  }}
+                  anchor={{ x: 0.5, y: 1 }}
+                  onPress={() => closePinCard()}
+                >
+                  <Image
+                    source={require('../../assets/icons/mapa/default-pin.png')}
+                    style={{ width: 40, height: 40 }}
+                    resizeMode="contain"
+                  />
+                </Marker>
+              </>
+            )}
+
+            {/* Pines agrupados */}
+            {groupedPins.map((pin) => (
               <Marker
-                coordinate={{
-                  latitude: selectedLocation.latitude,
-                  longitude: selectedLocation.longitude,
-                }}
+                key={pin.key}
+                coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
                 anchor={{ x: 0.5, y: 1 }}
-                onPress={() => closePinCard()}
+                onPress={() => focusPin(pin)}
+                title={fullName(pin)}
+                description={`${pin.services.length} servicios · ${pin.distanceKm.toFixed(1)} km`}
               >
                 <Image
-                  source={require('../../assets/icons/mapa/default-pin.png')}
-                  style={{ width: 40, height: 40 }}
+                  source={getCategoryIcon(pin.services[0]?.category || '')}
+                  style={{ width: 56, height: 56 }}
                   resizeMode="contain"
                 />
+                <View style={styles.pinBadge}>
+                  <Text style={styles.pinBadgeText}>{pin.services.length}</Text>
+                </View>
               </Marker>
-            </>
-          )}
-
-          {/* Pines agrupados */}
-          {groupedPins.map((pin) => (
-            <Marker
-              key={pin.key}
-              coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
-              anchor={{ x: 0.5, y: 1 }}
-              onPress={() => focusPin(pin)}
-              title={fullName(pin)}
-              description={`${pin.services.length} servicios · ${pin.distanceKm.toFixed(1)} km`}
-            >
-              <Image
-                source={getCategoryIcon(pin.services[0]?.category || '')}
-                style={{ width: 56, height: 56 }}
-                resizeMode="contain"
-              />
-              <View style={styles.pinBadge}>
-                <Text style={styles.pinBadgeText}>{pin.services.length}</Text>
-              </View>
-            </Marker>
-          ))}
-        </MapView>
+            ))}
+          </MapView>
+        ) : (
+          <View style={styles.mapPlaceholder}>
+            <ActivityIndicator size="large" color="#0284c7" />
+          </View>
+        )}
 
         {/* TARJETA SUPERIOR: UBICACIÓN + RADIO */}
         <View style={styles.topCardWrapper} pointerEvents="box-none">
@@ -779,15 +872,27 @@ export default function Search({ navigation }: any) {
                 <Text style={styles.topCardRadiusLabel}>Radio: {Math.round(radiusDraft)} km</Text>
               </View>
 
-              <TouchableOpacity style={styles.changeLocationButton} onPress={openLocationModal}>
-                <Ionicons
-                  name="swap-vertical-outline"
-                  size={16}
-                  color="#0369a1"
-                  style={{ marginRight: 4 }}
-                />
-                <Text style={styles.changeLocationText}>Cambiar</Text>
-              </TouchableOpacity>
+              <View style={styles.topButtonsCol}>
+                <TouchableOpacity style={styles.changeLocationButton} onPress={openLocationModal}>
+                  <Ionicons
+                    name="swap-vertical-outline"
+                    size={16}
+                    color="#0369a1"
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={styles.changeLocationText}>Cambiar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.changeLocationButton} onPress={openIntro}>
+                  <Ionicons
+                    name="options-outline"
+                    size={16}
+                    color="#0369a1"
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={styles.changeLocationText}>{modeLabel}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.sliderRow}>
@@ -830,7 +935,10 @@ export default function Search({ navigation }: any) {
                 </Text>
               </View>
 
-              <TouchableOpacity style={styles.viewProfileBtn} onPress={() => goToProfile(selectedPin.profesionalId)}>
+              <TouchableOpacity
+                style={styles.viewProfileBtn}
+                onPress={() => goToProfile(selectedPin.profesionalId)}
+              >
                 <Text style={styles.viewProfileText}>Ver perfil</Text>
               </TouchableOpacity>
             </View>
@@ -867,17 +975,27 @@ export default function Search({ navigation }: any) {
               <Ionicons name="search-outline" size={18} color="#6b7280" />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Buscar por servicio (plomero, electricista...)"
+                placeholder={
+                  searchMode === 'category'
+                    ? selectedCategory
+                      ? `Buscar dentro de ${selectedCategory}…`
+                      : 'Elegí una categoría arriba'
+                    : 'Buscar por servicio (plomero, electricista...)'
+                }
                 placeholderTextColor="#9ca3af"
                 value={query}
                 onChangeText={handleSearchChange}
                 autoCapitalize="none"
                 returnKeyType="search"
+                editable={!!searchMode}
               />
               {loadingSearch ? (
                 <ActivityIndicator size="small" color="#0284c7" />
               ) : query.length > 0 ? (
-                <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <TouchableOpacity
+                  onPress={() => setQuery('')}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
                   <Ionicons name="close-circle" size={18} color="#9ca3af" />
                 </TouchableOpacity>
               ) : (
@@ -889,16 +1007,28 @@ export default function Search({ navigation }: any) {
               {POPULAR_RUBROS.map((rubro) => (
                 <TouchableOpacity
                   key={rubro}
-                  style={styles.rubroChip}
+                  style={[
+                    styles.rubroChip,
+                    searchMode === 'category' &&
+                      selectedCategory &&
+                      selectedCategory.toLowerCase() === rubro.toLowerCase() && {
+                        backgroundColor: '#e0f2fe',
+                      },
+                  ]}
                   onPress={() => handleRubrosChipPress(rubro)}
                   activeOpacity={0.85}
+                  disabled={!searchMode}
                 >
                   <Text style={styles.rubroChipText}>{rubro}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {searchError ? (
+            {!searchMode ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>Elegí primero “qué estás buscando hoy”.</Text>
+              </View>
+            ) : searchError ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyText}>{searchError}</Text>
               </View>
@@ -912,7 +1042,11 @@ export default function Search({ navigation }: any) {
                 renderItem={({ item }) => {
                   const name = fullName(item);
                   return (
-                    <TouchableOpacity style={styles.resultCard} activeOpacity={0.85} onPress={() => focusPin(item)}>
+                    <TouchableOpacity
+                      style={styles.resultCard}
+                      activeOpacity={0.85}
+                      onPress={() => focusPin(item)}
+                    >
                       <Avatar name={name} photoUrl={item.photoUrl} />
 
                       <View style={{ flex: 1 }}>
@@ -946,12 +1080,62 @@ export default function Search({ navigation }: any) {
                 <Text style={styles.emptyText}>
                   {loadingSearch
                     ? 'Buscando…'
-                    : `No encontramos servicios para “${query}” dentro de ${Math.round(radiusKm)} km.`}
+                    : searchMode === 'category' && !selectedCategory && !query.trim()
+                      ? 'Elegí una categoría (o escribí algo).'
+                      : `No encontramos servicios para “${query}” dentro de ${Math.round(radiusKm)} km.`}
                 </Text>
               </View>
             )}
           </View>
         </KeyboardAvoidingView>
+
+        {/* MODAL: ¿Qué estás buscando hoy? */}
+        <Modal visible={introVisible} transparent animationType="fade" onRequestClose={closeIntro}>
+          <View style={styles.introOverlay}>
+            <View style={styles.introCard}>
+              <View style={styles.introHeaderRow}>
+                <Text style={styles.introTitle}>¿Qué estás buscando hoy?</Text>
+                <TouchableOpacity onPress={closeIntro} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="close" size={22} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.introSubtitle}>
+                Elegí una opción para empezar (así evitamos cargar resultados que no te sirven).
+              </Text>
+
+              <View style={styles.introButtonsRow}>
+                <TouchableOpacity style={styles.introBtn} onPress={pickModeAll} activeOpacity={0.9}>
+                  <Ionicons name="map-outline" size={18} color="#111827" />
+                  <Text style={styles.introBtnText}>Ver todo</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.introBtn} onPress={pickModeWorked} activeOpacity={0.9}>
+                  <Ionicons name="people-outline" size={18} color="#111827" />
+                  <Text style={styles.introBtnText}>Con los que trabajé</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.introSection}>Categorías</Text>
+
+              <View style={styles.introChipsWrap}>
+                {ALL_RUBROS.map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[
+                      styles.introChip,
+                      selectedCategory?.toLowerCase() === cat.toLowerCase() && { backgroundColor: '#e0f2fe' },
+                    ]}
+                    onPress={() => pickModeCategory(cat)}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.introChipText}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* MODAL CAMBIAR UBICACIÓN */}
         <Modal
@@ -1045,6 +1229,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#fff' },
   container: { flex: 1, backgroundColor: '#fff' },
   map: { flex: 1 },
+  mapPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   pinBadge: {
     position: 'absolute',
@@ -1076,6 +1261,9 @@ const styles = StyleSheet.create({
   topCardLabel: { fontSize: 12, color: '#6b7280' },
   topCardLocation: { fontSize: 15, fontWeight: '800', color: '#111827' },
   topCardRadiusLabel: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+
+  topButtonsCol: { gap: 8, alignItems: 'flex-end' },
+
   changeLocationButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1088,6 +1276,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   changeLocationText: { fontSize: 12, color: '#0369a1', fontWeight: '800' },
+
   sliderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
   sliderLabel: { fontSize: 12, color: '#111827', fontWeight: '800' },
   sliderValue: { fontSize: 12, color: '#111827', fontWeight: '700' },
@@ -1193,6 +1382,49 @@ const styles = StyleSheet.create({
   emptyState: { marginTop: 8 },
   emptyText: { fontSize: 13, color: '#6b7280', fontWeight: '700' },
 
+  // ===== Intro modal =====
+  introOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  introCard: {
+    width: '100%',
+    maxWidth: 520,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
+  },
+  introHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  introTitle: { fontSize: 18, fontWeight: '900', color: '#111827' },
+  introSubtitle: { fontSize: 13, color: '#6b7280', fontWeight: '600', marginTop: 6 },
+  introButtonsRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  introBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  introBtnText: { fontSize: 13, fontWeight: '900', color: '#111827' },
+  introSection: { marginTop: 14, fontSize: 13, fontWeight: '900', color: '#111827' },
+  introChipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  introChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: '#f3f4f6' },
+  introChipText: { fontSize: 12, fontWeight: '800', color: '#111827' },
+
+  // ===== Location modal =====
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.30)', justifyContent: 'flex-end' },
   modalContent: {
     backgroundColor: '#fff',

@@ -1,6 +1,6 @@
 // src/repositories/reservations.repository.ts
 import db from '../config/db';
-import { ReservationStatus } from '../schemas/reservation.schema';
+import { ReservationStatus, VisitStatus } from '../schemas/reservation.schema';
 
 type CreateReservationDbPayload = {
   servicio_id: number;
@@ -302,6 +302,7 @@ export async function getReservationByIdWithJoinsRepository(id: number) {
 
   return data || null;
 }
+
 // ✅ NUEVO: Reviews del profesional (las calificaciones del cliente)
 export type ReviewSort = 'recent' | 'best' | 'worst';
 
@@ -384,4 +385,135 @@ export async function listProfessionalReviewsRepository(params: {
     results,
     nextOffset: hasMore ? offset + limit : null,
   };
+}
+
+/* ============================================================
+   ✅ NUEVO: VISITAS + DETALLES (en el MISMO repository)
+   Tablas: reservation_visits, reservation_service_details
+   ============================================================ */
+
+export async function listReservationVisitsRepository(reservationId: number) {
+  const { data, error } = await db
+    .from('reservation_visits')
+    .select(`id, reservation_id, created_by, visit_at, status, notes, created_at, updated_at`)
+    .eq('reservation_id', reservationId)
+    .order('visit_at', { ascending: true });
+
+  if (error) {
+    console.error('❌ Error listReservationVisitsRepository:', error);
+    throw error;
+  }
+  return data ?? [];
+}
+
+export async function createReservationVisitRepository(payload: {
+  reservation_id: number;
+  created_by: string;
+  visit_at: string;
+  status: VisitStatus;
+  notes?: string | null;
+}) {
+  const { data, error } = await db
+    .from('reservation_visits')
+    .insert({
+      reservation_id: payload.reservation_id,
+      created_by: payload.created_by,
+      visit_at: payload.visit_at,
+      status: payload.status,
+      notes: payload.notes ?? null,
+    })
+    .select(`id, reservation_id, created_by, visit_at, status, notes, created_at, updated_at`)
+    .single();
+
+  if (error) {
+    console.error('❌ Error createReservationVisitRepository:', error);
+    throw error;
+  }
+  return data;
+}
+
+export async function getReservationVisitByIdRepository(visitId: number) {
+  const { data, error } = await db
+    .from('reservation_visits')
+    .select(`id, reservation_id`)
+    .eq('id', visitId)
+    .single();
+
+  if (error) return null;
+  return data ?? null;
+}
+
+export async function updateReservationVisitRepository(
+  visitId: number,
+  patch: Partial<{ visit_at: string; status: VisitStatus; notes: string | null }>,
+) {
+  const { data, error } = await db
+    .from('reservation_visits')
+    .update({
+      ...patch,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', visitId)
+    .select(`id, reservation_id, created_by, visit_at, status, notes, created_at, updated_at`)
+    .single();
+
+  if (error) {
+    console.error('❌ Error updateReservationVisitRepository:', error);
+    throw error;
+  }
+  return data;
+}
+
+export async function deleteReservationVisitRepository(visitId: number) {
+  const { error } = await db.from('reservation_visits').delete().eq('id', visitId);
+  if (error) {
+    console.error('❌ Error deleteReservationVisitRepository:', error);
+    throw error;
+  }
+  return true;
+}
+
+// ---- detalles del servicio (1 por reserva) ----
+
+export async function getReservationServiceDetailsRepository(reservationId: number) {
+  const { data, error } = await db
+    .from('reservation_service_details')
+    .select(`reservation_id, updated_by, final_price, duration_minutes, materials_used, final_notes, updated_at`)
+    .eq('reservation_id', reservationId)
+    .single();
+
+  if (error) return null;
+  return data ?? null;
+}
+
+export async function upsertReservationServiceDetailsRepository(payload: {
+  reservation_id: number;
+  updated_by: string;
+  final_price?: number | null;
+  duration_minutes?: number | null;
+  materials_used?: string | null;
+  final_notes?: string | null;
+}) {
+  const { data, error } = await db
+    .from('reservation_service_details')
+    .upsert(
+      {
+        reservation_id: payload.reservation_id,
+        updated_by: payload.updated_by,
+        final_price: payload.final_price ?? null,
+        duration_minutes: payload.duration_minutes ?? null,
+        materials_used: payload.materials_used ?? null,
+        final_notes: payload.final_notes ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'reservation_id' },
+    )
+    .select(`reservation_id, updated_by, final_price, duration_minutes, materials_used, final_notes, updated_at`)
+    .single();
+
+  if (error) {
+    console.error('❌ Error upsertReservationServiceDetailsRepository:', error);
+    throw error;
+  }
+  return data;
 }

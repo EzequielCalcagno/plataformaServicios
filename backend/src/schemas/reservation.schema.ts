@@ -103,3 +103,52 @@ export const ReservationDtoSchema = z.object({
 });
 
 export type ReservationDto = z.infer<typeof ReservationDtoSchema>;
+
+/* ============================================================
+   ✅ NUEVO: VISITAS + DETALLES (en el MISMO schema)
+   ============================================================ */
+
+export const VisitStatusSchema = z.enum(['REALIZADA', 'CANCELADA', 'REPROGRAMADA']);
+export type VisitStatus = z.infer<typeof VisitStatusSchema>;
+
+export const CreateVisitSchema = z.object({
+  visitAt: z.string().datetime(), // ISO
+  status: VisitStatusSchema.optional(),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+export const UpdateVisitSchema = z.object({
+  visitAt: z.string().datetime().optional(),
+  status: VisitStatusSchema.optional(),
+  notes: z.string().trim().max(2000).optional().nullable(),
+});
+
+export const VisitDtoSchema = z.object({
+  id: z.number(),
+  reservationId: z.number(),
+  createdBy: z.string(),
+  visitAt: z.string(),
+  status: VisitStatusSchema,
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type VisitDto = z.infer<typeof VisitDtoSchema>;
+
+export const UpsertServiceDetailsSchema = z.object({
+  finalPrice: z.number().nonnegative().optional().nullable(),
+  durationMinutes: z.number().int().positive().optional().nullable(),
+  materialsUsed: z.string().trim().max(5000).optional().nullable(),
+  finalNotes: z.string().trim().max(5000).optional().nullable(),
+});
+
+export const ServiceDetailsDtoSchema = z.object({
+  reservationId: z.number(),
+  updatedBy: z.string(),
+  finalPrice: z.number().nullable().optional(),
+  durationMinutes: z.number().int().nullable().optional(),
+  materialsUsed: z.string().nullable().optional(),
+  finalNotes: z.string().nullable().optional(),
+  updatedAt: z.string(),
+});
+export type ServiceDetailsDto = z.infer<typeof ServiceDetailsDtoSchema>;

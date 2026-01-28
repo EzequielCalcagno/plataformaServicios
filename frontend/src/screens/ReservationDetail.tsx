@@ -10,10 +10,12 @@ import {
   TouchableOpacity,
   Linking,
   Image,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { Screen } from '../components/Screen';
 import { TopBar } from '../components/TopBar';
@@ -35,28 +37,65 @@ import {
   requesterFinish,
   confirmFinish,
   rejectFinish,
-  // ✅ ratings
   rateReservation,
 } from '../services/reservations.client';
 
 type Props = { navigation: any; route: any };
 type Side = 'SOLICITANTE' | 'PRESTADOR' | 'UNKNOWN';
 
-function toISO(dateStr: string, timeStr: string) {
-  const d = dateStr.trim();
-  const t = timeStr.trim();
-  if (!d || !t) return null;
+// ✅ Visitas
+type VisitStatus = 'REALIZADA' | 'CANCELADA' | 'REPROGRAMADA';
+type Visit = {
+  id: string;
+  dateIso: string; // ISO
+  status: VisitStatus;
+  notes?: string;
+  durationMin?: number;
+};
 
-  const dt = new Date(`${d}T${t}:00`);
-  if (Number.isNaN(dt.getTime())) return null;
-  return dt.toISOString();
+const USER_ID_KEY = '@userId';
+const VISITS_KEY = (reservationId: number) => `@reservation_visits_${reservationId}`;
+
+function safeJsonParse<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }
 
-function fmtDate(iso?: string | null) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+function fmtDate(isoOrText?: string | null) {
+  if (!isoOrText) return '';
+  const d = new Date(isoOrText);
+  if (Number.isNaN(d.getTime())) return isoOrText;
   return new Intl.DateTimeFormat('es-UY', { dateStyle: 'medium', timeStyle: 'short' }).format(d);
+}
+function fmtDateOnly(d?: Date | null) {
+  if (!d) return 'Elegir...';
+  try {
+    return new Intl.DateTimeFormat('es-UY', { dateStyle: 'medium' }).format(d);
+  } catch {
+    return d.toDateString();
+  }
+}
+function fmtTimeOnly(d?: Date | null) {
+  if (!d) return 'Elegir...';
+  try {
+    return new Intl.DateTimeFormat('es-UY', { timeStyle: 'short' }).format(d);
+  } catch {
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+}
+function fmtDuration(min?: number) {
+  if (!min || !Number.isFinite(min) || min <= 0) return '';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
 }
 
 function openWhatsApp(phone: string, text: string) {
@@ -95,24 +134,48 @@ export default function ReservationDetail({ navigation, route }: Props) {
   const [item, setItem] = useState<ReservationListItem | null>(null);
   const [myUserId, setMyUserId] = useState<string>('');
 
-  const [proposeDate, setProposeDate] = useState('');
-  const [proposeTime, setProposeTime] = useState('');
   const [proposeMsg, setProposeMsg] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [rejectMsg, setRejectMsg] = useState('');
 
+  // ✅ NEGOCIACIÓN amigable (picker)
+  const [proposeDateTime, setProposeDateTime] = useState<Date | null>(null);
+  const [showProposeDatePicker, setShowProposeDatePicker] = useState(false);
+  const [showProposeTimePicker, setShowProposeTimePicker] = useState(false);
+
   // ✅ bottom sheet rating
   const [showRateSheet, setShowRateSheet] = useState<boolean>(false);
   const [ratingSending, setRatingSending] = useState<boolean>(false);
-
-  // ✅ para evitar abrir el sheet muchas veces en re-renders
   const didAutoOpenForThisClose = useRef<string | null>(null);
+
+  // ✅ visitas (persistidas localmente por reserva)
+  const [visits, setVisits] = useState<Visit[]>([]);
+  const [visitDateTime, setVisitDateTime] = useState<Date | null>(null);
+  const [showVisitDatePicker, setShowVisitDatePicker] = useState(false);
+  const [showVisitTimePicker, setShowVisitTimePicker] = useState(false);
+  const [visitDurationMin, setVisitDurationMin] = useState<string>('');
+  const [visitNotes, setVisitNotes] = useState('');
+  const [visitStatus, setVisitStatus] = useState<VisitStatus>('REALIZADA');
+
+  // ✅ cuando está CERRADO, oculto el form por defecto y lo habilito si el usuario toca el link
+  const [allowVisitsAfterClose, setAllowVisitsAfterClose] = useState(false);
+
+  const loadLocalVisits = useCallback(async () => {
+    if (!Number.isFinite(reservationId)) return;
+    try {
+      const rawVisits = await AsyncStorage.getItem(VISITS_KEY(reservationId));
+      const parsedVisits = safeJsonParse<Visit[]>(rawVisits, []);
+      setVisits(Array.isArray(parsedVisits) ? parsedVisits : []);
+    } catch (e) {
+      console.log('❌ loadLocalVisits error', e);
+    }
+  }, [reservationId]);
 
   const fetchDetail = useCallback(async () => {
     try {
       setLoading(true);
 
-      const uid = (await AsyncStorage.getItem('@userId')) ?? '';
+      const uid = (await AsyncStorage.getItem(USER_ID_KEY)) ?? '';
       setMyUserId(uid);
 
       if (!Number.isFinite(reservationId)) {
@@ -123,18 +186,14 @@ export default function ReservationDetail({ navigation, route }: Props) {
       const r = await getReservationById(reservationId);
       setItem(r);
 
-      // precarga si ya había propuesta
+      // ✅ precarga propuesta si existe
       if (r?.fechaHoraPropuesta) {
         const dt = new Date(r.fechaHoraPropuesta);
         if (!Number.isNaN(dt.getTime())) {
-          const y = dt.getFullYear();
-          const m = String(dt.getMonth() + 1).padStart(2, '0');
-          const d = String(dt.getDate()).padStart(2, '0');
-          const hh = String(dt.getHours()).padStart(2, '0');
-          const mm = String(dt.getMinutes()).padStart(2, '0');
-          setProposeDate(`${y}-${m}-${d}`);
-          setProposeTime(`${hh}:${mm}`);
+          setProposeDateTime(dt);
         }
+      } else {
+        setProposeDateTime(null);
       }
       setProposeMsg(r?.mensajePropuesta ?? '');
     } catch (e) {
@@ -148,8 +207,19 @@ export default function ReservationDetail({ navigation, route }: Props) {
   useFocusEffect(
     useCallback(() => {
       fetchDetail();
-    }, [fetchDetail]),
+      loadLocalVisits();
+    }, [fetchDetail, loadLocalVisits]),
   );
+
+  useEffect(() => {
+    loadLocalVisits();
+  }, [loadLocalVisits]);
+
+  // ✅ si cambia a NO CERRADO, vuelvo a ocultar el “override”
+  useEffect(() => {
+    if (!item) return;
+    if (item.estado !== 'CERRADO') setAllowVisitsAfterClose(false);
+  }, [item?.estado, item]);
 
   const mySide: Side = useMemo(() => {
     if (!item || !myUserId) return 'UNKNOWN';
@@ -158,7 +228,6 @@ export default function ReservationDetail({ navigation, route }: Props) {
     return 'UNKNOWN';
   }, [item, myUserId]);
 
-  // ✅ mapeo para comparar con accionRequeridaPor (CLIENTE/PROFESIONAL)
   const myActionKey = useMemo(() => {
     if (mySide === 'SOLICITANTE') return 'CLIENTE' as const;
     if (mySide === 'PRESTADOR') return 'PROFESIONAL' as const;
@@ -173,10 +242,10 @@ export default function ReservationDetail({ navigation, route }: Props) {
   const otherName = useMemo(() => {
     if (!item) return '';
     if (mySide === 'PRESTADOR') {
-      return `${item.clienteNombre ?? ''} ${item.clienteApellido ?? ''}`.trim() || item.clienteId;
+      return `${item.clienteNombre ?? ''} ${item.clienteApellido ?? ''}`.trim() || String(item.clienteId);
     }
     if (mySide === 'SOLICITANTE') {
-      return `${item.profesionalNombre ?? ''} ${item.profesionalApellido ?? ''}`.trim() || item.profesionalId;
+      return `${item.profesionalNombre ?? ''} ${item.profesionalApellido ?? ''}`.trim() || String(item.profesionalId);
     }
     return '';
   }, [item, mySide]);
@@ -219,15 +288,9 @@ export default function ReservationDetail({ navigation, route }: Props) {
   const canRequesterAccept = !!item && mySide === 'SOLICITANTE' && item.estado === 'EN_NEGOCIACION';
   const canRequesterFinish = !!item && mySide === 'SOLICITANTE' && item.estado === 'EN_PROCESO';
 
-  // ✅ confirmación de finalización
   const canConfirmFinish =
     !!item && item.estado === 'FINALIZADO' && !!myActionKey && item.accionRequeridaPor === myActionKey;
   const canRejectFinish = canConfirmFinish;
-
-  const proposalIsoPreview = useMemo(() => {
-    const iso = toISO(proposeDate, proposeTime);
-    return iso ? fmtDate(iso) : null;
-  }, [proposeDate, proposeTime]);
 
   const statusStep = useMemo(() => {
     if (!item) return 0;
@@ -237,9 +300,8 @@ export default function ReservationDetail({ navigation, route }: Props) {
     return 1;
   }, [item]);
 
-  // ✅ Rating: reglas
+  // ✅ Rating
   const isClosed = !!item && item.estado === 'CERRADO';
-
   const iAmRequester = mySide === 'SOLICITANTE';
   const iAmProvider = mySide === 'PRESTADOR';
 
@@ -272,7 +334,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
 
   const ratingQuestion = useMemo(() => {
     const name = otherName || 'la otra persona';
-    return `Como fue tu experiencia con\n${name}?`;
+    return `¿Cómo fue tu experiencia con\n${name}?`;
   }, [otherName]);
 
   const ratingPlaceholder = useMemo(() => {
@@ -287,12 +349,10 @@ export default function ReservationDetail({ navigation, route }: Props) {
     return !!item.clienteCalifico && !!item.profesionalCalifico;
   }, [item]);
 
-  // ✅ AUTO-OPEN: cuando pasa a CERRADO, se abre el sheet si te toca calificar
   useEffect(() => {
     if (!item) return;
 
     if (item.estado !== 'CERRADO') {
-      // si vuelve a estados previos, habilita a futuro volver a abrir al cerrar
       didAutoOpenForThisClose.current = null;
       return;
     }
@@ -317,7 +377,76 @@ export default function ReservationDetail({ navigation, route }: Props) {
     );
   };
 
-  // --- Handlers ---
+  // ✅ Visitas: reglas
+  const canLogVisitsByState = useMemo(() => {
+    if (!item) return false;
+    return ['EN_PROCESO', 'FINALIZADO', 'CERRADO'].includes(item.estado);
+  }, [item]);
+
+  const canShowVisitAddForm = useMemo(() => {
+    if (!item) return false;
+    // ✅ cuando ya está cerrado, NO se muestra a menos que el usuario lo habilite
+    if (item.estado === 'CERRADO') return allowVisitsAfterClose;
+    // si no está cerrado, se muestra normal en estados permitidos
+    return canLogVisitsByState;
+  }, [item, allowVisitsAfterClose, canLogVisitsByState]);
+
+  const addVisit = async () => {
+    if (!visitDateTime) {
+      Alert.alert('Falta fecha/hora', 'Elegí una fecha y una hora para la visita.');
+      return;
+    }
+
+    const dur = Number(visitDurationMin);
+    const durationMin = Number.isFinite(dur) && dur > 0 ? Math.floor(dur) : undefined;
+
+    const newVisit: Visit = {
+      id: `visit_${Date.now()}`,
+      dateIso: visitDateTime.toISOString(),
+      status: visitStatus,
+      notes: visitNotes.trim() || undefined,
+      durationMin,
+    };
+
+    const next = [...visits, newVisit].sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+    setVisits(next);
+
+    setVisitDateTime(null);
+    setVisitDurationMin('');
+    setVisitNotes('');
+    setVisitStatus('REALIZADA');
+
+    try {
+      await AsyncStorage.setItem(VISITS_KEY(reservationId), JSON.stringify(next));
+    } catch {}
+  };
+
+  const updateVisitStatus = async (visitId: string, status: VisitStatus) => {
+    const next = visits.map((v) => (v.id === visitId ? { ...v, status } : v));
+    setVisits(next);
+    try {
+      await AsyncStorage.setItem(VISITS_KEY(reservationId), JSON.stringify(next));
+    } catch {}
+  };
+
+  const removeVisit = (visitId: string) => {
+    Alert.alert('Eliminar visita', '¿Querés eliminar esta visita?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          const next = visits.filter((v) => v.id !== visitId);
+          setVisits(next);
+          try {
+            await AsyncStorage.setItem(VISITS_KEY(reservationId), JSON.stringify(next));
+          } catch {}
+        },
+      },
+    ]);
+  };
+
+  // --- Actions ---
   const onProviderAccept = async () => {
     if (!item) return;
     try {
@@ -332,14 +461,15 @@ export default function ReservationDetail({ navigation, route }: Props) {
 
   const onProviderPropose = async () => {
     if (!item) return;
-    const iso = toISO(proposeDate, proposeTime);
-    if (!iso) {
-      Alert.alert('Falta fecha/hora', 'Ingresá fecha (YYYY-MM-DD) y hora (HH:mm).');
+
+    if (!proposeDateTime) {
+      Alert.alert('Falta fecha/hora', 'Elegí una fecha y una hora para proponer.');
       return;
     }
+
     try {
       await proProposeReservation(item.id, {
-        fechaHoraPropuesta: iso,
+        fechaHoraPropuesta: proposeDateTime.toISOString(),
         mensajePropuesta: proposeMsg.trim() || undefined,
       });
       Alert.alert('Enviado', 'Propuesta enviada.');
@@ -447,7 +577,6 @@ export default function ReservationDetail({ navigation, route }: Props) {
     try {
       await confirmFinish(item.id);
       Alert.alert('Confirmado', 'La finalización fue confirmada.');
-      // ✅ al refrescar, si queda CERRADO y canRateNow=true, el useEffect lo abre solo
       fetchDetail();
     } catch (e) {
       console.log('❌ confirmFinish error', e);
@@ -467,7 +596,6 @@ export default function ReservationDetail({ navigation, route }: Props) {
     }
   };
 
-  // ✅ submit desde el bottom sheet
   const onSubmitRating = async (data: { puntaje: number; comentario?: string }) => {
     if (!item) return;
     if (!canRateNow) return;
@@ -488,7 +616,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
 
   return (
     <Screen>
-      <TopBar title="Booking details" showBack />
+      <TopBar title="Detalles de la reserva" showBack />
 
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
@@ -497,7 +625,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
           <Text style={styles.muted}>No se pudo cargar la reserva.</Text>
         ) : (
           <>
-            <Text style={styles.pageTitle}>{`Booking #${item.id}`}</Text>
+            <Text style={styles.pageTitle}>{`Reserva #${item.id}`}</Text>
 
             {/* Service card */}
             <Card withShadow style={styles.serviceCard}>
@@ -518,7 +646,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
                   <Ionicons name="calendar-outline" size={16} color={COLORS.textMuted} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.metaLabel}>Scheduled time</Text>
+                  <Text style={styles.metaLabel}>Fecha/hora agendada</Text>
                   <Text style={styles.metaValue}>{fmtDate(getScheduledISO(item)) || 'Sin fecha'}</Text>
                 </View>
               </View>
@@ -532,16 +660,15 @@ export default function ReservationDetail({ navigation, route }: Props) {
                 {otherPhotoUrl ? (
                   <Image source={{ uri: otherPhotoUrl }} style={styles.avatar} />
                 ) : (
-                  <Text style={[styles.avatar, styles.avatarPlaceholder] as any}>
+                  <View style={[styles.avatar, styles.avatarPlaceholder]}>
                     <Ionicons name="person" size={18} color="#fff" />
-                  </Text>
+                  </View>
                 )}
 
-                <Text style={{ flex: 1 } as any}>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.personName}>{otherName || '—'}</Text>
-                  {'\n'}
-                  <Text style={styles.personMeta}>—</Text>
-                </Text>
+                  <Text style={styles.personMeta}> </Text>
+                </View>
 
                 <TouchableOpacity
                   activeOpacity={0.9}
@@ -552,7 +679,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
                       `Hola! Te escribo por la reserva #${item.id} (${item.servicioTitulo ?? 'servicio'}).`,
                     )
                   }
-                  style={[styles.waMini, (!whatsappEnabled || !otherPhone) ? styles.waMiniDisabled : null]}
+                  style={[styles.waMini, !whatsappEnabled || !otherPhone ? styles.waMiniDisabled : null]}
                 >
                   <Ionicons name="logo-whatsapp" size={16} color="#25D366" />
                   <Text style={styles.waMiniText}>WhatsApp</Text>
@@ -560,7 +687,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
               </View>
 
               {!whatsappEnabled ? (
-                <Text style={styles.help}>WhatsApp se habilita cuando el servicio esté confirmado.</Text>
+                <Text style={styles.help}>WhatsApp se habilita cuando el servicio esté en proceso.</Text>
               ) : !otherPhone ? (
                 <Text style={styles.help}>No hay teléfono registrado para este usuario.</Text>
               ) : null}
@@ -568,25 +695,188 @@ export default function ReservationDetail({ navigation, route }: Props) {
 
             {/* Status stepper */}
             <Card withShadow style={styles.statusCard}>
-              <Text style={styles.sectionLikeRef}>Status</Text>
+              <Text style={styles.sectionLikeRef}>Estado</Text>
 
-              <Text style={styles.stepRow as any}>
-                <Ionicons name={statusStep >= 1 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />{' '}
-                <Text style={styles.stepText}>Booking confirmed</Text>
-              </Text>
+              <View style={styles.stepRow}>
+                <Ionicons name={statusStep >= 1 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />
+                <Text style={styles.stepText}>Solicitud enviada</Text>
+              </View>
 
-              <Text style={styles.stepRow as any}>
-                <Ionicons name={statusStep >= 2 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />{' '}
+              <View style={styles.stepRow}>
+                <Ionicons name={statusStep >= 2 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />
                 <Text style={styles.stepText}>En proceso</Text>
-              </Text>
+              </View>
 
-              <Text style={styles.stepRow as any}>
-                <Ionicons name={statusStep >= 3 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />{' '}
-                <Text style={styles.stepText}>Service completed</Text>
-              </Text>
+              <View style={styles.stepRow}>
+                <Ionicons name={statusStep >= 3 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />
+                <Text style={styles.stepText}>Servicio completado</Text>
+              </View>
             </Card>
 
-            {/* ✅ Vista de calificaciones (solo cuando ambos calificaron) */}
+            {/* ✅ Calificar */}
+            {isClosed && canRateNow && (
+              <Card withShadow style={styles.rateCardInfo}>
+                <Text style={styles.rateInfoTitle}>Calificación</Text>
+                <Text style={styles.help}>Tu servicio ya está cerrado. Dejá tu calificación para ayudar a mejorar la comunidad.</Text>
+                <View style={{ height: 10 }} />
+                <Button title="⭐ Calificar ahora" onPress={() => setShowRateSheet(true)} />
+              </Card>
+            )}
+
+            {/* ✅ Visitas */}
+            <SectionTitle>Visitas</SectionTitle>
+
+            {!canLogVisitsByState ? (
+              <Card style={styles.box}>
+                <Text style={styles.help}>Las visitas se registran cuando el servicio está en proceso o finalizado.</Text>
+              </Card>
+            ) : (
+              <>
+                <Card style={styles.box}>
+                  <Text style={styles.boxTitle}>Historial de visitas</Text>
+
+                  {visits.length === 0 ? (
+                    <Text style={styles.help}>Todavía no hay visitas registradas.</Text>
+                  ) : (
+                    visits.map((v) => (
+                      <View key={v.id} style={styles.visitRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.visitDate}>{fmtDate(v.dateIso)}</Text>
+                          <Text style={styles.visitMeta}>Estado: {v.status}</Text>
+                          {!!v.durationMin && <Text style={styles.visitMeta}>Duración: {fmtDuration(v.durationMin)}</Text>}
+                          {!!v.notes && <Text style={styles.visitNotes}>{v.notes}</Text>}
+
+                          <View style={styles.visitActionsRow}>
+                            {(['REALIZADA', 'REPROGRAMADA', 'CANCELADA'] as VisitStatus[]).map((st) => {
+                              const active = v.status === st;
+                              return (
+                                <TouchableOpacity
+                                  key={st}
+                                  activeOpacity={0.85}
+                                  onPress={() => updateVisitStatus(v.id, st)}
+                                  style={[styles.pill, active ? styles.pillActive : styles.pillInactive]}
+                                >
+                                  <Text style={[styles.pillText, active ? styles.pillTextActive : styles.pillTextInactive]}>
+                                    {st}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </View>
+
+                        <TouchableOpacity onPress={() => removeVisit(v.id)} style={styles.trashBtn}>
+                          <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ))
+                  )}
+                </Card>
+
+                {/* ✅ Form: se oculta por defecto cuando está CERRADO */}
+                {canShowVisitAddForm ? (
+                  <Card style={styles.box}>
+                    <Text style={styles.boxTitle}>Registrar nueva visita</Text>
+
+                    <Text style={styles.label}>Fecha y hora</Text>
+                    <View style={styles.twoCols}>
+                      <View style={{ flex: 1 }}>
+                        <TouchableOpacity activeOpacity={0.9} onPress={() => setShowVisitDatePicker(true)} style={styles.pickerBtn}>
+                          <Ionicons name="calendar-outline" size={18} color={COLORS.textMuted} />
+                          <Text style={styles.pickerBtnText}>{fmtDateOnly(visitDateTime)}</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={{ width: 12 }} />
+
+                      <View style={{ flex: 1 }}>
+                        <TouchableOpacity activeOpacity={0.9} onPress={() => setShowVisitTimePicker(true)} style={styles.pickerBtn}>
+                          <Ionicons name="time-outline" size={18} color={COLORS.textMuted} />
+                          <Text style={styles.pickerBtnText}>{fmtTimeOnly(visitDateTime)}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <Text style={styles.label}>Duración (minutos)</Text>
+                    <TextInput
+                      value={visitDurationMin}
+                      onChangeText={(t) => setVisitDurationMin(t.replace(/[^\d]/g, ''))}
+                      placeholder="Ej: 90"
+                      keyboardType="numeric"
+                      placeholderTextColor="#9ca3af"
+                      style={styles.input}
+                    />
+
+                    <Text style={styles.label}>Estado</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                      {(['REALIZADA', 'REPROGRAMADA', 'CANCELADA'] as VisitStatus[]).map((st) => {
+                        const active = visitStatus === st;
+                        return (
+                          <TouchableOpacity
+                            key={st}
+                            activeOpacity={0.85}
+                            onPress={() => setVisitStatus(st)}
+                            style={[styles.pill, active ? styles.pillActive : styles.pillInactive]}
+                          >
+                            <Text style={[styles.pillText, active ? styles.pillTextActive : styles.pillTextInactive]}>
+                              {st}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    <Text style={styles.label}>Notas (opcional)</Text>
+                    <TextInput
+                      value={visitNotes}
+                      onChangeText={setVisitNotes}
+                      placeholder="Ej: Se revisó la instalación..."
+                      placeholderTextColor="#9ca3af"
+                      style={[styles.input, { minHeight: 70 }]}
+                      multiline
+                    />
+
+                    <Button title="Agregar visita" onPress={addVisit} />
+
+                    {showVisitDatePicker && (
+                      <DateTimePicker
+                        value={visitDateTime ?? new Date()}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={(e, selected) => {
+                          setShowVisitDatePicker(false);
+                          if (!selected) return;
+
+                          const base = visitDateTime ?? new Date();
+                          const next = new Date(selected);
+                          next.setHours(base.getHours(), base.getMinutes(), 0, 0);
+                          setVisitDateTime(next);
+                        }}
+                      />
+                    )}
+
+                    {showVisitTimePicker && (
+                      <DateTimePicker
+                        value={visitDateTime ?? new Date()}
+                        mode="time"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={(e, selected) => {
+                          setShowVisitTimePicker(false);
+                          if (!selected) return;
+
+                          const base = visitDateTime ?? new Date();
+                          const next = new Date(base);
+                          next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+                          setVisitDateTime(next);
+                        }}
+                      />
+                    )}
+                  </Card>
+                ) : null}
+              </>
+            )}
+
+            {/* ✅ Vista de calificaciones (cuando corresponde) */}
             {isClosed && !canRateNow && (
               <Card withShadow style={styles.rateCardInfo}>
                 <Text style={styles.rateInfoTitle}>Calificación</Text>
@@ -600,23 +890,23 @@ export default function ReservationDetail({ navigation, route }: Props) {
                     <Text style={styles.help}>Ambos calificaron ✅</Text>
 
                     {(item as any).clientePuntaje ? (
-                      <Text style={styles.rateResultRow as any}>
+                      <View style={styles.rateResultRow}>
                         <Text style={styles.rateResultLabel}>Solicitante</Text>
                         {renderStarsStatic(Number((item as any).clientePuntaje))}
                         {!!(item as any).clienteComentario && (
                           <Text style={styles.rateResultComment}>{String((item as any).clienteComentario)}</Text>
                         )}
-                      </Text>
+                      </View>
                     ) : null}
 
                     {(item as any).profesionalPuntaje ? (
-                      <Text style={styles.rateResultRow as any}>
+                      <View style={styles.rateResultRow}>
                         <Text style={styles.rateResultLabel}>Prestador</Text>
                         {renderStarsStatic(Number((item as any).profesionalPuntaje))}
                         {!!(item as any).profesionalComentario && (
                           <Text style={styles.rateResultComment}>{String((item as any).profesionalComentario)}</Text>
                         )}
-                      </Text>
+                      </View>
                     ) : null}
                   </>
                 ) : (
@@ -634,7 +924,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
                   <Text style={styles.help}>¿Confirmás que el servicio ya terminó?</Text>
 
                   <Button title="✅ Confirmar finalización" onPress={onConfirmFinish} disabled={!canConfirmFinish} />
-                  <Text style={{ height: 10 } as any} />
+                  <View style={{ height: 10 }} />
 
                   <Text style={styles.label}>Si no estás de acuerdo, dejá un mensaje</Text>
                   <TextInput
@@ -666,37 +956,28 @@ export default function ReservationDetail({ navigation, route }: Props) {
                   <Card style={styles.box}>
                     <Text style={styles.boxTitle}>Negociar</Text>
 
-                    <Text style={styles.twoCols as any}>
-                      <Text style={{ flex: 1 } as any}>
-                        <Text style={styles.label}>Fecha</Text>
-                        {'\n'}
-                        <TextInput
-                          value={proposeDate}
-                          onChangeText={setProposeDate}
-                          placeholder="YYYY-MM-DD (ej: 2025-12-20)"
-                          placeholderTextColor="#9ca3af"
-                          style={styles.input}
-                        />
-                      </Text>
+                    <Text style={styles.label}>Fecha y hora propuesta</Text>
+                    <View style={styles.twoCols}>
+                      <View style={{ flex: 1 }}>
+                        <TouchableOpacity activeOpacity={0.9} onPress={() => setShowProposeDatePicker(true)} style={styles.pickerBtn}>
+                          <Ionicons name="calendar-outline" size={18} color={COLORS.textMuted} />
+                          <Text style={styles.pickerBtnText}>{fmtDateOnly(proposeDateTime)}</Text>
+                        </TouchableOpacity>
+                      </View>
 
-                      <Text style={{ width: 12 } as any} />
+                      <View style={{ width: 12 }} />
 
-                      <Text style={{ flex: 1 } as any}>
-                        <Text style={styles.label}>Hora</Text>
-                        {'\n'}
-                        <TextInput
-                          value={proposeTime}
-                          onChangeText={setProposeTime}
-                          placeholder="HH:mm (ej: 14:30)"
-                          placeholderTextColor="#9ca3af"
-                          style={styles.input}
-                        />
-                      </Text>
-                    </Text>
+                      <View style={{ flex: 1 }}>
+                        <TouchableOpacity activeOpacity={0.9} onPress={() => setShowProposeTimePicker(true)} style={styles.pickerBtn}>
+                          <Ionicons name="time-outline" size={18} color={COLORS.textMuted} />
+                          <Text style={styles.pickerBtnText}>{fmtTimeOnly(proposeDateTime)}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
 
-                    {!!proposalIsoPreview && (
+                    {!!proposeDateTime && (
                       <Text style={styles.preview}>
-                        Se enviará: <Text style={styles.previewStrong}>{proposalIsoPreview}</Text>
+                        Se enviará: <Text style={styles.previewStrong}>{fmtDate(proposeDateTime.toISOString())}</Text>
                       </Text>
                     )}
 
@@ -711,6 +992,40 @@ export default function ReservationDetail({ navigation, route }: Props) {
                     />
 
                     <Button title="Enviar propuesta" onPress={onProviderPropose} disabled={!canProviderAccept} />
+
+                    {showProposeDatePicker && (
+                      <DateTimePicker
+                        value={proposeDateTime ?? new Date()}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={(e, selected) => {
+                          setShowProposeDatePicker(false);
+                          if (!selected) return;
+
+                          const base = proposeDateTime ?? new Date();
+                          const next = new Date(selected);
+                          next.setHours(base.getHours(), base.getMinutes(), 0, 0);
+                          setProposeDateTime(next);
+                        }}
+                      />
+                    )}
+
+                    {showProposeTimePicker && (
+                      <DateTimePicker
+                        value={proposeDateTime ?? new Date()}
+                        mode="time"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={(e, selected) => {
+                          setShowProposeTimePicker(false);
+                          if (!selected) return;
+
+                          const base = proposeDateTime ?? new Date();
+                          const next = new Date(base);
+                          next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+                          setProposeDateTime(next);
+                        }}
+                      />
+                    )}
                   </Card>
                 )}
 
@@ -752,7 +1067,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
                   {!!item.mensajePropuesta && <Text style={styles.paragraph}>{item.mensajePropuesta}</Text>}
 
                   <Button title="Aceptar propuesta" onPress={onRequesterAcceptProposal} disabled={!canRequesterAccept} />
-                  <Text style={{ height: 10 } as any} />
+                  <View style={{ height: 10 }} />
 
                   <Text style={styles.label}>Si querés, dejá un mensaje al rechazar</Text>
                   <TextInput
@@ -776,17 +1091,27 @@ export default function ReservationDetail({ navigation, route }: Props) {
                 <Card style={styles.box}>
                   <Text style={styles.boxTitle}>Finalizar</Text>
                   <Button title="Solicitar finalización" onPress={onRequesterFinish} disabled={!canRequesterFinish} />
-                  <Text style={styles.help}>
-                    Al finalizar, le llegará una notificación al otro usuario para confirmar.
-                  </Text>
+                  <Text style={styles.help}>Al finalizar, le llegará una notificación al otro usuario para confirmar.</Text>
                 </Card>
               </>
+            )}
+
+            {/* ✅ Link al final: habilitar visitas si estaba cerrado */}
+            {isClosed && !allowVisitsAfterClose && (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setAllowVisitsAfterClose(true)}
+                style={styles.forgotVisitsLink}
+              >
+                <Ionicons name="add-circle-outline" size={18} color={COLORS.textMuted} />
+                <Text style={styles.forgotVisitsText}>¿Olvidaste agregar alguna visita?</Text>
+              </TouchableOpacity>
             )}
           </>
         )}
       </ScrollView>
 
-      {/* ✅ Bottom sheet: aparece automáticamente al quedar CERRADO */}
+      {/* ✅ Bottom sheet rating */}
       <RateReservationSheet
         visible={showRateSheet}
         loading={ratingSending}
@@ -858,6 +1183,34 @@ const styles = StyleSheet.create({
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   stepText: { fontSize: 12, fontWeight: '800', color: COLORS.text },
 
+  // visits
+  visitRow: { flexDirection: 'row', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.border },
+  visitDate: { fontSize: 13, fontWeight: '900', color: COLORS.text },
+  visitMeta: { marginTop: 2, fontSize: 12, color: COLORS.textMuted, fontWeight: '700' },
+  visitNotes: { marginTop: 6, fontSize: 12, color: COLORS.text, lineHeight: 16 },
+  visitActionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  trashBtn: { padding: 8, borderRadius: 12, backgroundColor: '#fee2e2', alignSelf: 'flex-start' },
+
+  pill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
+  pillActive: { backgroundColor: '#ecfeff', borderColor: '#bae6fd' },
+  pillInactive: { backgroundColor: '#f3f4f6', borderColor: '#e5e7eb' },
+  pillText: { fontSize: 11, fontWeight: '900' },
+  pillTextActive: { color: '#0369a1' },
+  pillTextInactive: { color: '#374151' },
+
+  // date/time picker button
+  pickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADII.lg,
+    padding: 12,
+    backgroundColor: '#fff',
+  },
+  pickerBtnText: { fontSize: 14, fontWeight: '800', color: COLORS.text },
+
   // rating view
   rateCardInfo: { marginBottom: SPACING.md },
   rateInfoTitle: { fontSize: 13, fontWeight: '900', color: COLORS.text, marginBottom: 8 },
@@ -886,4 +1239,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   twoCols: { flexDirection: 'row', marginBottom: 10 },
+
+  forgotVisitsLink: {
+    marginTop: 12,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+  },
+  forgotVisitsText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.textMuted,
+    textDecorationLine: 'underline',
+  },
 });
