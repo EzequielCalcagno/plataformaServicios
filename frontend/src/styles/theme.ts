@@ -33,6 +33,9 @@ export const COLORS = {
   activeTab: '#0D141C',
   inactiveTab: '#4F7096',
 
+  // Cards
+  borderCard: '#E9E9E9',
+
   // Buttons
   buttonPrimaryBg: '#2294F2',
   buttonPrimaryText: '#FFFFFF',

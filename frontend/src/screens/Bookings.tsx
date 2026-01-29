@@ -39,7 +39,9 @@ const TAB_LABELS: Record<TabKey, string> = {
 };
 
 function appRoleToRoleUI(Role: string | null | undefined): RoleUI {
-  const v = String(Role ?? '').trim().toLowerCase();
+  const v = String(Role ?? '')
+    .trim()
+    .toLowerCase();
   if (v === 'profesional' || v === 'professional' || v === 'pro' || v === '2') return 'PROFESIONAL';
   return 'CLIENTE';
 }
@@ -63,7 +65,9 @@ export default function Bookings({ navigation, route }: Props) {
 
   const resolveRole = useCallback(async (): Promise<RoleUI> => {
     const paramRole = route?.params?.role;
-    const pr = String(paramRole ?? '').trim().toLowerCase();
+    const pr = String(paramRole ?? '')
+      .trim()
+      .toLowerCase();
     if (pr === 'professional' || pr === 'profesional' || pr === 'pro') return 'PROFESIONAL';
     if (pr === 'client' || pr === 'cliente') return 'CLIENTE';
 
@@ -105,14 +109,17 @@ export default function Bookings({ navigation, route }: Props) {
       let list: ReservationListItem[] = [];
 
       if (r === 'CLIENTE') {
-        const tab = activeTab === 'PENDIENTES' ? 'waiting' : activeTab === 'ACTIVAS' ? 'active' : 'done';
+        const tab =
+          activeTab === 'PENDIENTES' ? 'waiting' : activeTab === 'ACTIVAS' ? 'active' : 'done';
         list = await listMyReservationsMine(tab);
       } else {
         if (proMailbox === 'RECIBIDAS') {
-          const tab = activeTab === 'PENDIENTES' ? 'pending' : activeTab === 'ACTIVAS' ? 'active' : 'done';
+          const tab =
+            activeTab === 'PENDIENTES' ? 'pending' : activeTab === 'ACTIVAS' ? 'active' : 'done';
           list = await listMyReservationsPro(tab);
         } else {
-          const tab = activeTab === 'PENDIENTES' ? 'waiting' : activeTab === 'ACTIVAS' ? 'active' : 'done';
+          const tab =
+            activeTab === 'PENDIENTES' ? 'waiting' : activeTab === 'ACTIVAS' ? 'active' : 'done';
           list = await listMyReservationsMine(tab);
         }
       }
@@ -205,12 +212,17 @@ export default function Bookings({ navigation, route }: Props) {
 
   return (
     <Screen>
-      <TopBar title="Bookings" rightNode={null} />
+      <TopBar
+        title={headerTitle}
+        showBack
+        onPressBack={() => navigation.goBack()}
+        rightNode={null}
+      />
 
       {/* Header like ref */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>{headerTitle}</Text>
+          {/* <Text style={styles.headerTitle}>{headerTitle}</Text> */}
           <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
         </View>
 
@@ -254,7 +266,11 @@ export default function Bookings({ navigation, route }: Props) {
               <Text style={[styles.tabText, active ? styles.tabTextActive : null]}>
                 {TAB_LABELS[t]}
               </Text>
-              {active ? <View style={styles.tabUnderline} /> : <View style={styles.tabUnderlineOff} />}
+              {active ? (
+                <View style={styles.tabUnderline} />
+              ) : (
+                <View style={styles.tabUnderlineOff} />
+              )}
             </TouchableOpacity>
           );
         })}
