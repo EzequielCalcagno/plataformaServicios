@@ -70,7 +70,7 @@ function Stars({ value }: { value: number }) {
 
 export default function Reviews({ route }: Props) {
   const profesionalId = String(route?.params?.profesionalId ?? '');
-  const professionalName = String(route?.params?.professionalName ?? 'Reviews');
+  const professionalName = String(route?.params?.professionalName ?? '');
 
   const [sort, setSort] = useState<ReviewSort>('recent');
   const [ratingFilter, setRatingFilter] = useState<ReviewRatingFilter>(0);
@@ -221,7 +221,7 @@ export default function Reviews({ route }: Props) {
 
   return (
     <Screen>
-      <TopBar title={`Reviews · ${professionalName}`} showBack />
+      <TopBar title={` Reviews ${professionalName}`} showBack />
 
       <View style={styles.filtersWrap}>
         {/* Sort pills */}

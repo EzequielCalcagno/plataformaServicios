@@ -158,9 +158,7 @@ export default function Account({ navigation }: Props) {
           // (ajustá los números si tu backend usa otros roles)
           const roleId = Number(data.id_rol);
           const isProfessional =
-            typeof data.is_professional === 'boolean'
-              ? data.is_professional
-              : roleId === 2; // <--- común: 1 = cliente, 2 = profesional
+            typeof data.is_professional === 'boolean' ? data.is_professional : roleId === 2; // <--- común: 1 = cliente, 2 = profesional
 
           const profileVm: ProfileVM = {
             fullName: `${data.nombre ?? 'Usuario'} ${data.apellido ?? ''}`.trim(),
@@ -196,7 +194,10 @@ export default function Account({ navigation }: Props) {
     await logout();
   };
 
-  const avatarUri = useMemo(() => normalizePhotoUrl(profile?.photoUrl ?? null), [profile?.photoUrl]);
+  const avatarUri = useMemo(
+    () => normalizePhotoUrl(profile?.photoUrl ?? null),
+    [profile?.photoUrl],
+  );
 
   if (loadingProfile) {
     return <Loading message="Cargando tu cuenta…" />;
@@ -258,12 +259,16 @@ export default function Account({ navigation }: Props) {
             </View>
           ) : (
             <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarInitial}>{profile.fullName?.[0]?.toUpperCase() || 'U'}</Text>
+              <Text style={styles.avatarInitial}>
+                {profile.fullName?.[0]?.toUpperCase() || 'U'}
+              </Text>
             </View>
           )}
 
           <Text style={styles.profileName}>{profile.fullName}</Text>
-          <Text style={styles.profileType}>{profile.isProfessional ? 'Profesional' : 'Usuario'}</Text>
+          <Text style={styles.profileType}>
+            {profile.isProfessional ? 'Profesional' : 'Usuario'}
+          </Text>
           <Text style={styles.profileRegisterDate}>
             {profile.registerDate ? `Miembro desde ${formatMemberSince(profile.registerDate)}` : ''}
           </Text>

@@ -1,14 +1,8 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { COLORS, SPACING, RADII } from '../styles/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { COLORS, SPACING, TYPO } from '../styles/theme';
 
 type Props = {
   title: string;
@@ -17,25 +11,34 @@ type Props = {
   rightNode?: React.ReactNode;
 };
 
+const SIDE = 42;
+
 export const TopBar: React.FC<Props> = ({ title, showBack = false, onPressBack, rightNode }) => {
   const navigation = useNavigation<any>();
 
   return (
     <View style={styles.container}>
       {/* LEFT */}
-      {showBack ? (
-        <TouchableOpacity onPress={onPressBack || navigation.goBack} style={styles.iconButton}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
-        </TouchableOpacity>
-      ) : (
-        <View style={{ width: 24 }} />
-      )}
+      <View style={styles.side}>
+        {showBack ? (
+          <TouchableOpacity
+            onPress={onPressBack || navigation.goBack}
+            style={styles.iconButton}
+            activeOpacity={0.85}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="chevron-back" size={18} color={COLORS.text} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
 
       {/* TITLE */}
-      <Text style={styles.title}>{title}</Text>
+      <Text numberOfLines={1} style={[TYPO.h2, styles.title]}>
+        {title}
+      </Text>
 
       {/* RIGHT */}
-      {rightNode ? rightNode : <View style={{ width: 24 }} />}
+      <View style={styles.side}>{rightNode}</View>
     </View>
   );
 };
@@ -46,24 +49,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm + 2,
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
+    backgroundColor: COLORS.cardBg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: COLORS.border,
-    zIndex: 20,
   },
+
+  side: {
+    width: SIDE,
+    height: SIDE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   iconButton: {
-    padding: 4,
-    borderRadius: RADII.sm,
+    width: SIDE,
+    height: SIDE,
+    borderRadius: 999,
+    backgroundColor: COLORS.bgLightGrey,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  icon: {
-    width: 20,
-    height: 20,
-    tintColor: COLORS.text,
-  },
+
   title: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
+    flex: 1,
+    textAlign: 'center',
   },
 });

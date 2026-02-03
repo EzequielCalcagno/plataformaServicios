@@ -1,25 +1,22 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-} from 'react-native';
+// src/screens/EditProfile.tsx
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import * as ImagePicker from 'expo-image-picker';
 
-const API_URL =
-  (Constants.expoConfig?.extra?.API_URL as string)?.replace(/\/+$/, '') || '';
+import { Screen } from '../components/Screen';
+import { Card } from '../components/Card';
+import { Input } from '../components/Input';
+import { Alert } from '../components/Alert';
+import { Button } from '../components/Button';
+import { COLORS, SPACING, TYPO } from '../styles/theme';
+import { TopBar } from '../components/TopBar';
 
-type Props = {
-  navigation: any;
-};
+const API_URL = (Constants.expoConfig?.extra?.API_URL as string)?.replace(/\/+$/, '') || '';
 
+type Props = { navigation: any };
 type AppRole = 'professional' | 'client';
 
 type ProfessionalForm = {
@@ -30,12 +27,14 @@ type ProfessionalForm = {
 export default function EditProfile({ navigation }: Props) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const [alertMsg, setAlertMsg] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
 
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const [profForm, setProfForm] = useState<ProfessionalForm>({
     specialty: '',
@@ -47,19 +46,21 @@ export default function EditProfile({ navigation }: Props) {
     const loadProfileForEdit = async () => {
       try {
         setLoading(true);
-        setErrorMsg(null);
+        setAlertMsg(null);
+        setOk(false);
 
         const token = await AsyncStorage.getItem('@token');
         const storedRole = (await AsyncStorage.getItem('@role')) as AppRole | null;
 
         if (!token || !storedRole) {
-          setErrorMsg('No hay sesión activa.');
+          setAlertMsg('No hay sesión activa.');
+          setOk(false);
           return;
         }
 
         setRole(storedRole);
 
-        // ✅ 1) Avatar SIEMPRE desde usuarios (currentUser)
+        // Avatar SIEMPRE desde currentUser
         const meRes = await fetch(`${API_URL}/private/currentUser`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -69,22 +70,18 @@ export default function EditProfile({ navigation }: Props) {
 
         if (meRes.ok) {
           const meData = await meRes.json();
-          // cache-busting al cargar también puede ayudar si venís de subir recién
           const url = meData?.foto_url ? `${meData.foto_url}?t=${Date.now()}` : null;
           setAvatarUrl(url);
-        } else {
-          // no cortamos la pantalla por esto, solo avisamos en consola
-          const t = await meRes.text();
-          console.log('⚠️ No se pudo cargar currentUser', meRes.status, t);
         }
 
-        // Si es cliente, por ahora dejamos el mensaje (pero el avatar ya lo mostramos)
+        // Si es cliente, solo foto por ahora (no bloqueamos toda la pantalla con error feo)
         if (storedRole !== 'professional') {
-          setErrorMsg('Edición de cliente aún no implementada.');
+          setAlertMsg('Por ahora, en perfil de cliente solo podés actualizar tu foto.');
+          setOk(true);
           return;
         }
 
-        // ✅ 2) Datos profesionales desde private/profile
+        // Datos profesionales
         const res = await fetch(`${API_URL}/private/profile`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -95,7 +92,8 @@ export default function EditProfile({ navigation }: Props) {
         if (!res.ok) {
           const txt = await res.text();
           console.log('❌ Error al cargar perfil profesional', res.status, txt);
-          setErrorMsg('No se pudo cargar el perfil profesional.');
+          setAlertMsg('No se pudo cargar el perfil profesional.');
+          setOk(false);
           return;
         }
 
@@ -105,12 +103,10 @@ export default function EditProfile({ navigation }: Props) {
           specialty: data.especialidad || '',
           about: data.descripcion || data.experiencia || '',
         });
-
-        // ❌ NO usar data.portada_url (no es foto de perfil)
-        // setAvatarUrl(data.portada_url || null);
       } catch (error) {
         console.log('❌ Error loadProfileForEdit', error);
-        setErrorMsg('Error al cargar el perfil.');
+        setAlertMsg('Error al cargar el perfil.');
+        setOk(false);
       } finally {
         setLoading(false);
       }
@@ -122,13 +118,14 @@ export default function EditProfile({ navigation }: Props) {
   // ========= SUBIR AVATAR ==========
   const handlePickAvatar = async () => {
     try {
-      setErrorMsg(null);
-      setSuccessMsg(null);
+      setAlertMsg(null);
+      setOk(false);
       setUploadingAvatar(true);
 
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        setErrorMsg('Necesitamos permiso para acceder a tus fotos.');
+        setAlertMsg('Necesitamos permiso para acceder a tus fotos.');
+        setOk(false);
         return;
       }
 
@@ -142,13 +139,15 @@ export default function EditProfile({ navigation }: Props) {
 
       const asset = result.assets?.[0];
       if (!asset?.uri) {
-        setErrorMsg('No se pudo obtener la imagen seleccionada.');
+        setAlertMsg('No se pudo obtener la imagen seleccionada.');
+        setOk(false);
         return;
       }
 
       const token = await AsyncStorage.getItem('@token');
       if (!token) {
-        setErrorMsg('No hay sesión activa.');
+        setAlertMsg('No hay sesión activa.');
+        setOk(false);
         return;
       }
 
@@ -160,7 +159,6 @@ export default function EditProfile({ navigation }: Props) {
       } as any);
 
       const uploadUrl = `${API_URL}/uploads/profile-image`;
-      console.log('📤 Subiendo avatar a:', uploadUrl);
 
       const res = await fetch(uploadUrl, {
         method: 'POST',
@@ -180,23 +178,24 @@ export default function EditProfile({ navigation }: Props) {
 
       if (!res.ok) {
         console.log('❌ Error subiendo avatar:', res.status, text);
-        setErrorMsg(data.message || 'No se pudo subir la imagen.');
+        setAlertMsg(data.message || 'No se pudo subir la imagen.');
+        setOk(false);
         return;
       }
 
       if (!data.url) {
-        setErrorMsg('El servidor no devolvió la URL.');
+        setAlertMsg('El servidor no devolvió la URL.');
+        setOk(false);
         return;
       }
 
-      // ✅ ACÁ va el cache-busting:
-      const cacheBusted = `${data.url}?t=${Date.now()}`;
-      setAvatarUrl(cacheBusted);
-
-      setSuccessMsg('Imagen actualizada correctamente.');
+      setAvatarUrl(`${data.url}?t=${Date.now()}`);
+      setAlertMsg('Imagen actualizada correctamente.');
+      setOk(true);
     } catch (error) {
       console.log('❌ Error handlePickAvatar:', error);
-      setErrorMsg('Error al subir la imagen.');
+      setAlertMsg('Error al subir la imagen.');
+      setOk(false);
     } finally {
       setUploadingAvatar(false);
     }
@@ -206,22 +205,22 @@ export default function EditProfile({ navigation }: Props) {
   const handleSave = async () => {
     try {
       setSaving(true);
-      setErrorMsg(null);
-      setSuccessMsg(null);
+      setAlertMsg(null);
+      setOk(false);
 
       const token = await AsyncStorage.getItem('@token');
       if (!token || !role) {
-        setErrorMsg('No hay sesión activa.');
+        setAlertMsg('No hay sesión activa.');
+        setOk(false);
         return;
       }
 
-      // Si es cliente, por ahora no hace PATCH (pero el avatar ya se sube por otro endpoint)
       if (role !== 'professional') {
-        setSuccessMsg('Foto actualizada. (Edición de cliente aún no implementada)');
+        setAlertMsg('Foto actualizada. (Edición de cliente aún no implementada)');
+        setOk(true);
         return;
       }
 
-      // ✅ ACÁ va el body correcto (sin portadaUrl):
       const body = {
         descripcion: profForm.about,
         especialidad: profForm.specialty,
@@ -240,178 +239,206 @@ export default function EditProfile({ navigation }: Props) {
       if (!res.ok) {
         const t = await res.text();
         console.log('❌ Error al guardar perfil:', res.status, t);
-        setErrorMsg('No se pudo guardar el perfil.');
+        setAlertMsg('No se pudo guardar el perfil.');
+        setOk(false);
         return;
       }
 
-      setSuccessMsg('Perfil actualizado correctamente.');
+      setAlertMsg('Perfil actualizado correctamente.');
+      setOk(true);
     } catch (error) {
       console.log('❌ Error saving profile', error);
-      setErrorMsg('Error de red al guardar el perfil.');
+      setAlertMsg('Error de red al guardar el perfil.');
+      setOk(false);
     } finally {
       setSaving(false);
     }
   };
 
-  // ========= RENDER ==========
+  const initials = useMemo(() => {
+    const base = (profForm.specialty || 'U').trim();
+    return (base[0] || 'U').toUpperCase();
+  }, [profForm.specialty]);
+
+  const isPro = role === 'professional';
+  const canEdit = isPro; // por ahora
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.screen}>
-        <Text style={{ padding: 20 }}>Cargando perfil...</Text>
-      </SafeAreaView>
+      <Screen>
+        <View style={styles.center}>
+          <Text style={styles.muted}>Cargando perfil…</Text>
+        </View>
+      </Screen>
     );
   }
 
   if (!role) {
     return (
-      <SafeAreaView style={styles.screen}>
-        <Text style={{ padding: 20 }}>No se pudo determinar el rol.</Text>
-      </SafeAreaView>
+      <Screen>
+        <View style={styles.center}>
+          <Text style={styles.muted}>No se pudo determinar el rol.</Text>
+          <Button title="Volver" onPress={() => navigation.goBack()} variant="outline" />
+        </View>
+      </Screen>
     );
   }
 
-  const initialLetter = profForm.specialty?.[0]?.toUpperCase() || 'U';
-
   return (
-    <SafeAreaView style={styles.screen}>
-      {/* Top bar */}
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={{ fontSize: 18 }}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Edit Profile</Text>
-        <View style={{ width: 20 }} />
-      </View>
+    <Screen>
+      <TopBar title="Editar perfil" showBack />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {alertMsg && (
+          <Alert
+            type={ok ? 'success' : 'error'}
+            message={alertMsg}
+            style={{ marginBottom: SPACING.md }}
+          />
+        )}
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
-        {successMsg && <Text style={styles.successText}>{successMsg}</Text>}
+        {/* Avatar card */}
+        <Card style={styles.avatarCard} withShadow>
+          <View style={styles.avatarRow}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarInitial}>{initials}</Text>
+              </View>
+            )}
 
-        {/* Avatar */}
-        <View style={styles.avatarSection}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarInitial}>{initialLetter}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.avatarTitle}>Foto de perfil</Text>
+              <Text style={styles.avatarSub}>
+                Se muestra en tu perfil público y en tus reservas.
+              </Text>
+
+              <View style={{ marginTop: 10 }}>
+                <Button
+                  title={
+                    uploadingAvatar ? 'Subiendo…' : avatarUrl ? 'Cambiar foto' : 'Agregar foto'
+                  }
+                  onPress={handlePickAvatar}
+                  disabled={uploadingAvatar}
+                  variant="neutral"
+                  size="md"
+                  leftIcon={
+                    <Ionicons
+                      name="image-outline"
+                      size={18}
+                      color={COLORS.text}
+                      style={{ marginRight: 6 }}
+                    />
+                  }
+                />
+              </View>
             </View>
-          )}
+          </View>
+        </Card>
 
-          <TouchableOpacity
-            onPress={handlePickAvatar}
-            style={styles.avatarButton}
-            disabled={uploadingAvatar}
-          >
-            <Text style={styles.avatarButtonText}>
-              {uploadingAvatar ? 'Subiendo...' : avatarUrl ? 'Cambiar foto' : 'Agregar imagen'}
-            </Text>
-          </TouchableOpacity>
+        {/* Form profesional */}
+        <View style={{ marginTop: SPACING.lg }}>
+          <Text style={styles.sectionTitle}>Información profesional</Text>
+          <Text style={styles.sectionSub}>
+            {canEdit
+              ? 'Completá estos datos para aparecer mejor en búsquedas.'
+              : 'Solo disponible para perfiles profesionales.'}
+          </Text>
+
+          <View style={{ marginTop: SPACING.md, gap: 12 }}>
+            <Input
+              placeholder="Especialidad (ej: Electricidad, Plomería)"
+              value={profForm.specialty}
+              onChangeText={(t: string) => setProfForm((f) => ({ ...f, specialty: t }))}
+              editable={canEdit}
+            />
+
+            <Input
+              placeholder="Sobre mí (tu experiencia, qué ofrecés, cómo trabajás)"
+              value={profForm.about}
+              onChangeText={(t: string) => setProfForm((f) => ({ ...f, about: t }))}
+              editable={canEdit}
+              multiline
+            />
+
+            {isPro && (
+              <Text style={styles.helper}>
+                Tip: escribí 2–3 líneas concretas (años de experiencia, zonas, tiempos de
+                respuesta).
+              </Text>
+            )}
+          </View>
         </View>
 
-        {/* Formulario profesional */}
-        <Text style={styles.label}>Especialidad</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ej: Electricidad, Plomería..."
-          value={profForm.specialty}
-          onChangeText={(t) => setProfForm((f) => ({ ...f, specialty: t }))}
-          editable={role === 'professional'}
-        />
+        {/* Guardar */}
+        <View style={{ marginTop: SPACING.xl }}>
+          <Button
+            title={saving ? 'Guardando…' : isPro ? 'Guardar cambios' : 'Listo'}
+            onPress={handleSave}
+            disabled={saving || uploadingAvatar}
+            variant="primary"
+            size="lg"
+          />
+        </View>
 
-        <Text style={styles.label}>Sobre mí</Text>
-        <TextInput
-          style={[styles.input, styles.inputMultiline]}
-          multiline
-          value={profForm.about}
-          onChangeText={(t) => setProfForm((f) => ({ ...f, about: t }))}
-          placeholder="Describe tu experiencia..."
-          editable={role === 'professional'}
-        />
-
-        <TouchableOpacity onPress={handleSave} style={styles.saveButton} disabled={saving}>
-          <Text style={styles.saveButtonText}>{saving ? 'Guardando...' : 'Guardar cambios'}</Text>
-        </TouchableOpacity>
+        {/* Cliente: aviso */}
+        {!isPro && (
+          <Text style={[styles.helper, { marginTop: SPACING.md }]}>
+            La edición completa de perfil de cliente la agregamos después. Por ahora, foto.
+          </Text>
+        )}
       </ScrollView>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
-/* ========= STYLES ========= */
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f5f7fb' },
-  topBar: {
+  content: {
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 30,
+  },
+
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
+  muted: { color: COLORS.textMuted, fontWeight: '600' },
+
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
-  },
-  topBarTitle: { fontSize: 16, fontWeight: '600' },
-  content: { padding: 16 },
-  avatarSection: { alignItems: 'center', marginBottom: 18 },
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-  },
-  avatarPlaceholder: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#e5e7eb',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarInitial: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#6b7280',
-  },
-  avatarButton: {
-    marginTop: 10,
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 24,
-  },
-  avatarButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 6,
-    marginTop: 10,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: '#fff',
+    marginBottom: 8,
   },
-  inputMultiline: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  saveButton: {
-    marginTop: 22,
-    backgroundColor: '#2563eb',
-    paddingVertical: 12,
-    borderRadius: 14,
+  headerTitle: { textAlign: 'center', flex: 1 },
+
+  iconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 999,
+    backgroundColor: COLORS.bgLightGrey,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  saveButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 15,
+
+  avatarCard: {
+    borderRadius: 18,
+    padding: 14,
   },
-  errorText: { color: '#b91c1c', marginBottom: 8 },
-  successText: { color: '#166534', marginBottom: 8 },
+  avatarRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+
+  avatar: { width: 72, height: 72, borderRadius: 36 },
+  avatarPlaceholder: {
+    backgroundColor: COLORS.bgLightGrey,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: { fontSize: 26, fontWeight: '700', color: COLORS.textMuted },
+
+  avatarTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  avatarSub: { marginTop: 2, fontSize: 12, fontWeight: '600', color: COLORS.textMuted },
+
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  sectionSub: { marginTop: 2, fontSize: 12, fontWeight: '600', color: COLORS.textMuted },
+
+  helper: { fontSize: 12, fontWeight: '600', color: COLORS.textMuted, marginTop: 6 },
 });
