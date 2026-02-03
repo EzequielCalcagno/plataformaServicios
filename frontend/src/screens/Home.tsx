@@ -217,9 +217,9 @@ export default function Home() {
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         <Card style={styles.heroCard} withShadow>
           <Text style={styles.heroTitle}>
-            Hi {firstName} 👋{'\n'}what needs fixing today?
+            Hola {firstName} 👋{'\n'}¿Qué necesitas arreglar hoy?
           </Text>
-          <Text style={styles.heroSubtitle}>Book with the professional today!</Text>
+          <Text style={styles.heroSubtitle}>Reserva hoy con un profesional!</Text>
 
           <Button
             title={isProfessional ? 'Ver solicitudes' : 'Ver profesionales disponibles'}

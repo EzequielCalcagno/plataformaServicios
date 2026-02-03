@@ -20,12 +20,14 @@ if (!JWT_SECRET) {
 export const loginService = async (email: string, password: string) => {
   const user = await getUserByEmailRepository(email);
 
-  if (!user) throw new Error('Usuario no encontrado');
+  if (!user) throw new Error('INVALID_CREDENTIALS');
 
   const isValidPassword = await bcrypt.compare(password, user.contrasena_hash);
-  if (!isValidPassword) throw new Error('Contraseña incorrecta');
+  if (!isValidPassword) throw new Error('INVALID_CREDENTIALS');
 
-  if (!user.id) throw new Error('ID de usuario no definido');
+  if (!user.id) throw new Error('USER_ID_MISSING');
+
+  // ✅ ya existe en users.repository.ts
   await updateLastLogin(String(user.id));
 
   const token = jwt.sign(
@@ -60,7 +62,7 @@ export const registerService = async ({
 }: RegisterParams) => {
   const existingUser = await getUserByEmailRepository(email);
   if (existingUser) {
-    throw new Error('El email ya está registrado');
+    throw new Error('EMAIL_ALREADY_REGISTERED');
   }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
@@ -84,7 +86,6 @@ export const registerService = async ({
     email,
     contrasena_hash: passwordHash,
     telefono: telefono ?? null,
-    // foto_url: null,
     id_rol: rolId,
   });
 };

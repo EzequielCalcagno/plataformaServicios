@@ -8,8 +8,10 @@ import {
   Image,
   ScrollView,
   ImageSourcePropType,
+  ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import Constants from 'expo-constants';
 
 import { ApiError } from '../utils/http';
 import { getCurrentUser } from '../services/user.client';
@@ -45,10 +47,32 @@ type RowItem = {
   onPress?: () => void;
 };
 
+// ====== API URL (para normalizar foto si viene relativa) ======
+const API_URL =
+  ((Constants.expoConfig?.extra as any)?.API_URL as string)?.replace(/\/+$/, '') || '';
+
+function normalizePhotoUrl(photoUrl: string | null): string | null {
+  if (!photoUrl) return null;
+  const raw = String(photoUrl).trim();
+  if (!raw) return null;
+
+  // Si ya es absoluta
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+
+  // Si es relativa: "/uploads/..." o "uploads/..."
+  const path = raw.startsWith('/') ? raw : `/${raw}`;
+  if (!API_URL) return null;
+  return `${API_URL}${path}`;
+}
+
 export default function Account({ navigation }: Props) {
   const { logout } = useSession();
   const [profile, setProfile] = useState<ProfileVM | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+
+  // Avatar states
+  const [avatarError, setAvatarError] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
 
   // Modals
   const [showNotifyModal, setShowNotifyModal] = useState(false);
@@ -77,12 +101,12 @@ export default function Account({ navigation }: Props) {
       {
         key: 'locations',
         label: 'Mis ubicaciones',
-        leftIcon: require('../../assets/icons/cuenta/ubicacion.png'), // ⬅️ asegurate de tener este asset
+        leftIcon: require('../../assets/icons/cuenta/ubicacion.png'),
         rightIcon: require('../../assets/icons/cuenta/flechaDerecha.png'),
-        onPress: () => navigation.navigate('Locations'), // ⬅️ debe coincidir con tu navigator
+        onPress: () => navigation.navigate('Locations'),
       },
 
-      // Si querés que "Agregar servicio" sea solo para profesionales:
+      // Solo para profesionales
       ...(profile?.isProfessional
         ? [
             {
@@ -127,17 +151,30 @@ export default function Account({ navigation }: Props) {
       const loadProfile = async () => {
         try {
           setLoadingProfile(true);
-          const data = await getCurrentUser();
+          const data: any = await getCurrentUser();
+
+          // ✅ FIX: isProfessional estaba al revés.
+          // Prioridad: boolean del backend si existe; sino por id_rol
+          // (ajustá los números si tu backend usa otros roles)
+          const roleId = Number(data.id_rol);
+          const isProfessional =
+            typeof data.is_professional === 'boolean'
+              ? data.is_professional
+              : roleId === 2; // <--- común: 1 = cliente, 2 = profesional
 
           const profileVm: ProfileVM = {
             fullName: `${data.nombre ?? 'Usuario'} ${data.apellido ?? ''}`.trim(),
             photoUrl: data.foto_url ?? null,
-            isProfessional: data.id_rol === 1,
+            isProfessional,
             isVerified: data.verificado,
             registerDate: data.fecha_registro,
           };
 
-          if (mounted) setProfile(profileVm);
+          if (mounted) {
+            setProfile(profileVm);
+            // Reset del avatar (por si cambió la foto)
+            setAvatarError(false);
+          }
         } catch (err) {
           console.error('Error cargando perfil en Account:', err);
           if (err instanceof ApiError && err.status === 401) {
@@ -159,6 +196,8 @@ export default function Account({ navigation }: Props) {
     await logout();
   };
 
+  const avatarUri = useMemo(() => normalizePhotoUrl(profile?.photoUrl ?? null), [profile?.photoUrl]);
+
   if (loadingProfile) {
     return <Loading message="Cargando tu cuenta…" />;
   }
@@ -173,6 +212,8 @@ export default function Account({ navigation }: Props) {
       />
     );
   }
+
+  const shouldShowConvertCard = !profile.isProfessional; // ✅ ahora funciona si isProfessional está bien
 
   return (
     <Screen>
@@ -197,8 +238,24 @@ export default function Account({ navigation }: Props) {
 
         {/* Card perfil */}
         <Card style={styles.profileCard}>
-          {profile.photoUrl ? (
-            <Image source={{ uri: profile.photoUrl }} style={styles.avatar} />
+          {avatarUri && !avatarError ? (
+            <View>
+              <Image
+                source={{ uri: avatarUri }}
+                style={styles.avatar}
+                onLoadStart={() => setAvatarLoading(true)}
+                onLoadEnd={() => setAvatarLoading(false)}
+                onError={() => {
+                  setAvatarLoading(false);
+                  setAvatarError(true);
+                }}
+              />
+              {avatarLoading && (
+                <View style={styles.avatarLoadingOverlay}>
+                  <ActivityIndicator size="small" color={COLORS.primaryBrilliant} />
+                </View>
+              )}
+            </View>
           ) : (
             <View style={[styles.avatar, styles.avatarPlaceholder]}>
               <Text style={styles.avatarInitial}>{profile.fullName?.[0]?.toUpperCase() || 'U'}</Text>
@@ -213,7 +270,7 @@ export default function Account({ navigation }: Props) {
         </Card>
 
         {/* Card promo */}
-        {!profile.isProfessional && (
+        {shouldShowConvertCard && (
           <Card
             style={styles.convertirseContainer}
             withShadow
@@ -371,6 +428,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textMuted,
   },
+  avatarLoadingOverlay: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+
   profileName: {
     fontSize: 20,
     fontWeight: '700',

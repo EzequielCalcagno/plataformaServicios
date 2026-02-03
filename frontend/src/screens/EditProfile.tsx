@@ -59,11 +59,32 @@ export default function EditProfile({ navigation }: Props) {
 
         setRole(storedRole);
 
+        // ✅ 1) Avatar SIEMPRE desde usuarios (currentUser)
+        const meRes = await fetch(`${API_URL}/private/currentUser`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          // cache-busting al cargar también puede ayudar si venís de subir recién
+          const url = meData?.foto_url ? `${meData.foto_url}?t=${Date.now()}` : null;
+          setAvatarUrl(url);
+        } else {
+          // no cortamos la pantalla por esto, solo avisamos en consola
+          const t = await meRes.text();
+          console.log('⚠️ No se pudo cargar currentUser', meRes.status, t);
+        }
+
+        // Si es cliente, por ahora dejamos el mensaje (pero el avatar ya lo mostramos)
         if (storedRole !== 'professional') {
           setErrorMsg('Edición de cliente aún no implementada.');
           return;
         }
 
+        // ✅ 2) Datos profesionales desde private/profile
         const res = await fetch(`${API_URL}/private/profile`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -73,20 +94,20 @@ export default function EditProfile({ navigation }: Props) {
 
         if (!res.ok) {
           const txt = await res.text();
-          console.log('❌ Error al cargar perfil', res.status, txt);
-          setErrorMsg('No se pudo cargar el perfil.');
+          console.log('❌ Error al cargar perfil profesional', res.status, txt);
+          setErrorMsg('No se pudo cargar el perfil profesional.');
           return;
         }
 
         const data = await res.json();
 
-        // Mapear al formulario
         setProfForm({
           specialty: data.especialidad || '',
           about: data.descripcion || data.experiencia || '',
         });
 
-        setAvatarUrl(data.portada_url || null);
+        // ❌ NO usar data.portada_url (no es foto de perfil)
+        // setAvatarUrl(data.portada_url || null);
       } catch (error) {
         console.log('❌ Error loadProfileForEdit', error);
         setErrorMsg('Error al cargar el perfil.');
@@ -102,6 +123,7 @@ export default function EditProfile({ navigation }: Props) {
   const handlePickAvatar = async () => {
     try {
       setErrorMsg(null);
+      setSuccessMsg(null);
       setUploadingAvatar(true);
 
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -167,8 +189,11 @@ export default function EditProfile({ navigation }: Props) {
         return;
       }
 
-      setAvatarUrl(data.url);
-      setSuccessMsg('Imagen actualizada (no olvides guardar cambios)');
+      // ✅ ACÁ va el cache-busting:
+      const cacheBusted = `${data.url}?t=${Date.now()}`;
+      setAvatarUrl(cacheBusted);
+
+      setSuccessMsg('Imagen actualizada correctamente.');
     } catch (error) {
       console.log('❌ Error handlePickAvatar:', error);
       setErrorMsg('Error al subir la imagen.');
@@ -190,32 +215,36 @@ export default function EditProfile({ navigation }: Props) {
         return;
       }
 
-      if (role === 'professional') {
-        const body = {
-          descripcion: profForm.about,
-          especialidad: profForm.specialty,
-          experiencia: profForm.about,
-          portadaUrl: avatarUrl ?? null,
-        };
-
-        const res = await fetch(`${API_URL}/private/profile`, {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        });
-
-        if (!res.ok) {
-          const t = await res.text();
-          console.log('❌ Error al guardar perfil:', res.status, t);
-          setErrorMsg('No se pudo guardar el perfil.');
-          return;
-        }
-
-        setSuccessMsg('Perfil actualizado correctamente.');
+      // Si es cliente, por ahora no hace PATCH (pero el avatar ya se sube por otro endpoint)
+      if (role !== 'professional') {
+        setSuccessMsg('Foto actualizada. (Edición de cliente aún no implementada)');
+        return;
       }
+
+      // ✅ ACÁ va el body correcto (sin portadaUrl):
+      const body = {
+        descripcion: profForm.about,
+        especialidad: profForm.specialty,
+        experiencia: profForm.about,
+      };
+
+      const res = await fetch(`${API_URL}/private/profile`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        console.log('❌ Error al guardar perfil:', res.status, t);
+        setErrorMsg('No se pudo guardar el perfil.');
+        return;
+      }
+
+      setSuccessMsg('Perfil actualizado correctamente.');
     } catch (error) {
       console.log('❌ Error saving profile', error);
       setErrorMsg('Error de red al guardar el perfil.');
@@ -241,8 +270,7 @@ export default function EditProfile({ navigation }: Props) {
     );
   }
 
-  const initialLetter =
-    profForm.specialty?.[0]?.toUpperCase() || 'U';
+  const initialLetter = profForm.specialty?.[0]?.toUpperCase() || 'U';
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -275,11 +303,7 @@ export default function EditProfile({ navigation }: Props) {
             disabled={uploadingAvatar}
           >
             <Text style={styles.avatarButtonText}>
-              {uploadingAvatar
-                ? 'Subiendo...'
-                : avatarUrl
-                ? 'Cambiar foto'
-                : 'Agregar imagen'}
+              {uploadingAvatar ? 'Subiendo...' : avatarUrl ? 'Cambiar foto' : 'Agregar imagen'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -290,7 +314,8 @@ export default function EditProfile({ navigation }: Props) {
           style={styles.input}
           placeholder="Ej: Electricidad, Plomería..."
           value={profForm.specialty}
-          onChangeText={t => setProfForm(f => ({ ...f, specialty: t }))}
+          onChangeText={(t) => setProfForm((f) => ({ ...f, specialty: t }))}
+          editable={role === 'professional'}
         />
 
         <Text style={styles.label}>Sobre mí</Text>
@@ -298,18 +323,13 @@ export default function EditProfile({ navigation }: Props) {
           style={[styles.input, styles.inputMultiline]}
           multiline
           value={profForm.about}
-          onChangeText={t => setProfForm(f => ({ ...f, about: t }))}
+          onChangeText={(t) => setProfForm((f) => ({ ...f, about: t }))}
           placeholder="Describe tu experiencia..."
+          editable={role === 'professional'}
         />
 
-        <TouchableOpacity
-          onPress={handleSave}
-          style={styles.saveButton}
-          disabled={saving}
-        >
-          <Text style={styles.saveButtonText}>
-            {saving ? 'Guardando...' : 'Guardar cambios'}
-          </Text>
+        <TouchableOpacity onPress={handleSave} style={styles.saveButton} disabled={saving}>
+          <Text style={styles.saveButtonText}>{saving ? 'Guardando...' : 'Guardar cambios'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

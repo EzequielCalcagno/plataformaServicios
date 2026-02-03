@@ -11,11 +11,15 @@ import {
   Linking,
   Image,
   Platform,
+  Modal,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import LottieView from 'lottie-react-native';
 
 import { Screen } from '../components/Screen';
 import { TopBar } from '../components/TopBar';
@@ -127,6 +131,105 @@ function moneyUYU(n?: number | null) {
   }
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** ✅ Overlay premium con Lottie (loading o success)
+ *  - En success: NO cierra hasta que termina la animación (onAnimationFinish)
+ *  - Reset+play para asegurar que arranque desde 0
+ */
+function LottieOverlay({
+  visible,
+  mode,
+  title,
+  subtitle,
+  onDone,
+  successSource,
+}: {
+  visible: boolean;
+  mode: 'loading' | 'success';
+  title: string;
+  subtitle?: string;
+  onDone?: () => void;
+  successSource: any; // require(...)
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.96)).current;
+  const lottieRef = useRef<LottieView>(null);
+
+  // Fade in
+  useEffect(() => {
+    if (!visible) {
+      opacity.setValue(0);
+      scale.setValue(0.96);
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 170,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.quad),
+      }),
+      Animated.timing(scale, {
+        toValue: 1,
+        duration: 170,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.quad),
+      }),
+    ]).start();
+  }, [visible, opacity, scale]);
+
+  // Cuando cambia a success: reset + play
+  useEffect(() => {
+    if (!visible) return;
+    if (mode !== 'success') return;
+
+    // Asegura start desde 0 incluso si se montó antes
+    requestAnimationFrame(() => {
+      lottieRef.current?.reset();
+      lottieRef.current?.play();
+    });
+  }, [visible, mode]);
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible transparent animationType="none" statusBarTranslucent>
+      <Animated.View style={[styles.overlayWrap, { opacity }]}>
+        <Animated.View style={[styles.overlayCard, { transform: [{ scale }] }]}>
+          {mode === 'loading' ? (
+            <View style={styles.loadingIcon}>
+              <View style={styles.loadingDotRow}>
+                <View style={[styles.loadingDot, { opacity: 0.4 }]} />
+                <View style={[styles.loadingDot, { opacity: 0.8 }]} />
+                <View style={[styles.loadingDot, { opacity: 0.6 }]} />
+              </View>
+            </View>
+          ) : (
+            <View style={styles.lottieBox}>
+              <LottieView
+                ref={lottieRef}
+                source={successSource}
+                autoPlay={false} // lo manejamos con reset+play
+                loop={false}
+                style={{ width: 180, height: 180 }}
+                onAnimationFinish={() => {
+                  // IMPORTANTE: cerrar solo al terminar
+                  setTimeout(() => onDone?.(), 220);
+                }}
+              />
+            </View>
+          )}
+
+          <Text style={styles.overlayTitle}>{title}</Text>
+          {!!subtitle && <Text style={styles.overlaySubtitle}>{subtitle}</Text>}
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  );
+}
+
 export default function ReservationDetail({ navigation, route }: Props) {
   const reservationId = Number(route?.params?.reservationId);
 
@@ -138,7 +241,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
   const [cancelReason, setCancelReason] = useState('');
   const [rejectMsg, setRejectMsg] = useState('');
 
-  // ✅ NEGOCIACIÓN amigable (picker)
+  // ✅ NEGOCIACIÓN
   const [proposeDateTime, setProposeDateTime] = useState<Date | null>(null);
   const [showProposeDatePicker, setShowProposeDatePicker] = useState(false);
   const [showProposeTimePicker, setShowProposeTimePicker] = useState(false);
@@ -148,7 +251,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
   const [ratingSending, setRatingSending] = useState<boolean>(false);
   const didAutoOpenForThisClose = useRef<string | null>(null);
 
-  // ✅ visitas (persistidas localmente por reserva)
+  // ✅ visitas
   const [visits, setVisits] = useState<Visit[]>([]);
   const [visitDateTime, setVisitDateTime] = useState<Date | null>(null);
   const [showVisitDatePicker, setShowVisitDatePicker] = useState(false);
@@ -157,8 +260,46 @@ export default function ReservationDetail({ navigation, route }: Props) {
   const [visitNotes, setVisitNotes] = useState('');
   const [visitStatus, setVisitStatus] = useState<VisitStatus>('REALIZADA');
 
-  // ✅ cuando está CERRADO, oculto el form por defecto y lo habilito si el usuario toca el link
   const [allowVisitsAfterClose, setAllowVisitsAfterClose] = useState(false);
+
+  // ✅ Overlay único: loading + checklist success
+  // IMPORTANTÍSIMO: path correcto desde /src/screens -> /src/assets = ../assets/...
+  const CHECKLIST_ANIM = useMemo(() => require('../../assets/lottie/checklist.json'), []);
+
+  const [overlay, setOverlay] = useState<{
+    visible: boolean;
+    mode: 'loading' | 'success';
+    title: string;
+    subtitle?: string;
+  }>({
+    visible: false,
+    mode: 'loading',
+    title: 'Procesando…',
+    subtitle: 'Un momento…',
+  });
+
+  const openOverlayLoading = useCallback((title: string, subtitle?: string) => {
+    setOverlay({
+      visible: true,
+      mode: 'loading',
+      title,
+      subtitle: subtitle ?? 'Un momento…',
+    });
+  }, []);
+
+  const goOverlaySuccess = useCallback((title: string, subtitle?: string) => {
+    setOverlay((prev) => ({
+      ...prev,
+      visible: true,
+      mode: 'success',
+      title,
+      subtitle: subtitle ?? prev.subtitle,
+    }));
+  }, []);
+
+  const closeOverlay = useCallback(() => {
+    setOverlay((prev) => ({ ...prev, visible: false, mode: 'loading' }));
+  }, []);
 
   const loadLocalVisits = useCallback(async () => {
     if (!Number.isFinite(reservationId)) return;
@@ -186,12 +327,9 @@ export default function ReservationDetail({ navigation, route }: Props) {
       const r = await getReservationById(reservationId);
       setItem(r);
 
-      // ✅ precarga propuesta si existe
       if (r?.fechaHoraPropuesta) {
         const dt = new Date(r.fechaHoraPropuesta);
-        if (!Number.isNaN(dt.getTime())) {
-          setProposeDateTime(dt);
-        }
+        if (!Number.isNaN(dt.getTime())) setProposeDateTime(dt);
       } else {
         setProposeDateTime(null);
       }
@@ -215,7 +353,6 @@ export default function ReservationDetail({ navigation, route }: Props) {
     loadLocalVisits();
   }, [loadLocalVisits]);
 
-  // ✅ si cambia a NO CERRADO, vuelvo a ocultar el “override”
   useEffect(() => {
     if (!item) return;
     if (item.estado !== 'CERRADO') setAllowVisitsAfterClose(false);
@@ -234,10 +371,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
     return null;
   }, [mySide]);
 
-  const title = useMemo(
-    () => item?.servicioTitulo ?? `Reserva #${reservationId}`,
-    [item?.servicioTitulo, reservationId],
-  );
+  const title = useMemo(() => item?.servicioTitulo ?? `Reserva #${reservationId}`, [item?.servicioTitulo, reservationId]);
 
   const otherName = useMemo(() => {
     if (!item) return '';
@@ -385,9 +519,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
 
   const canShowVisitAddForm = useMemo(() => {
     if (!item) return false;
-    // ✅ cuando ya está cerrado, NO se muestra a menos que el usuario lo habilite
     if (item.estado === 'CERRADO') return allowVisitsAfterClose;
-    // si no está cerrado, se muestra normal en estados permitidos
     return canLogVisitsByState;
   }, [item, allowVisitsAfterClose, canLogVisitsByState]);
 
@@ -449,12 +581,19 @@ export default function ReservationDetail({ navigation, route }: Props) {
   // --- Actions ---
   const onProviderAccept = async () => {
     if (!item) return;
+    if (!canProviderAccept) return;
+
     try {
-      await proAcceptReservation(item.id);
-      Alert.alert('Listo', 'Reserva aceptada.');
-      fetchDetail();
+      openOverlayLoading('Aceptando…', 'Un momento…');
+
+      // ✅ Evita "flash": loading mínimo 600ms (si responde muy rápido)
+      await Promise.all([proAcceptReservation(item.id), sleep(600)]);
+
+      // ✅ Éxito: checklist (se cierra SOLO cuando termina el Lottie)
+      goOverlaySuccess('¡Reserva confirmada!', 'Quedó todo coordinado.');
     } catch (e) {
       console.log('❌ accept error', e);
+      closeOverlay();
       Alert.alert('Error', 'No se pudo aceptar.');
     }
   };
@@ -572,14 +711,21 @@ export default function ReservationDetail({ navigation, route }: Props) {
     ]);
   };
 
+  // ✅ Checklist al confirmar el servicio (SOLICITANTE)
   const onConfirmFinish = async () => {
     if (!item) return;
+    if (!canConfirmFinish) return;
+
     try {
-      await confirmFinish(item.id);
-      Alert.alert('Confirmado', 'La finalización fue confirmada.');
-      fetchDetail();
+      openOverlayLoading('Confirmando…', 'Guardando cambios…');
+
+      await Promise.all([confirmFinish(item.id), sleep(600)]);
+
+      // ✅ Éxito: checklist (cierra al terminar)
+      goOverlaySuccess('¡Servicio confirmado!', 'Gracias por confirmar.');
     } catch (e) {
       console.log('❌ confirmFinish error', e);
+      closeOverlay();
       Alert.alert('Error', 'No se pudo confirmar.');
     }
   };
@@ -617,6 +763,19 @@ export default function ReservationDetail({ navigation, route }: Props) {
   return (
     <Screen>
       <TopBar title="Detalles de la reserva" showBack />
+
+      {/* ✅ Overlay (solo checklist para success) */}
+      <LottieOverlay
+        visible={overlay.visible}
+        mode={overlay.mode}
+        title={overlay.title}
+        subtitle={overlay.subtitle}
+        successSource={CHECKLIST_ANIM}
+        onDone={async () => {
+          closeOverlay();
+          await fetchDetail();
+        }}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
@@ -674,10 +833,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
                   activeOpacity={0.9}
                   disabled={!whatsappEnabled || !otherPhone}
                   onPress={() =>
-                    openWhatsApp(
-                      otherPhone!,
-                      `Hola! Te escribo por la reserva #${item.id} (${item.servicioTitulo ?? 'servicio'}).`,
-                    )
+                    openWhatsApp(otherPhone!, `Hola! Te escribo por la reserva #${item.id} (${item.servicioTitulo ?? 'servicio'}).`)
                   }
                   style={[styles.waMini, !whatsappEnabled || !otherPhone ? styles.waMiniDisabled : null]}
                 >
@@ -698,17 +854,29 @@ export default function ReservationDetail({ navigation, route }: Props) {
               <Text style={styles.sectionLikeRef}>Estado</Text>
 
               <View style={styles.stepRow}>
-                <Ionicons name={statusStep >= 1 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />
+                <Ionicons
+                  name={statusStep >= 1 ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={18}
+                  color={COLORS.text}
+                />
                 <Text style={styles.stepText}>Solicitud enviada</Text>
               </View>
 
               <View style={styles.stepRow}>
-                <Ionicons name={statusStep >= 2 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />
+                <Ionicons
+                  name={statusStep >= 2 ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={18}
+                  color={COLORS.text}
+                />
                 <Text style={styles.stepText}>En proceso</Text>
               </View>
 
               <View style={styles.stepRow}>
-                <Ionicons name={statusStep >= 3 ? 'checkmark-circle' : 'ellipse-outline'} size={18} color={COLORS.text} />
+                <Ionicons
+                  name={statusStep >= 3 ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={18}
+                  color={COLORS.text}
+                />
                 <Text style={styles.stepText}>Servicio completado</Text>
               </View>
             </Card>
@@ -717,7 +885,9 @@ export default function ReservationDetail({ navigation, route }: Props) {
             {isClosed && canRateNow && (
               <Card withShadow style={styles.rateCardInfo}>
                 <Text style={styles.rateInfoTitle}>Calificación</Text>
-                <Text style={styles.help}>Tu servicio ya está cerrado. Dejá tu calificación para ayudar a mejorar la comunidad.</Text>
+                <Text style={styles.help}>
+                  Tu servicio ya está cerrado. Dejá tu calificación para ayudar a mejorar la comunidad.
+                </Text>
                 <View style={{ height: 10 }} />
                 <Button title="⭐ Calificar ahora" onPress={() => setShowRateSheet(true)} />
               </Card>
@@ -773,7 +943,6 @@ export default function ReservationDetail({ navigation, route }: Props) {
                   )}
                 </Card>
 
-                {/* ✅ Form: se oculta por defecto cuando está CERRADO */}
                 {canShowVisitAddForm ? (
                   <Card style={styles.box}>
                     <Text style={styles.boxTitle}>Registrar nueva visita</Text>
@@ -781,7 +950,11 @@ export default function ReservationDetail({ navigation, route }: Props) {
                     <Text style={styles.label}>Fecha y hora</Text>
                     <View style={styles.twoCols}>
                       <View style={{ flex: 1 }}>
-                        <TouchableOpacity activeOpacity={0.9} onPress={() => setShowVisitDatePicker(true)} style={styles.pickerBtn}>
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          onPress={() => setShowVisitDatePicker(true)}
+                          style={styles.pickerBtn}
+                        >
                           <Ionicons name="calendar-outline" size={18} color={COLORS.textMuted} />
                           <Text style={styles.pickerBtnText}>{fmtDateOnly(visitDateTime)}</Text>
                         </TouchableOpacity>
@@ -790,7 +963,11 @@ export default function ReservationDetail({ navigation, route }: Props) {
                       <View style={{ width: 12 }} />
 
                       <View style={{ flex: 1 }}>
-                        <TouchableOpacity activeOpacity={0.9} onPress={() => setShowVisitTimePicker(true)} style={styles.pickerBtn}>
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          onPress={() => setShowVisitTimePicker(true)}
+                          style={styles.pickerBtn}
+                        >
                           <Ionicons name="time-outline" size={18} color={COLORS.textMuted} />
                           <Text style={styles.pickerBtnText}>{fmtTimeOnly(visitDateTime)}</Text>
                         </TouchableOpacity>
@@ -876,7 +1053,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
               </>
             )}
 
-            {/* ✅ Vista de calificaciones (cuando corresponde) */}
+            {/* ✅ Vista de calificaciones */}
             {isClosed && !canRateNow && (
               <Card withShadow style={styles.rateCardInfo}>
                 <Text style={styles.rateInfoTitle}>Calificación</Text>
@@ -959,7 +1136,11 @@ export default function ReservationDetail({ navigation, route }: Props) {
                     <Text style={styles.label}>Fecha y hora propuesta</Text>
                     <View style={styles.twoCols}>
                       <View style={{ flex: 1 }}>
-                        <TouchableOpacity activeOpacity={0.9} onPress={() => setShowProposeDatePicker(true)} style={styles.pickerBtn}>
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          onPress={() => setShowProposeDatePicker(true)}
+                          style={styles.pickerBtn}
+                        >
                           <Ionicons name="calendar-outline" size={18} color={COLORS.textMuted} />
                           <Text style={styles.pickerBtnText}>{fmtDateOnly(proposeDateTime)}</Text>
                         </TouchableOpacity>
@@ -968,7 +1149,11 @@ export default function ReservationDetail({ navigation, route }: Props) {
                       <View style={{ width: 12 }} />
 
                       <View style={{ flex: 1 }}>
-                        <TouchableOpacity activeOpacity={0.9} onPress={() => setShowProposeTimePicker(true)} style={styles.pickerBtn}>
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          onPress={() => setShowProposeTimePicker(true)}
+                          style={styles.pickerBtn}
+                        >
                           <Ionicons name="time-outline" size={18} color={COLORS.textMuted} />
                           <Text style={styles.pickerBtnText}>{fmtTimeOnly(proposeDateTime)}</Text>
                         </TouchableOpacity>
@@ -1060,9 +1245,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
 
                 <Card style={styles.box}>
                   <Text style={styles.boxTitle}>Propuesta del prestador</Text>
-                  <Text style={styles.meta}>
-                    {item.fechaHoraPropuesta ? fmtDate(item.fechaHoraPropuesta) : 'Sin fecha propuesta'}
-                  </Text>
+                  <Text style={styles.meta}>{item.fechaHoraPropuesta ? fmtDate(item.fechaHoraPropuesta) : 'Sin fecha propuesta'}</Text>
 
                   {!!item.mensajePropuesta && <Text style={styles.paragraph}>{item.mensajePropuesta}</Text>}
 
@@ -1098,11 +1281,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
 
             {/* ✅ Link al final: habilitar visitas si estaba cerrado */}
             {isClosed && !allowVisitsAfterClose && (
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => setAllowVisitsAfterClose(true)}
-                style={styles.forgotVisitsLink}
-              >
+              <TouchableOpacity activeOpacity={0.85} onPress={() => setAllowVisitsAfterClose(true)} style={styles.forgotVisitsLink}>
                 <Ionicons name="add-circle-outline" size={18} color={COLORS.textMuted} />
                 <Text style={styles.forgotVisitsText}>¿Olvidaste agregar alguna visita?</Text>
               </TouchableOpacity>
@@ -1183,6 +1362,48 @@ const styles = StyleSheet.create({
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   stepText: { fontSize: 12, fontWeight: '800', color: COLORS.text },
 
+  // overlay lottie
+  overlayWrap: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 999,
+    elevation: 999,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 18,
+  },
+  overlayCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  overlayTitle: { fontSize: 16, fontWeight: '900', color: '#0f172a', marginTop: 2 },
+  overlaySubtitle: { fontSize: 13, color: '#475569', marginTop: 6, textAlign: 'center' },
+  lottieBox: {
+    width: 200,
+    height: 200,
+    borderRadius: 18,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  loadingIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  loadingDotRow: { flexDirection: 'row', gap: 8 },
+  loadingDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#2563eb' },
+
   // visits
   visitRow: { flexDirection: 'row', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.border },
   visitDate: { fontSize: 13, fontWeight: '900', color: COLORS.text },
@@ -1198,7 +1419,6 @@ const styles = StyleSheet.create({
   pillTextActive: { color: '#0369a1' },
   pillTextInactive: { color: '#374151' },
 
-  // date/time picker button
   pickerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1211,7 +1431,6 @@ const styles = StyleSheet.create({
   },
   pickerBtnText: { fontSize: 14, fontWeight: '800', color: COLORS.text },
 
-  // rating view
   rateCardInfo: { marginBottom: SPACING.md },
   rateInfoTitle: { fontSize: 13, fontWeight: '900', color: COLORS.text, marginBottom: 8 },
   rateResultRow: { borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10 },

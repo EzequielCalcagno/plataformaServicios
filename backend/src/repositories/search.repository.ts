@@ -36,3 +36,18 @@ export const searchServiciosRepository = async (params: SearchServiciosParams) =
 
   return data ?? [];
 };
+export const getUsersBasicByIdsRepository = async (ids: string[]) => {
+  if (!ids.length) return [];
+
+  const { data, error } = await db
+    .from('usuarios')
+    .select('id, nombre, apellido, foto_url')
+    .in('id', ids);
+
+  if (error) {
+    console.error('❌ Error en getUsersBasicByIdsRepository:', error);
+    throw error;
+  }
+
+  return data ?? [];
+};

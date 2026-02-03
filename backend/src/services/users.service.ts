@@ -1,8 +1,13 @@
-import { getAllUsersRepository, getUserByIdRepository } from '../repositories/users.repository';
+// src/services/users.service.ts
+import {
+  getAllUsersRepository,
+  getUserByIdRepository,
+  updateUserPhotoUrlRepository,
+} from '../repositories/users.repository';
+
 import type { User } from '../schemas/user.schema';
 
 export const getAllUsersService = async () => {
-  // acá podrías aplicar lógica de negocio en el futuro (ej: filtrar, transformar, etc.)
   const users = await getAllUsersRepository();
   return users;
 };
@@ -10,4 +15,9 @@ export const getAllUsersService = async () => {
 export const getUserByIdService = async (id: string) => {
   const user = (await getUserByIdRepository(id)) as User;
   return user;
+};
+
+// ✅ NUEVO
+export const updateUserPhotoUrlService = async (id: string, fotoUrl: string) => {
+  return updateUserPhotoUrlRepository(id, fotoUrl);
 };

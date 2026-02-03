@@ -2,6 +2,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { uploadToBucket } from '../repositories/storage.repository';
+import { updateUserPhotoUrlRepository } from '../repositories/users.repository';
 
 type UploadInput = {
   file: Express.Multer.File;
@@ -13,6 +14,7 @@ export async function uploadWorkImageService({ file, userId }: UploadInput): Pro
 
   const ext = getExtension(file.originalname) ?? 'jpg';
   const fileName = `works/${userId}/${Date.now()}.${ext}`;
+
   return uploadAndCleanup({
     bucket,
     file,
@@ -25,15 +27,23 @@ export async function uploadProfileImageService({ file, userId }: UploadInput): 
   const bucket = process.env.SUPABASE_BUCKET || 'pds-files';
 
   const ext = getExtension(file.originalname) ?? 'jpg';
-  // siempre pisa el avatar
+
+  // ✅ Siempre el mismo path -> pisa el avatar anterior
   const fileName = `profiles/${userId}/avatar.${ext}`;
 
-  return uploadAndCleanup({
+  // 1) Subimos y obtenemos URL pública
+  const publicUrl = await uploadAndCleanup({
     bucket,
     file,
     fileName,
     upsert: true,
   });
+
+  // 2) ✅ Guardamos la URL en la tabla usuarios.foto_url
+  //    (esto es lo que hace que se vea en Account, Search, etc.)
+  await updateUserPhotoUrlRepository(userId, publicUrl);
+
+  return publicUrl;
 }
 
 // -------------------------

@@ -31,6 +31,11 @@ function getAuthUserId(req: Request) {
   return String(u?.id ?? '');
 }
 
+function parseId(param: any): number {
+  const n = Number(param);
+  return Number.isFinite(n) ? n : NaN;
+}
+
 export const createReservationController = async (req: Request, res: Response) => {
   try {
     const clienteId = getAuthUserId(req);
@@ -40,7 +45,7 @@ export const createReservationController = async (req: Request, res: Response) =
     return res.status(201).json(created);
   } catch (error: any) {
     console.error('❌ createReservationController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error al crear reserva' });
+    return res.status(400).json({ error: error?.message ?? 'Error al crear reserva' });
   }
 };
 
@@ -49,7 +54,7 @@ export const getReservationByIdController = async (req: Request, res: Response) 
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
 
     const dto = await getReservationByIdForUserService(userId, id);
@@ -58,7 +63,7 @@ export const getReservationByIdController = async (req: Request, res: Response) 
     return res.json(dto);
   } catch (error: any) {
     console.error('❌ getReservationByIdController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error obteniendo reserva' });
+    return res.status(400).json({ error: error?.message ?? 'Error obteniendo reserva' });
   }
 };
 
@@ -72,7 +77,7 @@ export const listMyReservationsClienteController = async (req: Request, res: Res
     return res.json({ results: list });
   } catch (error: any) {
     console.error('❌ listMyReservationsClienteController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error listando reservas' });
+    return res.status(400).json({ error: error?.message ?? 'Error listando reservas' });
   }
 };
 
@@ -86,7 +91,7 @@ export const listMyReservationsProfesionalController = async (req: Request, res:
     return res.json({ results: list });
   } catch (error: any) {
     console.error('❌ listMyReservationsProfesionalController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error listando reservas' });
+    return res.status(400).json({ error: error?.message ?? 'Error listando reservas' });
   }
 };
 
@@ -95,12 +100,14 @@ export const profesionalAcceptReservationController = async (req: Request, res: 
     const profesionalId = getAuthUserId(req);
     if (!profesionalId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+
     const updated = await profesionalAcceptReservationService(profesionalId, id);
     return res.json(updated);
   } catch (error: any) {
     console.error('❌ profesionalAcceptReservationController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error aceptando' });
+    return res.status(400).json({ error: error?.message ?? 'Error aceptando' });
   }
 };
 
@@ -109,40 +116,54 @@ export const profesionalProposeController = async (req: Request, res: Response) 
     const profesionalId = getAuthUserId(req);
     if (!profesionalId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+
     const updated = await profesionalProposeService(profesionalId, id, req.body);
     return res.json(updated);
   } catch (error: any) {
     console.error('❌ profesionalProposeController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error negociando' });
+    return res.status(400).json({ error: error?.message ?? 'Error negociando' });
   }
 };
 
+/**
+ * ✅ NOMBRE DE EXPORT IMPORTANTE:
+ * private.route.ts debe importar: profesionalCancelController
+ */
 export const profesionalCancelController = async (req: Request, res: Response) => {
   try {
     const profesionalId = getAuthUserId(req);
     if (!profesionalId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+
     const updated = await profesionalCancelService(profesionalId, id, req.body);
     return res.json(updated);
   } catch (error: any) {
     console.error('❌ profesionalCancelController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error cancelando' });
+    return res.status(400).json({ error: error?.message ?? 'Error cancelando' });
   }
 };
 
+/**
+ * ✅ NOMBRE DE EXPORT IMPORTANTE:
+ * private.route.ts debe importar: profesionalFinishController
+ */
 export const profesionalFinishController = async (req: Request, res: Response) => {
   try {
     const profesionalId = getAuthUserId(req);
     if (!profesionalId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+
     const updated = await profesionalFinishService(profesionalId, id, req.body);
     return res.json(updated);
   } catch (error: any) {
     console.error('❌ profesionalFinishController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error finalizando' });
+    return res.status(400).json({ error: error?.message ?? 'Error finalizando' });
   }
 };
 
@@ -151,12 +172,14 @@ export const clientAcceptProposalController = async (req: Request, res: Response
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+
     const updated = await requesterAcceptProposalService(userId, id);
     return res.json(updated);
   } catch (error: any) {
     console.error('❌ clientAcceptProposalController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error aceptando propuesta' });
+    return res.status(400).json({ error: error?.message ?? 'Error aceptando propuesta' });
   }
 };
 
@@ -165,12 +188,14 @@ export const clientRejectProposalController = async (req: Request, res: Response
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+
     const updated = await requesterRejectProposalService(userId, id, req.body);
     return res.json(updated);
   } catch (error: any) {
     console.error('❌ clientRejectProposalController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error rechazando propuesta' });
+    return res.status(400).json({ error: error?.message ?? 'Error rechazando propuesta' });
   }
 };
 
@@ -179,12 +204,15 @@ export const requesterFinishController = async (req: Request, res: Response) => 
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+
+    // ✅ tu service espera SOLO (userId, id)
     const updated = await requesterFinishService(userId, id);
     return res.json(updated);
   } catch (error: any) {
     console.error('❌ requesterFinishController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error finalizando' });
+    return res.status(400).json({ error: error?.message ?? 'Error finalizando' });
   }
 };
 
@@ -193,26 +221,32 @@ export const confirmFinishController = async (req: Request, res: Response) => {
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+
+    // ✅ tu service espera SOLO (userId, id)
     const updated = await confirmFinishService(userId, id);
     return res.json(updated);
   } catch (error: any) {
     console.error('❌ confirmFinishController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error confirmando' });
+    return res.status(400).json({ error: error?.message ?? 'Error confirmando' });
   }
 };
+
 
 export const rejectFinishController = async (req: Request, res: Response) => {
   try {
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
+
     const updated = await rejectFinishService(userId, id, req.body);
     return res.json(updated);
   } catch (error: any) {
     console.error('❌ rejectFinishController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error rechazando' });
+    return res.status(400).json({ error: error?.message ?? 'Error rechazando' });
   }
 };
 
@@ -221,18 +255,18 @@ export const rateReservationController = async (req: Request, res: Response) => 
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
 
     const updated = await rateReservationService(userId, id, req.body);
     return res.json(updated);
   } catch (error: any) {
     console.error('❌ rateReservationController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error calificando' });
+    return res.status(400).json({ error: error?.message ?? 'Error calificando' });
   }
 };
 
-// ✅ NUEVO: GET /public/professionals/:id/reviews
+// ✅ NUEVO: GET /private/professionals/:id/reviews
 export async function listProfessionalReviewsController(req: any, res: any) {
   try {
     const profesionalId = String(req.params.id ?? '');
@@ -262,14 +296,14 @@ export const listReservationVisitsController = async (req: Request, res: Respons
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
 
     const results = await listReservationVisitsService(userId, id);
     return res.json({ results });
   } catch (error: any) {
     console.error('❌ listReservationVisitsController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error listando visitas' });
+    return res.status(400).json({ error: error?.message ?? 'Error listando visitas' });
   }
 };
 
@@ -278,14 +312,14 @@ export const createReservationVisitController = async (req: Request, res: Respon
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
 
     const created = await createReservationVisitService(userId, id, req.body);
     return res.status(201).json(created);
   } catch (error: any) {
     console.error('❌ createReservationVisitController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error creando visita' });
+    return res.status(400).json({ error: error?.message ?? 'Error creando visita' });
   }
 };
 
@@ -294,8 +328,8 @@ export const updateReservationVisitController = async (req: Request, res: Respon
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
-    const visitId = Number(req.params.visitId);
+    const id = parseId(req.params.id);
+    const visitId = parseId(req.params.visitId);
     if (!Number.isFinite(id) || !Number.isFinite(visitId)) {
       return res.status(400).json({ error: 'ID inválido' });
     }
@@ -304,7 +338,7 @@ export const updateReservationVisitController = async (req: Request, res: Respon
     return res.json(updated);
   } catch (error: any) {
     console.error('❌ updateReservationVisitController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error actualizando visita' });
+    return res.status(400).json({ error: error?.message ?? 'Error actualizando visita' });
   }
 };
 
@@ -313,8 +347,8 @@ export const deleteReservationVisitController = async (req: Request, res: Respon
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
-    const visitId = Number(req.params.visitId);
+    const id = parseId(req.params.id);
+    const visitId = parseId(req.params.visitId);
     if (!Number.isFinite(id) || !Number.isFinite(visitId)) {
       return res.status(400).json({ error: 'ID inválido' });
     }
@@ -323,7 +357,7 @@ export const deleteReservationVisitController = async (req: Request, res: Respon
     return res.status(204).send();
   } catch (error: any) {
     console.error('❌ deleteReservationVisitController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error eliminando visita' });
+    return res.status(400).json({ error: error?.message ?? 'Error eliminando visita' });
   }
 };
 
@@ -332,14 +366,14 @@ export const getReservationServiceDetailsController = async (req: Request, res: 
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
 
     const dto = await getReservationServiceDetailsService(userId, id);
     return res.json(dto);
   } catch (error: any) {
     console.error('❌ getReservationServiceDetailsController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error obteniendo detalles' });
+    return res.status(400).json({ error: error?.message ?? 'Error obteniendo detalles' });
   }
 };
 
@@ -348,13 +382,13 @@ export const upsertReservationServiceDetailsController = async (req: Request, re
     const userId = getAuthUserId(req);
     if (!userId) return res.status(401).json({ error: 'No autenticado' });
 
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido' });
 
     const dto = await upsertReservationServiceDetailsService(userId, id, req.body);
     return res.json(dto);
   } catch (error: any) {
     console.error('❌ upsertReservationServiceDetailsController:', error);
-    return res.status(400).json({ error: error.message ?? 'Error guardando detalles' });
+    return res.status(400).json({ error: error?.message ?? 'Error guardando detalles' });
   }
 };
