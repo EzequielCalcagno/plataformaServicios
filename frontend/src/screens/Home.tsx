@@ -1,5 +1,5 @@
 // src/screens/Home.tsx
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
+  ImageBackground,
+  Image,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { getCurrentUser, UserResponse } from '../services/user.client';
 import { ApiError } from '../utils/http';
 import { mapRolFromId } from '../utils/roles';
+
+const HERO_IMG = require('../../assets/images/home-bg.png');
 
 import {
   ReservationListItem,
@@ -30,6 +34,7 @@ import { SectionTitle } from '../components/SectionTitle';
 import { COLORS, SPACING, RADII } from '../styles/theme';
 import { Loading } from './Loading';
 import { Error } from './Error';
+import { TipCard } from '../components/TipCard';
 
 type PendingItem = {
   key: string;
@@ -259,156 +264,168 @@ export default function Home() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* ===== Header (Airbnb-like) ===== */}
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.hello}>Hola, {firstName}</Text>
-            <Text style={styles.subhello}>
-              {isProfessional ? 'Tu panel de trabajo' : 'Encontrá ayuda cerca de vos'}
-            </Text>
-          </View>
-        </View>
-
-        {/* ===== CTA principal ===== */}
-        <Card style={styles.heroCard} withShadow>
-          <View style={styles.heroRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.heroTitle}>{ctaTitle}</Text>
-              <Text style={styles.heroSubtitle}>{ctaSubtitle}</Text>
-            </View>
-
-            <View style={styles.heroBadge}>
-              <Ionicons
-                name={isProfessional ? 'briefcase-outline' : 'map-outline'}
-                size={18}
-                color={COLORS.primaryBrilliant}
+        {/* HERO full width */}
+        <ImageBackground source={HERO_IMG} style={styles.hero} imageStyle={styles.heroImage}>
+          <View style={styles.heroOverlay} />
+          <View style={styles.heroContent}>
+            <View style={styles.logoWrapper} pointerEvents="none">
+              <Image
+                source={require('../../assets/images/fixo-logo.png')}
+                style={styles.logo}
+                resizeMode="contain"
               />
             </View>
+
+            <Text style={styles.heroHello}>
+              Hola {firstName} <Text style={styles.heroWave}>👋</Text>
+            </Text>
+
+            <Text style={styles.heroSub}>
+              {pendingItems.length > 0
+                ? `Tenés ${pendingItems.length} ${pendingItems.length === 1 ? 'trabajo' : 'trabajos'} para hoy.`
+                : isProfessional
+                  ? 'Tu panel de trabajo.'
+                  : 'Encontrá ayuda cerca de vos.'}
+            </Text>
+
+            <TouchableOpacity activeOpacity={0.9} style={styles.heroCta} onPress={goCTA}>
+              <Text style={styles.heroCtaText}>{ctaTitle}</Text>
+            </TouchableOpacity>
           </View>
+        </ImageBackground>
 
-          <Button title={ctaTitle} onPress={goCTA} style={{ marginTop: 10 }} />
-        </Card>
-
-        {/* ===== Acciones rápidas ===== */}
-        <View style={styles.quickGrid}>
-          {!isProfessional ? (
-            <>
-              <TouchableOpacity
-                activeOpacity={0.9}
-                style={styles.quickTile}
-                onPress={() => navigation.navigate('Buscar')}
-              >
-                <View style={styles.quickIconWrap}>
-                  <Ionicons name="search-outline" size={18} color={COLORS.text} />
-                </View>
-                <Text style={styles.quickTitle}>Buscar</Text>
-                <Text style={styles.quickSub}>Profesionales cerca</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.9}
-                style={styles.quickTile}
-                onPress={() => navigation.navigate('Solicitudes')}
-              >
-                <View style={styles.quickIconWrap}>
-                  <Ionicons name="calendar-outline" size={18} color={COLORS.text} />
-                </View>
-                <Text style={styles.quickTitle}>Reservas</Text>
-                <Text style={styles.quickSub}>Activas y pasadas</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <TouchableOpacity
-                activeOpacity={0.9}
-                style={styles.quickTile}
-                onPress={() => navigation.navigate('Solicitudes')}
-              >
-                <View style={styles.quickIconWrap}>
-                  <Ionicons name="notifications-outline" size={18} color={COLORS.text} />
-                </View>
-                <Text style={styles.quickTitle}>Solicitudes</Text>
-                <Text style={styles.quickSub}>Pendientes y activas</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.9}
-                style={styles.quickTile}
-                onPress={() => navigation.navigate('AddService')}
-              >
-                <View style={styles.quickIconWrap}>
-                  <Ionicons name="add-circle-outline" size={18} color={COLORS.text} />
-                </View>
-                <Text style={styles.quickTitle}>Servicio</Text>
-                <Text style={styles.quickSub}>Agregar nuevo</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-
-        {/* ===== Pendientes ===== */}
-        <View style={{ marginTop: 8 }}>
-          <SectionTitle>Pendientes</SectionTitle>
-
-          {pendingLoading ? (
-            <Card style={styles.pendingCard}>
-              <View style={styles.pendingLoadingRow}>
-                <ActivityIndicator />
-                <Text style={styles.pendingMuted}>Buscando acciones pendientes…</Text>
-              </View>
-            </Card>
-          ) : pendingItems.length === 0 ? (
-            <Card style={styles.pendingCard}>
-              <View style={styles.pendingLoadingRow}>
-                <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.textMuted} />
-                <Text style={styles.pendingMuted}>No tenés acciones pendientes</Text>
-              </View>
-            </Card>
-          ) : (
-            <Card style={styles.pendingCard} withShadow>
-              {pendingItems.map((p, idx) => (
+        {/* Contenido con padding */}
+        <View style={styles.inner}>
+          {/* ===== Acciones rápidas ===== */}
+          <View style={styles.quickGrid}>
+            {!isProfessional ? (
+              <>
                 <TouchableOpacity
-                  key={p.key}
-                  activeOpacity={0.85}
-                  onPress={() => openReservation(p.reservationId)}
-                  style={[styles.pendingRow, idx > 0 ? styles.pendingRowBorder : null]}
+                  activeOpacity={0.9}
+                  style={styles.quickTile}
+                  onPress={() => navigation.navigate('Buscar')}
                 >
-                  <View style={[styles.pendingIconWrap, toneBg(p.tone)]}>
-                    <Ionicons name={p.icon} size={18} color={toneIcon(p.tone)} />
+                  <View style={styles.quickIconWrap}>
+                    <Ionicons name="search-outline" size={18} color={COLORS.text} />
                   </View>
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.pendingTitle}>{p.title}</Text>
-                    {!!p.subtitle && <Text style={styles.pendingSub}>{p.subtitle}</Text>}
-                  </View>
-
-                  <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+                  <Text style={styles.quickTitle}>Buscar</Text>
+                  <Text style={styles.quickSub}>Profesionales cerca</Text>
                 </TouchableOpacity>
-              ))}
-            </Card>
+
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={styles.quickTile}
+                  onPress={() => navigation.navigate('Solicitudes')}
+                >
+                  <View style={styles.quickIconWrap}>
+                    <Ionicons name="calendar-outline" size={18} color={COLORS.text} />
+                  </View>
+                  <Text style={styles.quickTitle}>Reservas</Text>
+                  <Text style={styles.quickSub}>Activas y pasadas</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={styles.quickTile}
+                  onPress={() => navigation.navigate('Solicitudes')}
+                >
+                  <View style={styles.quickIconWrap}>
+                    <Ionicons name="notifications-outline" size={18} color={COLORS.text} />
+                  </View>
+                  <Text style={styles.quickTitle}>Solicitudes</Text>
+                  <Text style={styles.quickSub}>Pendientes y activas</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={styles.quickTile}
+                  onPress={() => navigation.navigate('AddService')}
+                >
+                  <View style={styles.quickIconWrap}>
+                    <Ionicons name="add-circle-outline" size={18} color={COLORS.text} />
+                  </View>
+                  <Text style={styles.quickTitle}>Servicio</Text>
+                  <Text style={styles.quickSub}>Agregar nuevo</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+
+          {isProfessional && (
+            <>
+              <TipCard
+                message="Agregá fotos de tus trabajos en tu perfil para aumentar la confianza"
+                onPress={() => navigation.navigate('AddService')}
+              />
+            </>
+          )}
+
+          {/* ===== Pendientes ===== */}
+          <View style={{ marginTop: 8 }}>
+            <SectionTitle>Pendientes</SectionTitle>
+
+            {pendingLoading ? (
+              <Card style={styles.pendingCard}>
+                <View style={styles.pendingLoadingRow}>
+                  <ActivityIndicator />
+                  <Text style={styles.pendingMuted}>Buscando acciones pendientes…</Text>
+                </View>
+              </Card>
+            ) : pendingItems.length === 0 ? (
+              <Card style={styles.pendingCard}>
+                <View style={styles.pendingLoadingRow}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.textMuted} />
+                  <Text style={styles.pendingMuted}>No tenés acciones pendientes</Text>
+                </View>
+              </Card>
+            ) : (
+              <Card style={styles.pendingCard} withShadow>
+                {pendingItems.map((p, idx) => (
+                  <TouchableOpacity
+                    key={p.key}
+                    activeOpacity={0.85}
+                    onPress={() => openReservation(p.reservationId)}
+                    style={[styles.pendingRow, idx > 0 ? styles.pendingRowBorder : null]}
+                  >
+                    <View style={[styles.pendingIconWrap, toneBg(p.tone)]}>
+                      <Ionicons name={p.icon} size={18} color={toneIcon(p.tone)} />
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pendingTitle}>{p.title}</Text>
+                      {!!p.subtitle && <Text style={styles.pendingSub}>{p.subtitle}</Text>}
+                    </View>
+
+                    <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+                ))}
+              </Card>
+            )}
+          </View>
+
+          {/* ===== Profesional: resumen (placeholder serio) ===== */}
+          {isProfessional && (
+            <View style={{ marginTop: 10 }}>
+              <SectionTitle>Resumen rápido</SectionTitle>
+
+              <View style={styles.summaryRow}>
+                <Card style={styles.summaryCard}>
+                  <Text style={styles.summaryLabel}>Trabajos completados</Text>
+                  <Text style={styles.summaryValue}>—</Text>
+                  <Text style={styles.summaryHint}>Próximamente</Text>
+                </Card>
+
+                <Card style={styles.summaryCard}>
+                  <Text style={styles.summaryLabel}>Rating</Text>
+                  <Text style={styles.summaryValue}>—</Text>
+                  <Text style={styles.summaryHint}>Próximamente</Text>
+                </Card>
+              </View>
+            </View>
           )}
         </View>
-
-        {/* ===== Profesional: resumen (placeholder serio) ===== */}
-        {isProfessional && (
-          <View style={{ marginTop: 10 }}>
-            <SectionTitle>Resumen rápido</SectionTitle>
-
-            <View style={styles.summaryRow}>
-              <Card style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Trabajos completados</Text>
-                <Text style={styles.summaryValue}>—</Text>
-                <Text style={styles.summaryHint}>Próximamente</Text>
-              </Card>
-
-              <Card style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Rating</Text>
-                <Text style={styles.summaryValue}>—</Text>
-                <Text style={styles.summaryHint}>Próximamente</Text>
-              </Card>
-            </View>
-          </View>
-        )}
       </ScrollView>
     </Screen>
   );
@@ -416,43 +433,80 @@ export default function Home() {
 
 const styles = StyleSheet.create({
   content: {
-    paddingHorizontal: SPACING.lg,
     paddingTop: 10,
     paddingBottom: SPACING.xl * 2,
   },
 
-  /* Header */
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
-  },
-  hello: { fontSize: 22, fontWeight: '700', color: COLORS.text },
-  subhello: { marginTop: 2, fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
-  iconBtn: {
-    padding: 10,
-    borderRadius: 999,
-    backgroundColor: COLORS.bgLightGrey,
-  },
-
-  /* Hero card */
-  heroCard: {
-    borderRadius: RADII.lg,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
+  hero: {
+    height: 260,
+    overflow: 'hidden',
     marginBottom: SPACING.lg,
   },
-  heroRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  heroTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text },
-  heroSubtitle: { marginTop: 4, fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
-  heroBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 999,
+  heroImage: {
+    resizeMode: 'cover',
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  logoWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.bgLightGrey,
+  },
+  logo: {
+    width: 110,
+    marginBottom: 12,
+  },
+  heroContent: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'flex-end',
+  },
+  heroBrand: {
+    position: 'absolute',
+    top: 12,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  heroHello: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  heroWave: {
+    fontSize: 22,
+  },
+  heroSub: {
+    marginTop: 6,
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+  },
+  heroCta: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: COLORS.primaryBrilliant,
+  },
+  heroCtaText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+
+  inner: {
+    paddingHorizontal: SPACING.lg,
   },
 
   /* Quick actions */

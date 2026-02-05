@@ -23,7 +23,8 @@ function TabIcon({ routeName, focused }: { routeName: string; focused: boolean }
   const icon = TAB_ICONS[routeName];
 
   return (
-    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+    <View style={styles.iconSlot}>
+      <View style={[styles.indicator, focused && styles.indicatorOn]} />
       <Image
         source={icon}
         resizeMode="contain"
@@ -40,7 +41,7 @@ export default function MainTabs() {
         headerShown: false,
 
         // Labels
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
         tabBarLabelStyle: styles.label,
         tabBarActiveTintColor: COLORS.activeTab,
         tabBarInactiveTintColor: COLORS.inactiveTab,
@@ -66,27 +67,24 @@ export default function MainTabs() {
 }
 
 const styles = StyleSheet.create({
+  icon: { width: 28, height: 28 },
+
+  label: {
+    ...TYPO.caption,
+    marginTop: 3,
+  },
+
   tabBar: {
     backgroundColor: COLORS.tabBarBg,
     borderTopColor: COLORS.borderTab,
     borderTopWidth: StyleSheet.hairlineWidth,
-
-    height: Platform.OS === 'ios' ? 86 : 72,
+    height: Platform.OS === 'ios' ? 86 : 70,
     paddingBottom: Platform.OS === 'ios' ? 18 : 10,
-    paddingTop: 8,
-
-    // “floating” leve sin que parezca raro
-    ...SHADOWS.soft,
+    paddingTop: 10,
   },
 
   item: {
     paddingTop: 4,
-  },
-
-  label: {
-    ...TYPO.caption,
-    fontFamily: TYPO.caption.fontFamily,
-    marginTop: 2,
   },
 
   iconWrap: {
@@ -103,8 +101,21 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
 
-  icon: {
-    width: 36,
-    height: 36,
+  iconSlot: {
+    width: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+
+  indicator: {
+    width: 18,
+    height: 3,
+    borderRadius: RADII.pill,
+    backgroundColor: 'transparent',
+  },
+
+  indicatorOn: {
+    backgroundColor: COLORS.primaryBrilliant,
   },
 });

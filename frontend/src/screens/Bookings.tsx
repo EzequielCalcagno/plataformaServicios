@@ -30,7 +30,7 @@ type Props = { navigation: any; route: any };
 
 type RoleUI = 'CLIENTE' | 'PROFESIONAL';
 type TabKey = 'PENDIENTES' | 'ACTIVAS' | 'COMPLETADAS';
-type ProMailbox = 'RECIBIDAS' | 'HECHAS';
+type ProMailbox = 'COMO_PRO' | 'COMO_CLIENTE';
 
 const TAB_LABELS: Record<TabKey, string> = {
   PENDIENTES: 'Pendientes',
@@ -39,7 +39,9 @@ const TAB_LABELS: Record<TabKey, string> = {
 };
 
 function appRoleToRoleUI(Role: string | null | undefined): RoleUI {
-  const v = String(Role ?? '').trim().toLowerCase();
+  const v = String(Role ?? '')
+    .trim()
+    .toLowerCase();
   if (v === 'profesional' || v === 'professional' || v === 'pro' || v === '2') return 'PROFESIONAL';
   return 'CLIENTE';
 }
@@ -76,18 +78,30 @@ function statusUI(estado?: string | null) {
     return { label: 'Pendiente', tone: 'warn' as const, icon: 'time-outline' as const };
   }
   if (e === 'ACTIVA' || e === 'ACTIVE' || e === 'EN_NEGOCIACION') {
-    return { label: e === 'EN_NEGOCIACION' ? 'En negociación' : 'Activa', tone: 'primary' as const, icon: 'flash-outline' as const };
+    return {
+      label: e === 'EN_NEGOCIACION' ? 'En negociación' : 'Activa',
+      tone: 'primary' as const,
+      icon: 'flash-outline' as const,
+    };
   }
   if (e === 'COMPLETADA' || e === 'DONE' || e === 'CERRADO' || e === 'FINALIZADO') {
-    return { label: 'Completada', tone: 'success' as const, icon: 'checkmark-circle-outline' as const };
+    return {
+      label: 'Completada',
+      tone: 'success' as const,
+      icon: 'checkmark-circle-outline' as const,
+    };
   }
 
-  return { label: estado || 'Estado', tone: 'muted' as const, icon: 'information-circle-outline' as const };
+  return {
+    label: estado || 'Estado',
+    tone: 'muted' as const,
+    icon: 'information-circle-outline' as const,
+  };
 }
 
 export default function Bookings({ navigation, route }: Props) {
   const [roleUI, setRoleUI] = useState<RoleUI>('CLIENTE');
-  const [proMailbox, setProMailbox] = useState<ProMailbox>('RECIBIDAS');
+  const [proMailbox, setProMailbox] = useState<ProMailbox>('COMO_PRO');
 
   const [activeTab, setActiveTab] = useState<TabKey>('PENDIENTES');
   const [items, setItems] = useState<ReservationListItem[]>([]);
@@ -95,7 +109,9 @@ export default function Bookings({ navigation, route }: Props) {
 
   const resolveRole = useCallback(async (): Promise<RoleUI> => {
     const paramRole = route?.params?.role;
-    const pr = String(paramRole ?? '').trim().toLowerCase();
+    const pr = String(paramRole ?? '')
+      .trim()
+      .toLowerCase();
     if (pr === 'professional' || pr === 'profesional' || pr === 'pro') return 'PROFESIONAL';
     if (pr === 'client' || pr === 'cliente') return 'CLIENTE';
 
@@ -114,12 +130,14 @@ export default function Bookings({ navigation, route }: Props) {
 
   const headerTitle = useMemo(() => {
     if (roleUI === 'CLIENTE') return 'Mis solicitudes';
-    return 'Mis trabajos';
+    return 'Mis solicitudes';
   }, [roleUI]);
 
   const headerSubtitle = useMemo(() => {
     if (roleUI === 'CLIENTE') return 'Solicitudes que hiciste';
-    return proMailbox === 'RECIBIDAS' ? 'Solicitudes que te llegaron' : 'Solicitudes que hiciste';
+    return proMailbox === 'COMO_PRO'
+      ? 'Solicitudes que te llegaron como profesional'
+      : 'Solicitudes que hiciste como cliente';
   }, [roleUI, proMailbox]);
 
   const onChangeTab = (tab: TabKey) => setActiveTab(tab);
@@ -138,7 +156,7 @@ export default function Bookings({ navigation, route }: Props) {
           activeTab === 'PENDIENTES' ? 'waiting' : activeTab === 'ACTIVAS' ? 'active' : 'done';
         list = await listMyReservationsMine(tab);
       } else {
-        if (proMailbox === 'RECIBIDAS') {
+        if (proMailbox === 'COMO_PRO') {
           const tab =
             activeTab === 'PENDIENTES' ? 'pending' : activeTab === 'ACTIVAS' ? 'active' : 'done';
           list = await listMyReservationsPro(tab);
@@ -169,12 +187,11 @@ export default function Bookings({ navigation, route }: Props) {
   );
 
   const renderItem = ({ item }: { item: ReservationListItem }) => {
-    const isReceived = roleUI === 'PROFESIONAL' && proMailbox === 'RECIBIDAS';
+    const isReceived = roleUI === 'PROFESIONAL' && proMailbox === 'COMO_PRO';
 
-    const otherName =
-      isReceived
-        ? formatName(item.clienteNombre, item.clienteApellido) || item.clienteId
-        : formatName(item.profesionalNombre, item.profesionalApellido) || item.profesionalId;
+    const otherName = isReceived
+      ? formatName(item.clienteNombre, item.clienteApellido) || item.clienteId
+      : formatName(item.profesionalNombre, item.profesionalApellido) || item.profesionalId;
 
     const otherPhoto = isReceived ? item.clienteFotoUrl : item.profesionalFotoUrl;
 
@@ -290,14 +307,16 @@ export default function Bookings({ navigation, route }: Props) {
       <Text style={styles.emptyText}>
         {roleUI === 'CLIENTE'
           ? 'Probá buscar profesionales y crear una solicitud.'
-          : 'Cuando te llegue una solicitud, va a aparecer acá.'}
+          : proMailbox === 'COMO_PRO'
+            ? 'Cuando te llegue una solicitud, va a aparecer acá.'
+            : 'Cuando hagas una solicitud como cliente, va a aparecer acá.'}
       </Text>
 
       {roleUI === 'CLIENTE' && !loading ? (
         <TouchableOpacity
           activeOpacity={0.9}
           style={styles.emptyCta}
-          onPress={() => navigation.navigate('Search')}
+          onPress={() => navigation.navigate('Buscar')}
         >
           <Text style={styles.emptyCtaText}>Buscar profesionales</Text>
         </TouchableOpacity>
@@ -317,7 +336,7 @@ export default function Bookings({ navigation, route }: Props) {
       {/* Mailbox (solo profesional) */}
       {roleUI === 'PROFESIONAL' && (
         <View style={styles.mailboxRow}>
-          {(['RECIBIDAS', 'HECHAS'] as ProMailbox[]).map((k) => {
+          {(['COMO_PRO', 'COMO_CLIENTE'] as ProMailbox[]).map((k) => {
             const active = k === proMailbox;
             return (
               <TouchableOpacity
@@ -327,7 +346,7 @@ export default function Bookings({ navigation, route }: Props) {
                 activeOpacity={0.9}
               >
                 <Text style={[styles.mailboxText, active ? styles.mailboxTextActive : null]}>
-                  {k === 'RECIBIDAS' ? 'Recibidas' : 'Hechas'}
+                  {k === 'COMO_PRO' ? 'Como profesional' : 'Como cliente'}
                 </Text>
               </TouchableOpacity>
             );
@@ -346,8 +365,15 @@ export default function Bookings({ navigation, route }: Props) {
               onPress={() => onChangeTab(t)}
               activeOpacity={0.9}
             >
-              <Text style={[styles.tabText, active ? styles.tabTextActive : null]}>{TAB_LABELS[t]}</Text>
-              <View style={[styles.tabUnderline, active ? styles.tabUnderlineOn : styles.tabUnderlineOff]} />
+              <Text style={[styles.tabText, active ? styles.tabTextActive : null]}>
+                {TAB_LABELS[t]}
+              </Text>
+              <View
+                style={[
+                  styles.tabUnderline,
+                  active ? styles.tabUnderlineOn : styles.tabUnderlineOff,
+                ]}
+              />
             </TouchableOpacity>
           );
         })}
@@ -356,7 +382,11 @@ export default function Bookings({ navigation, route }: Props) {
       <FlatList
         data={items}
         keyExtractor={(it) => String(it.id)}
-        contentContainerStyle={{ padding: SPACING.lg, paddingTop: SPACING.md, paddingBottom: SPACING.xl }}
+        contentContainerStyle={{
+          padding: SPACING.lg,
+          paddingTop: SPACING.md,
+          paddingBottom: SPACING.xl,
+        }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} />}
         ListEmptyComponent={<EmptyState />}
         renderItem={renderItem}
