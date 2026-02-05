@@ -1,5 +1,5 @@
 // src/screens/Register.tsx
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,173 +7,272 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  Switch,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+
 import { register } from '../services/auth.client';
 
-// 🔹 Componentes genéricos
 import { Screen } from '../components/Screen';
+import { TopBar } from '../components/TopBar';
+import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
-import { SectionTitle } from '../components/SectionTitle';
+
 import { COLORS, SPACING, RADII, TYPO } from '../styles/theme';
 
 interface RegisterProps {
   navigation?: any;
 }
 
+const emailLooksOk = (s: string) => {
+  const v = s.trim().toLowerCase();
+  return v.includes('@') && v.includes('.') && v.length >= 6;
+};
+
+const normalizeUyPhone = (rawDigits: string) => {
+  const digits = rawDigits.replace(/\D/g, '').replace(/^0+/, '');
+  if (!(digits.length === 8 || digits.length === 9)) return null;
+  return `+598${digits}`;
+};
+
+// 🔥 mini-wrapper reutilizable: Input + rightNode (sin tocar tu componente Input)
+function InputRow({
+  label,
+  error,
+  children,
+  rightNode,
+}: {
+  label: string;
+  error?: string | null;
+  children: React.ReactNode;
+  rightNode?: React.ReactNode;
+}) {
+  return (
+    <View style={{ marginTop: SPACING.md }}>
+      <Text style={styles.label}>{label}</Text>
+
+      <View style={styles.inputRow}>
+        <View style={{ flex: 1 }}>{children}</View>
+        {rightNode ? <View style={styles.rightNode}>{rightNode}</View> : null}
+      </View>
+
+      {!!error && <Text style={styles.fieldError}>{error}</Text>}
+    </View>
+  );
+}
+
 const Register: React.FC<RegisterProps> = ({ navigation }) => {
-  const [name, setName] = useState('');
+  const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [telefono, setTelefono] = useState('');
 
+  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
 
-  const handleSubmit = async () => {
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [submitted, setSubmitted] = useState(false);
+
+  const markTouched = (key: string) => setTouched((p) => ({ ...p, [key]: true }));
+  const showError = (key: string) => submitted || !!touched[key];
+
+  const errors = useMemo(() => {
+    const e: Record<string, string> = {};
+    if (!nombre.trim()) e.nombre = 'Ingresá tu nombre.';
+    if (!apellido.trim()) e.apellido = 'Ingresá tu apellido.';
+    if (!emailLooksOk(email)) e.email = 'Ingresá un email válido.';
+    if (password.length < 6) e.password = 'Mínimo 6 caracteres.';
+    if (!normalizeUyPhone(telefono)) e.telefono = 'Teléfono UY: 8 o 9 dígitos.';
+    return e;
+  }, [nombre, apellido, email, password, telefono]);
+
+  const canSubmit = useMemo(() => Object.keys(errors).length === 0 && !loading, [errors, loading]);
+
+  const handleChange = (key: string, setter: (v: string) => void) => (v: string) => {
+    setter(v);
+    // opcional: mientras escribe, no muestres error si no está submitted
+    if (!submitted) setTouched((p) => ({ ...p, [key]: false }));
+  };
+
+  const handleSubmit = useCallback(async () => {
     setAlertMsg(null);
     setOk(false);
+    setSubmitted(true);
 
-    if (!name.trim()) return setAlertMsg('Ingrese un nombre.');
-    if (!apellido.trim()) return setAlertMsg('Ingrese un apellido.');
-
-    if (!email.trim()) return setAlertMsg('Ingrese un email válido.');
-    if (email.indexOf('@') === -1 || email.indexOf('.') === -1) {
-      return setAlertMsg('Ingrese un email válido.');
+    if (!canSubmit) {
+      setAlertMsg('Revisá los campos marcados.');
+      setOk(false);
+      return;
     }
 
-    if (!password || password.length < 6) {
-      return setAlertMsg('La contraseña debe tener al menos 6 caracteres.');
+    const telefonoCompleto = normalizeUyPhone(telefono);
+    if (!telefonoCompleto) {
+      setAlertMsg('Teléfono inválido.');
+      setOk(false);
+      return;
     }
-
-    if (!telefono.trim()) {
-      return setAlertMsg('Ingrese un teléfono de contacto.');
-    }
-    if (!/^\d{8,9}$/.test(telefono)) {
-      return setAlertMsg('Ingrese un teléfono válido de Uruguay.');
-    }
-
-    const telefonoNormalizado = telefono.replace(/^0+/, ''); // saca ceros iniciales
-    const telefonoCompleto = `+598${telefonoNormalizado}`;
 
     const payloadForApi = {
-      email: email.trim(),
+      email: email.trim().toLowerCase(),
       password,
-      nombre: name.trim(),
+      nombre: nombre.trim(),
       apellido: apellido.trim(),
       telefono: telefonoCompleto,
     };
 
     try {
       setLoading(true);
-
       await register(payloadForApi);
 
       setOk(true);
       setAlertMsg('¡Cuenta creada con éxito!');
 
-      setTimeout(() => {
-        navigation?.replace?.('Login');
-      }, 500);
+      setTimeout(() => navigation?.replace?.('Login'), 450);
     } catch (e: any) {
       setOk(false);
       setAlertMsg(e?.message ?? 'No se pudo crear la cuenta.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [canSubmit, nombre, apellido, email, password, telefono, navigation]);
 
   return (
     <Screen>
       <KeyboardAvoidingView
-        style={styles.container}
+        style={{ flex: 1 }}
         behavior={Platform.select({ ios: 'padding', android: undefined })}
       >
-        <View style={styles.content}>
-          {/* Logo */}
-          <Image
-            source={require('../../assets/images/fixo-logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+        <ScrollView
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header compacto (como pantalla seria) */}
+          <View style={styles.header}>
+            <Image
+              source={require('../../assets/images/fixo-logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.title}>Súmate a Fixo</Text>
+            <Text style={styles.subtitle}>
+              Creá tu cuenta de cliente para pedir servicios en minutos.
+            </Text>
+          </View>
 
-          {/* Titulo */}
-          <Text style={[TYPO.h1, styles.title]}>Súmate a Fixo</Text>
-
-          {/* Subtitulo */}
-          <Text style={[TYPO.subtitle, styles.subtitle]}>
-            Buscá servicios o empezá a ofrecer los tuyos. Todo en un solo lugar.
-          </Text>
-
-          {/* Alertas */}
           {alertMsg && (
             <Alert
               type={ok ? 'success' : 'error'}
               message={alertMsg}
-              style={{ marginBottom: SPACING.sm }}
+              style={{ marginBottom: SPACING.md }}
             />
           )}
 
-          {/* Nombre*/}
-          <Input
-            placeholder="Nombre"
-            value={name}
-            onChangeText={setName}
-            style={{ marginBottom: SPACING.sm }}
-          />
+          <InputRow label="Nombre" error={showError('nombre') ? errors.nombre : null}>
+            <Input
+              placeholder="Ej: Juan"
+              value={nombre}
+              onChangeText={handleChange('nombre', setNombre)}
+              onBlur={() => markTouched('nombre')}
+              returnKeyType="next"
+              autoCapitalize="words"
+              textContentType="givenName"
+            />
+          </InputRow>
 
-          {/* Apellido */}
-          <Input
-            placeholder="Apellido"
-            value={apellido}
-            onChangeText={setApellido}
-            style={{ marginBottom: SPACING.sm }}
-          />
+          <InputRow label="Apellido" error={showError('apellido') ? errors.apellido : null}>
+            <Input
+              placeholder="Ej: Pérez"
+              value={apellido}
+              onChangeText={handleChange('apellido', setApellido)}
+              onBlur={() => markTouched('apellido')}
+              returnKeyType="next"
+              autoCapitalize="words"
+              textContentType="familyName"
+            />
+          </InputRow>
 
-          {/* Email */}
-          <Input
-            placeholder="Correo electrónico"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            style={{ marginBottom: SPACING.sm }}
-          />
+          <InputRow label="Correo electrónico" error={showError('email') ? errors.email : null}>
+            <Input
+              placeholder="tu@email.com"
+              value={email}
+              onChangeText={handleChange('email', setEmail)}
+              onBlur={() => markTouched('email')}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              returnKeyType="next"
+              textContentType="emailAddress"
+            />
+          </InputRow>
 
-          {/* Contraseña */}
-          <Input
-            placeholder="Contraseña"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            style={{ marginBottom: SPACING.sm }}
-          />
+          <InputRow
+            label="Contraseña"
+            error={showError('password') ? errors.password : null}
+            rightNode={
+              <TouchableOpacity
+                onPress={() => setShowPass((p) => !p)}
+                activeOpacity={0.85}
+                style={styles.eyeBtn}
+              >
+                <Ionicons
+                  name={showPass ? 'eye-off-outline' : 'eye-outline'}
+                  size={18}
+                  color={COLORS.textMuted}
+                />
+              </TouchableOpacity>
+            }
+          >
+            <Input
+              placeholder="Mínimo 6 caracteres"
+              value={password}
+              onChangeText={handleChange('password', setPassword)}
+              onBlur={() => markTouched('password')}
+              secureTextEntry={!showPass}
+              returnKeyType="next"
+              textContentType="newPassword"
+            />
+          </InputRow>
 
-          {/* Teléfono */}
-          <Input
-            placeholder="99 123 123"
-            value={telefono}
-            onChangeText={(text) => setTelefono(text.replace(/[^0-9]/g, ''))}
-            keyboardType="phone-pad"
-            maxLength={8}
-            prefixText="+598"
-          />
+          <InputRow label="Teléfono" error={showError('telefono') ? errors.telefono : null}>
+            <Input
+              placeholder="99 123 456"
+              value={telefono}
+              onChangeText={handleChange('telefono', (t) => setTelefono(t.replace(/[^0-9]/g, '')))}
+              onBlur={() => markTouched('telefono')}
+              keyboardType="phone-pad"
+              maxLength={9}
+              prefixText="+598"
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit}
+              textContentType="telephoneNumber"
+            />
+          </InputRow>
 
-          {/* Botón Crear cuenta */}
+          <Text style={styles.helper}>
+            Al crear tu cuenta aceptás nuestros términos y política de privacidad.
+          </Text>
+          <View style={{ height: 130 }} />
+        </ScrollView>
+
+        {/* Footer fijo (mismo patrón que AddService) */}
+        <View style={styles.footer}>
           <Button
-            title={loading ? 'Creando...' : 'Crear cuenta'}
+            title={loading ? 'Creando…' : 'Crear cuenta'}
             onPress={handleSubmit}
-            disabled={loading}
+            disabled={!canSubmit}
             variant="primary"
             size="lg"
           />
 
-          {/* Footer */}
-          <Text style={styles.footer}>
+          <Text style={styles.footerText}>
             ¿Ya tenés cuenta?{' '}
             <Text style={styles.footerLink} onPress={() => navigation?.navigate('Login')}>
               Iniciar sesión
@@ -189,38 +288,99 @@ export default Register;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.xl,
+  },
+
+  header: {
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+
+  logo: {
+    width: 110,
+    height: 86,
+    marginBottom: SPACING.xs,
+  },
+
+  title: {
+    ...TYPO.h2, // 👈 menos gigante: register no es landing page
+    textAlign: 'center',
+  },
+
+  subtitle: {
+    ...TYPO.subtitle,
+    textAlign: 'center',
+    marginTop: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+  },
+
+  card: {
+    borderRadius: RADII.lg,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    backgroundColor: COLORS.cardBg,
+  },
+
+  sectionTitle: {
+    ...TYPO.h3,
+    marginBottom: SPACING.sm,
+  },
+
+  label: {
+    ...TYPO.label,
+    marginBottom: SPACING.sm,
+  },
+
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  rightNode: {
+    marginLeft: SPACING.sm,
+  },
+
+  eyeBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: RADII.pill,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.bgScreen,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  content: {
-    width: '100%',
-    maxWidth: 360,
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xl + SPACING.md,
+
+  fieldError: {
+    ...TYPO.caption,
+    color: COLORS.danger,
+    marginTop: 6,
   },
-  logo: {
-    width: 120,
-    height: 90,
-    alignSelf: 'center',
-    marginBottom: 12,
+
+  helper: {
+    ...TYPO.helper,
+    marginTop: SPACING.md,
   },
-  title: {
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  subtitle: {
-    textAlign: 'center',
-    marginBottom: 26,
-    paddingHorizontal: 8,
-  },
-  link: { color: COLORS.primary, textDecorationLine: 'underline' },
+
   footer: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.cardBg,
+  },
+
+  footerText: {
+    ...TYPO.bodyMuted,
     textAlign: 'center',
     marginTop: SPACING.md,
-    fontSize: 14,
-    color: COLORS.textMuted,
   },
-  footerLink: { color: COLORS.primary, textDecorationLine: 'underline' },
+
+  footerLink: {
+    ...TYPO.link,
+  },
 });

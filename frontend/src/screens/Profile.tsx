@@ -23,23 +23,20 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { SectionTitle } from '../components/SectionTitle';
 import { Divider } from '../components/Divider';
-import { COLORS } from '../styles/theme';
+import { TopBar } from '../components/TopBar';
+import { Alert } from '../components/Alert';
+
+import { COLORS, SPACING, RADII, TYPO, SHADOWS } from '../styles/theme';
 
 type Props = { navigation: any; route: any };
 
-type StarDist = {
-  5: number;
-  4: number;
-  3: number;
-  2: number;
-  1: number;
-};
+type StarDist = { 5: number; 4: number; 3: number; 2: number; 1: number };
 
 type ReviewItem = {
   id: string;
   authorName: string;
   timeAgo: string;
-  rating: number; // 1..5
+  rating: number;
   comment: string;
 };
 
@@ -52,7 +49,7 @@ type ProfessionalProfile = {
   specialty?: string | null;
   location?: string | null;
 
-  ratingAvg: number; // 0..5
+  ratingAvg: number;
   reviewsCount: number;
   jobsCompleted: number;
 
@@ -73,7 +70,7 @@ type ClientProfile = {
 };
 
 /* ===========================
-   URL NORMALIZATION (igual Account)
+   URL NORMALIZATION
 =========================== */
 
 const API_URL =
@@ -139,19 +136,17 @@ function normalizeProfessionalProfile(input: any): ProfessionalProfile {
     input?.name ?? input?.nombre ?? input?.nombre_completo ?? input?.fullName ?? '',
   ).trim();
 
-  const photoUrl =
-    (input?.photoUrl ??
-      input?.fotoUrl ??
-      input?.foto_url ??
-      input?.avatarUrl ??
-      null) as string | null;
+  const photoUrl = (input?.photoUrl ??
+    input?.fotoUrl ??
+    input?.foto_url ??
+    input?.avatarUrl ??
+    null) as string | null;
 
-  const coverUrl =
-    (input?.coverUrl ??
-      input?.portadaUrl ??
-      input?.portada_url ??
-      input?.cover_url ??
-      null) as string | null;
+  const coverUrl = (input?.coverUrl ??
+    input?.portadaUrl ??
+    input?.portada_url ??
+    input?.cover_url ??
+    null) as string | null;
 
   const specialty = input?.specialty ?? input?.especialidad ?? input?.oficio ?? null;
   const location = input?.location ?? input?.ubicacion ?? input?.ciudad ?? null;
@@ -175,11 +170,7 @@ function normalizeProfessionalProfile(input: any): ProfessionalProfile {
   const starDist = normalizeStarDist(stats ?? input);
 
   const latestReviewsRaw =
-    input?.latestReviews ??
-    input?.reviews ??
-    input?.ultimasResenas ??
-    input?.ultimas_reviews ??
-    [];
+    input?.latestReviews ?? input?.reviews ?? input?.ultimasResenas ?? input?.ultimas_reviews ?? [];
 
   const latestReviews: ReviewItem[] = Array.isArray(latestReviewsRaw)
     ? latestReviewsRaw.map((r: any, idx: number) => ({
@@ -256,8 +247,17 @@ function Bar({ pct }: { pct: number }) {
   );
 }
 
+function Pill({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
+  return (
+    <View style={styles.pill}>
+      <Ionicons name={icon} size={14} color={COLORS.text} style={{ marginRight: 6 }} />
+      <Text style={styles.pillText}>{text}</Text>
+    </View>
+  );
+}
+
 /* ===========================
-   COMPONENT
+   SCREEN
 =========================== */
 
 export default function Profile({ route, navigation }: Props) {
@@ -273,15 +273,17 @@ export default function Profile({ route, navigation }: Props) {
   const [clientProfile, setClientProfile] = useState<ClientProfile | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [alertMsg, setAlertMsg] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
 
-  // Avatar states (igual Account)
+  // Avatar states
   const [avatarError, setAvatarError] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
 
   const fetchProfile = useCallback(async () => {
     try {
-      setErrorMsg(null);
+      setAlertMsg(null);
+      setOk(false);
       setLoading(true);
 
       if (isViewingOtherProfessional) {
@@ -289,31 +291,24 @@ export default function Profile({ route, navigation }: Props) {
         const normalized = normalizeProfessionalProfile(data);
         if (!normalized.id) throw new Error('Perfil profesional inválido (sin id)');
         setProfessionalProfile(normalized);
-        setClientProfile(null);
         setAvatarError(false);
         return;
       }
 
-      if (isProfessional) {
-        const data = await api.get<any>('/private/profile');
-        const normalized = normalizeProfessionalProfile(data);
-        if (!normalized.id) throw new Error('Tu perfil profesional llegó sin id');
-        setProfessionalProfile(normalized);
-        setClientProfile(null);
-        setAvatarError(false);
-      } else {
-        const compact = await getMyProfile();
-        setClientProfile(mapCompactToClientProfile(compact));
-        setProfessionalProfile(null);
-        setAvatarError(false);
-      }
-    } catch (e) {
+      // Mi perfil profesional
+      const data = await api.get<any>('/private/profile');
+      const normalized = normalizeProfessionalProfile(data);
+      if (!normalized.id) throw new Error('Tu perfil profesional llegó sin id');
+      setProfessionalProfile(normalized);
+      setAvatarError(false);
+    } catch (e: any) {
       console.log('❌ Error fetchProfile', e);
-      setErrorMsg('Error al cargar el perfil.');
+      setOk(false);
+      setAlertMsg('Error al cargar el perfil.');
     } finally {
       setLoading(false);
     }
-  }, [isViewingOtherProfessional, profesionalIdFromRoute, isProfessional]);
+  }, [isViewingOtherProfessional, profesionalIdFromRoute]);
 
   useFocusEffect(
     useCallback(() => {
@@ -346,32 +341,17 @@ export default function Profile({ route, navigation }: Props) {
     };
   }, [professionalProfile]);
 
-  // Normalización URLs (cover + avatar)
-  const coverUri = useMemo(
-    () => normalizePhotoUrl((professionalProfile?.coverUrl ?? null) as any),
-    [professionalProfile?.coverUrl],
-  );
   const avatarUri = useMemo(
-    () => normalizePhotoUrl((professionalProfile?.photoUrl ?? clientProfile?.photoUrl ?? null) as any),
-    [professionalProfile?.photoUrl, clientProfile?.photoUrl],
+    () => normalizePhotoUrl((professionalProfile?.photoUrl ?? null) as any),
+    [professionalProfile?.photoUrl],
   );
 
   if (loading) {
     return (
       <Screen>
         <View style={styles.center}>
-          <Text style={{ color: COLORS.textMuted }}>Cargando perfil…</Text>
-        </View>
-      </Screen>
-    );
-  }
-
-  if (errorMsg) {
-    return (
-      <Screen>
-        <View style={styles.center}>
-          <Text style={{ color: COLORS.text }}>{errorMsg}</Text>
-          {!isViewingOtherProfessional && <Button title="Salir" onPress={handleLogout} />}
+          <ActivityIndicator />
+          <Text style={[TYPO.bodyMuted, { marginTop: 10 }]}>Cargando perfil…</Text>
         </View>
       </Screen>
     );
@@ -379,164 +359,219 @@ export default function Profile({ route, navigation }: Props) {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Header estilo Account */}
-        <View style={styles.header}>
-          
-          {!isViewingOtherProfessional ? (
+      <TopBar
+        title={isViewingOtherProfessional ? 'Perfil' : 'Mi perfil'}
+        showBack={isViewingOtherProfessional}
+        rightNode={
+          !isViewingOtherProfessional ? (
             <TouchableOpacity
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               style={styles.iconBtn}
               onPress={() => setShowMenu((p) => !p)}
             >
               <Ionicons name="settings-outline" size={18} color={COLORS.text} />
             </TouchableOpacity>
-          ) : null}
+          ) : null
+        }
+      />
+
+      {/* Menu */}
+      {showMenu && !isViewingOtherProfessional && (
+        <View style={styles.menu}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={styles.menuRow}
+            onPress={() => {
+              setShowMenu(false);
+              navigation.navigate('EditProfile');
+            }}
+          >
+            <Ionicons
+              name="create-outline"
+              size={16}
+              color={COLORS.text}
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.menuItem}>Editar perfil</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={styles.menuRow}
+            onPress={async () => {
+              setShowMenu(false);
+              await handleLogout();
+            }}
+          >
+            <Ionicons
+              name="log-out-outline"
+              size={16}
+              color={COLORS.danger}
+              style={{ marginRight: 8 }}
+            />
+            <Text style={[styles.menuItem, { color: COLORS.danger }]}>Cerrar sesión</Text>
+          </TouchableOpacity>
         </View>
+      )}
 
-        {/* Menu (mantenido) */}
-        {showMenu && !isViewingOtherProfessional && (
-          <View style={styles.menu}>
-            <Text
-              style={styles.menuItem}
-              onPress={() => {
-                setShowMenu(false);
-                navigation.navigate('EditProfile');
-              }}
-            >
-              Editar perfil
-            </Text>
-
-            <Text
-              style={[styles.menuItem, styles.danger]}
-              onPress={async () => {
-                setShowMenu(false);
-                await handleLogout();
-              }}
-            >
-              Cerrar sesión
-            </Text>
-          </View>
-        )}
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {alertMsg ? (
+          <Alert
+            type={ok ? 'success' : 'error'}
+            message={alertMsg}
+            style={{ marginBottom: SPACING.md }}
+          />
+        ) : null}
 
         {/* ====== PROFESIONAL ====== */}
         {professionalProfile ? (
           <>
-            {/* Cover opcional: más “Airbnb”: rectángulo redondeado arriba */}
-            {!!coverUri && (
-              <View style={styles.coverWrap}>
-                <Image source={{ uri: coverUri }} style={styles.coverImg} />
-              </View>
-            )}
-
-            {/* Card principal: misma vibra Account */}
-            <Card style={styles.profileCard}>
-              {avatarUri && !avatarError ? (
-                <View>
-                  <Image
-                    source={{ uri: avatarUri }}
-                    style={styles.avatar}
-                    onLoadStart={() => setAvatarLoading(true)}
-                    onLoadEnd={() => setAvatarLoading(false)}
-                    onError={() => {
-                      setAvatarLoading(false);
-                      setAvatarError(true);
-                    }}
-                  />
-                  {avatarLoading && (
-                    <View style={styles.avatarLoadingOverlay}>
-                      <ActivityIndicator size="small" color={COLORS.primaryBrilliant} />
+            {/* INFO CARD (foto dentro) */}
+            <Card style={styles.profileCard} withShadow>
+              <View style={styles.profileHeader}>
+                <View style={styles.avatarInCardWrap}>
+                  {avatarUri && !avatarError ? (
+                    <View>
+                      <Image
+                        source={{ uri: avatarUri }}
+                        style={styles.avatarInCard}
+                        onLoadStart={() => setAvatarLoading(true)}
+                        onLoadEnd={() => setAvatarLoading(false)}
+                        onError={() => {
+                          setAvatarLoading(false);
+                          setAvatarError(true);
+                        }}
+                      />
+                      {avatarLoading && (
+                        <View style={styles.avatarLoadingOverlayInCard}>
+                          <ActivityIndicator size="small" color={COLORS.primaryBrilliant} />
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    <View style={[styles.avatarInCard, styles.avatarPlaceholder]}>
+                      <Text style={styles.avatarInitial}>
+                        {initials(professionalProfile.name || 'Profesional')}
+                      </Text>
                     </View>
                   )}
                 </View>
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Text style={styles.avatarInitial}>
-                    {initials(professionalProfile.name || 'Profesional')}
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {professionalProfile.name}
                   </Text>
+
+                  {!!professionalProfile.specialty && (
+                    <Text style={styles.meta} numberOfLines={1}>
+                      {professionalProfile.specialty}
+                    </Text>
+                  )}
+
+                  {!!professionalProfile.location && (
+                    <View style={styles.metaRow}>
+                      <Ionicons name="location-outline" size={14} color={COLORS.textMuted} />
+                      <Text
+                        style={[styles.meta, { marginTop: 0, marginLeft: 6 }]}
+                        numberOfLines={1}
+                      >
+                        {professionalProfile.location}
+                      </Text>
+                    </View>
+                  )}
                 </View>
-              )}
+              </View>
 
-              <Text style={styles.profileName}>{professionalProfile.name}</Text>
-
-              {!!professionalProfile.specialty && (
-                <Text style={styles.profileSub}>{professionalProfile.specialty}</Text>
-              )}
-              {!!professionalProfile.location && (
-                <Text style={styles.profileSub}>{professionalProfile.location}</Text>
-              )}
-
-              <View style={styles.statsRow}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>{fmtAvg(professionalProfile.ratingAvg)}</Text>
-                  <Text style={styles.statLabel}>Rating</Text>
-                </View>
-
-                <View style={styles.statDivider} />
-
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>{professionalProfile.jobsCompleted}</Text>
-                  <Text style={styles.statLabel}>Trabajos</Text>
-                </View>
+              <View style={styles.pillsRow}>
+                <Pill icon="star" text={`${fmtAvg(professionalProfile.ratingAvg)} rating`} />
+                <Pill
+                  icon="chatbubble-ellipses-outline"
+                  text={`${professionalProfile.reviewsCount} reseñas`}
+                />
+                <Pill
+                  icon="checkmark-done-outline"
+                  text={`${professionalProfile.jobsCompleted} trabajos`}
+                />
               </View>
 
               {isViewingOtherProfessional && (
                 <Button
                   title="Solicitar servicio"
-                  style={{ marginTop: 14 }}
                   onPress={() =>
                     navigation.navigate('CreateRequest', { profesionalId: professionalProfile.id })
                   }
+                  style={{ marginTop: SPACING.md }}
                 />
               )}
             </Card>
 
-            {/* Sobre mí */}
+            {/* ABOUT */}
             {!!professionalProfile.about && (
               <>
                 <SectionTitle>Sobre mí</SectionTitle>
-                <Card style={styles.softCard}>
+                <Card style={styles.sectionCard} withShadow>
                   <Text style={styles.paragraph}>{professionalProfile.about}</Text>
                 </Card>
               </>
             )}
 
-            {/* Servicios */}
-            {!!professionalProfile.services?.length && (
-              <>
-                <View style={styles.sectionRow}>
-                  <SectionTitle>Servicios ofrecidos</SectionTitle>
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={() =>
-                      navigation.navigate('ProfessionalServices', {
-                        profesionalId: professionalProfile.id,
-                      })
-                    }
-                  >
-                    <Text style={styles.linkText}>ver todos</Text>
-                  </TouchableOpacity>
-                </View>
+            {/* SERVICES */}
+            <View style={styles.sectionHeaderRow}>
+              <SectionTitle>Servicios</SectionTitle>
 
-                {professionalProfile.services.slice(0, 3).map((s) => (
-                  <Card key={s.id} style={styles.softCard}>
-                    <Text style={styles.serviceTitle}>{s.title}</Text>
-                    <Text style={styles.serviceCategory}>{s.category}</Text>
+              {!!professionalProfile.services?.length && (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    // OJO: si no existe esta screen, sacalo.
+                    navigation.navigate('ProfessionalServices', {
+                      profesionalId: professionalProfile.id,
+                    });
+                  }}
+                >
+                  <Text style={styles.linkText}>Ver todos</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {!!professionalProfile.services?.length ? (
+              <View style={{ gap: SPACING.sm }}>
+                {professionalProfile.services.slice(0, 4).map((s) => (
+                  <Card key={s.id} style={styles.serviceCard} withShadow>
+                    <View style={styles.serviceRow}>
+                      <View style={styles.serviceIcon}>
+                        <Ionicons name="briefcase-outline" size={18} color={COLORS.text} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.serviceTitle} numberOfLines={1}>
+                          {s.title}
+                        </Text>
+                        <Text style={styles.serviceCategory} numberOfLines={1}>
+                          {s.category}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+                    </View>
                   </Card>
                 ))}
-              </>
+              </View>
+            ) : (
+              <Card style={styles.sectionCard} withShadow>
+                <Text style={styles.helper}>Este profesional todavía no cargó servicios.</Text>
+              </Card>
             )}
 
-            {/* Calificaciones */}
+            {/* RATINGS */}
             <SectionTitle>Calificaciones</SectionTitle>
             <Card style={styles.ratingCard} withShadow>
               <View style={styles.ratingTop}>
-                <View style={{ alignItems: 'flex-start' }}>
-                  <Text style={styles.ratingAvgBig}>{fmtAvg(professionalProfile.ratingAvg)}</Text>
-                  <Text style={styles.ratingCount}>({professionalProfile.reviewsCount} reseñas)</Text>
+                <View style={styles.ratingLeft}>
+                  <Text style={styles.ratingAvg}>{fmtAvg(professionalProfile.ratingAvg)}</Text>
+                  <StarsInline value={professionalProfile.ratingAvg} size={16} />
+                  <Text style={styles.ratingCount}>{professionalProfile.reviewsCount} reseñas</Text>
                 </View>
 
-                <View style={{ flex: 1, paddingLeft: 16 }}>
+                <View style={styles.ratingRight}>
                   {[5, 4, 3, 2, 1].map((n) => (
                     <View key={n} style={styles.distRow}>
                       <Text style={styles.distStar}>{n}</Text>
@@ -548,60 +583,75 @@ export default function Profile({ route, navigation }: Props) {
                 </View>
               </View>
 
+              {/* REVIEWS */}
               {!!professionalProfile.latestReviews?.length ? (
-                <View style={{ marginTop: 10 }}>
+                <View style={{ marginTop: SPACING.sm }}>
                   {professionalProfile.latestReviews.slice(0, 3).map((r) => (
                     <View key={r.id} style={styles.reviewItem}>
                       <View style={styles.reviewHeader}>
                         <View style={styles.reviewAvatar}>
                           <Text style={styles.reviewAvatarText}>{initials(r.authorName)}</Text>
                         </View>
+
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.reviewName}>{r.authorName}</Text>
+                          <Text style={styles.reviewName} numberOfLines={1}>
+                            {r.authorName}
+                          </Text>
                           <Text style={styles.reviewTime}>{r.timeAgo}</Text>
                         </View>
+
                         <StarsInline value={r.rating} />
                       </View>
 
-                      {!!r.comment && <Text style={styles.reviewComment}>{r.comment}</Text>}
+                      {!!r.comment && (
+                        <Text style={styles.reviewComment} numberOfLines={4}>
+                          {r.comment}
+                        </Text>
+                      )}
                     </View>
                   ))}
 
                   <Button
-                    title={`Ver las ${professionalProfile.reviewsCount} reseñas`}
-                    style={{ marginTop: 10 }}
+                    title={`Ver reseñas`}
+                    variant="outline"
+                    style={{ marginTop: SPACING.md }}
                     onPress={() =>
                       navigation.navigate('Reviews', { profesionalId: professionalProfile.id })
                     }
                   />
                 </View>
               ) : (
-                <Text style={[styles.help, { marginTop: 10 }]}>
+                <Text style={[styles.helper, { marginTop: SPACING.sm }]}>
                   Todavía no hay reseñas para mostrar.
                 </Text>
               )}
             </Card>
 
-            <Divider />
-
-            {/* Logout solo si es mi perfil */}
+            {/* Solo mi perfil */}
             {!isViewingOtherProfessional && (
-              <TouchableOpacity activeOpacity={0.8} style={styles.logoutRow} onPress={handleLogout}>
-                <Ionicons name="log-out-outline" size={18} color={COLORS.text} />
-                <Text style={styles.logoutText}>Cerrar sesión</Text>
-              </TouchableOpacity>
+              <>
+                <Divider />
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.logoutRow}
+                  onPress={handleLogout}
+                >
+                  <Ionicons name="log-out-outline" size={18} color={COLORS.text} />
+                  <Text style={styles.logoutText}>Cerrar sesión</Text>
+                </TouchableOpacity>
+              </>
             )}
           </>
         ) : (
           // ====== CLIENTE ======
           <>
-            {clientProfile && (
-              <Card style={styles.profileCard}>
+            {clientProfile ? (
+              <Card style={styles.profileCard} withShadow>
                 {avatarUri && !avatarError ? (
                   <View>
                     <Image
                       source={{ uri: avatarUri }}
-                      style={styles.avatar}
+                      style={styles.avatarClient}
                       onLoadStart={() => setAvatarLoading(true)}
                       onLoadEnd={() => setAvatarLoading(false)}
                       onError={() => {
@@ -610,32 +660,38 @@ export default function Profile({ route, navigation }: Props) {
                       }}
                     />
                     {avatarLoading && (
-                      <View style={styles.avatarLoadingOverlay}>
+                      <View style={styles.avatarLoadingOverlayClient}>
                         <ActivityIndicator size="small" color={COLORS.primaryBrilliant} />
                       </View>
                     )}
                   </View>
                 ) : (
-                  <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                  <View style={[styles.avatarClient, styles.avatarPlaceholder]}>
                     <Text style={styles.avatarInitial}>{initials(clientProfile.name)}</Text>
                   </View>
                 )}
 
-                <Text style={styles.profileName}>{clientProfile.name}</Text>
-                {!!clientProfile.location && <Text style={styles.profileSub}>{clientProfile.location}</Text>}
+                <Text style={styles.name}>{clientProfile.name}</Text>
+                {!!clientProfile.location && (
+                  <Text style={styles.meta}>{clientProfile.location}</Text>
+                )}
 
-                <Text style={[styles.help, { marginTop: 14 }]}>
+                <Text style={[styles.helper, { marginTop: SPACING.md }]}>
                   Perfil de cliente (en construcción).
                 </Text>
 
                 <Divider />
 
-                <TouchableOpacity activeOpacity={0.8} style={styles.logoutRow} onPress={handleLogout}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.logoutRow}
+                  onPress={handleLogout}
+                >
                   <Ionicons name="log-out-outline" size={18} color={COLORS.text} />
                   <Text style={styles.logoutText}>Cerrar sesión</Text>
                 </TouchableOpacity>
               </Card>
-            )}
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -644,75 +700,74 @@ export default function Profile({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.lg },
 
-  // Igual Account: paddingHorizontal 18, top 10, bottom 30
   content: {
     paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 30,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.xl * 2,
   },
 
-  // Header estilo Account
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
   iconBtn: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    borderRadius: RADII.pill,
     backgroundColor: COLORS.bgLightGrey,
-    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
 
-  // Menu (no Airbnb, pero lo dejamos; al menos que se vea limpio)
+  /* Menu */
   menu: {
     position: 'absolute',
     right: 18,
     top: 56,
     backgroundColor: COLORS.cardBg,
-    borderRadius: 12,
+    borderRadius: RADII.md,
     padding: 8,
-    zIndex: 20,
-    elevation: 6,
+    zIndex: 50,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.soft,
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  menuItem: { ...TYPO.label, fontFamily: TYPO.label.fontFamily },
+
+  /* Hero */
+  hero: { marginBottom: SPACING.lg },
+  cover: {
+    height: 160,
+    borderRadius: RADII.lg,
+    overflow: 'hidden',
+    backgroundColor: COLORS.bgLightGrey,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  menuItem: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    color: COLORS.text,
-    fontWeight: '700',
-  },
-  danger: { color: COLORS.danger },
-
-  // Cover
-  coverWrap: {
-    height: 150,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
   coverImg: { width: '100%', height: '100%' },
+  coverFallback: { flex: 1 },
 
-  // Card principal (calcado de Account vibe)
-  profileCard: {
-    alignItems: 'center',
-    paddingVertical: 24,
-    marginBottom: 18,
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+  avatarWrap: {
+    position: 'absolute',
+    left: SPACING.lg,
+    bottom: -28,
+    borderRadius: 999,
+    backgroundColor: COLORS.bgScreen,
+    padding: 4,
   },
 
   avatar: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+  },
+  avatarClient: {
     width: 88,
     height: 88,
     borderRadius: 44,
@@ -724,11 +779,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitial: {
-    fontSize: 22,
-    fontWeight: '700',
+    ...TYPO.h3,
     color: COLORS.textMuted,
   },
   avatarLoadingOverlay: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+  avatarLoadingOverlayClient: {
     position: 'absolute',
     left: 0,
     top: 0,
@@ -740,89 +805,169 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.55)',
   },
 
-  profileName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  profileSub: {
-    fontSize: 14,
-    color: COLORS.textMuted,
-    marginTop: 2,
+  /* Profile card */
+  profileCard: {
+    padding: SPACING.lg,
+    borderRadius: RADII.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    backgroundColor: COLORS.cardBg,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.lg,
   },
 
-  // Stats: simple y limpio
-  statsRow: {
+  profileHeader: {
     flexDirection: 'row',
-    marginTop: 16,
-    width: '100%',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: 14,
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
   },
-  statBox: { flex: 1, alignItems: 'center' },
-  statDivider: { width: 1, backgroundColor: COLORS.border },
-  statValue: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  statLabel: { fontSize: 12, color: COLORS.textMuted, marginTop: 4, fontWeight: '600' },
 
-  sectionRow: {
+  avatarInCardWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+    backgroundColor: COLORS.bgLightGrey,
+  },
+
+  avatarInCard: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+  },
+
+  avatarLoadingOverlayInCard: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+
+  name: { ...TYPO.h2 },
+  meta: { ...TYPO.subtitle, marginTop: 4 },
+
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+
+  pillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: SPACING.md,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: RADII.pill,
+    backgroundColor: COLORS.graySoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  pillText: { ...TYPO.caption, fontFamily: TYPO.caption.fontFamily, color: COLORS.text },
+
+  sectionCard: {
+    borderRadius: RADII.lg,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    backgroundColor: COLORS.cardBg,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  paragraph: { ...TYPO.body },
+  helper: { ...TYPO.helper, fontFamily: TYPO.helper.fontFamily },
+
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 6,
+    marginTop: 2,
   },
-  linkText: { color: COLORS.primaryBrilliant, fontWeight: '700', fontSize: 12 },
+  linkText: { ...TYPO.link, textDecorationLine: 'none', color: COLORS.primaryBrilliant },
 
-  // Soft cards (sin “gritar”)
-  softCard: {
-    marginTop: 8,
-    marginBottom: 10,
+  /* Services */
+  serviceCard: {
+    borderRadius: RADII.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    backgroundColor: COLORS.cardBg,
   },
+  serviceRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  serviceIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: COLORS.bgLightGrey,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  serviceTitle: { ...TYPO.label, fontFamily: TYPO.label.fontFamily },
+  serviceCategory: { ...TYPO.caption, marginTop: 2 },
 
-  paragraph: { fontSize: 14, color: COLORS.text, lineHeight: 20 },
+  /* Rating */
+  ratingCard: {
+    borderRadius: RADII.lg,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    backgroundColor: COLORS.cardBg,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  ratingTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  ratingLeft: { width: 110 },
+  ratingRight: { flex: 1 },
 
-  serviceTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  serviceCategory: { fontSize: 13, color: COLORS.textMuted, marginTop: 3 },
+  ratingAvg: { ...TYPO.display, fontSize: 30, lineHeight: 34 },
+  ratingCount: { ...TYPO.caption, marginTop: 6 },
 
-  // Ratings block
-  ratingCard: { marginTop: 8, marginBottom: 18 },
-  ratingTop: { flexDirection: 'row', alignItems: 'flex-start' },
-  ratingAvgBig: { fontSize: 28, fontWeight: '700', color: COLORS.text, lineHeight: 32 },
-  ratingCount: { marginTop: 4, fontSize: 12, color: COLORS.textMuted, fontWeight: '600' },
-
-  distRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  distRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   distStar: {
     width: 12,
     textAlign: 'right',
     marginRight: 6,
-    color: COLORS.textMuted,
-    fontWeight: '700',
+    ...TYPO.caption,
+    fontFamily: TYPO.caption.fontFamily,
   },
   distPct: {
-    width: 40,
+    width: 38,
     textAlign: 'right',
     marginLeft: 8,
-    color: COLORS.textMuted,
-    fontWeight: '700',
-    fontSize: 11,
+    ...TYPO.caption,
+    fontFamily: TYPO.caption.fontFamily,
   },
 
   barTrack: {
     flex: 1,
-    height: 6,
-    borderRadius: 999,
+    height: 7,
+    borderRadius: RADII.pill,
     backgroundColor: COLORS.bgLightGrey,
     overflow: 'hidden',
   },
   barFill: {
     height: '100%',
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     backgroundColor: COLORS.primaryBrilliant,
   },
 
-  reviewItem: { paddingTop: 12, marginTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border },
+  /* Reviews */
+  reviewItem: {
+    paddingTop: SPACING.md,
+    marginTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+
   reviewAvatar: {
     width: 34,
     height: 34,
@@ -831,24 +976,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  reviewAvatarText: { fontWeight: '700', color: COLORS.textMuted, fontSize: 12 },
+  reviewAvatarText: {
+    ...TYPO.caption,
+    fontFamily: TYPO.caption.fontFamily,
+    color: COLORS.textMuted,
+  },
 
-  reviewName: { fontWeight: '700', color: COLORS.text, fontSize: 14 },
-  reviewTime: { marginTop: 2, color: COLORS.textMuted, fontSize: 12, fontWeight: '600' },
-  reviewComment: { marginTop: 8, color: COLORS.text, fontSize: 14, lineHeight: 20 },
+  reviewName: { ...TYPO.label, fontFamily: TYPO.label.fontFamily },
+  reviewTime: { ...TYPO.caption, marginTop: 2 },
+  reviewComment: { ...TYPO.body, marginTop: 8 },
 
-  help: { fontSize: 13, color: COLORS.textMuted, fontWeight: '600' },
-
+  /* Logout */
   logoutRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 8,
   },
-  logoutText: {
-    fontSize: 14,
-    color: COLORS.text,
-    fontWeight: '600',
-  },
+  logoutText: { ...TYPO.body, fontFamily: TYPO.body.fontFamily, color: COLORS.text },
 });

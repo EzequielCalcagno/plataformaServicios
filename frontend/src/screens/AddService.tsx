@@ -1,22 +1,31 @@
 // src/screens/AddService.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   Image,
-  ActivityIndicator,
+  TouchableOpacity,
+  TextInput,
+  KeyboardAvoidingView,
   Platform,
+  SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 
-import { api } from '../utils/api'; // ✅ usamos tu wrapper
-import { API_URL } from '../utils/http'; // solo para upload
+import { Screen } from '../components/Screen';
+import { TopBar } from '../components/TopBar';
+import { Card } from '../components/Card';
+import { Button } from '../components/Button';
+import { Alert } from '../components/Alert';
+
+import { TYPO, COLORS, SPACING, RADII } from '../styles/theme';
+import { api } from '../utils/api';
+import { API_URL } from '../utils/http';
 
 type Props = { navigation: any; route: any };
 type AppRole = 'professional' | 'client';
@@ -44,9 +53,8 @@ const CATEGORIES = [
   'Otros',
 ];
 
-// fallback local por si backend no responde
 const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
-  'Limpieza': [
+  Limpieza: [
     'Limpieza de grasera',
     'Limpieza profunda de cocina',
     'Limpieza de baños',
@@ -58,7 +66,7 @@ const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
     'Limpieza de patios',
     'Limpieza de galpón',
   ],
-  'Plomería': [
+  Plomería: [
     'Reparación de pérdidas',
     'Destapación de cañerías',
     'Instalación de grifería',
@@ -70,7 +78,7 @@ const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
     'Cambio de válvula',
     'Reparación de canilla',
   ],
-  'Electricidad': [
+  Electricidad: [
     'Instalación de tomacorriente',
     'Cambio de llaves térmicas',
     'Instalación de luminaria',
@@ -82,7 +90,7 @@ const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
     'Revisión eléctrica general',
     'Instalación de extractor',
   ],
-  'Gas': [
+  Gas: [
     'Revisión de instalación de gas',
     'Instalación de cocina a gas',
     'Instalación de calefón a gas',
@@ -91,7 +99,7 @@ const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
     'Mantenimiento de calefactor a gas',
     'Prueba de hermeticidad',
   ],
-  'Pintura': [
+  Pintura: [
     'Pintura interior',
     'Pintura exterior',
     'Pintura de rejas',
@@ -100,7 +108,7 @@ const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
     'Pintura antihumedad',
     'Barnizado de madera',
   ],
-  'Carpintería': [
+  Carpintería: [
     'Armado de muebles',
     'Reparación de puertas',
     'Ajuste de bisagras',
@@ -108,7 +116,7 @@ const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
     'Instalación de placard',
     'Reparación de muebles',
   ],
-  'Albañilería': [
+  Albañilería: [
     'Reparación de humedad',
     'Arreglo de revoque',
     'Colocación de cerámicas',
@@ -116,7 +124,7 @@ const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
     'Pequeñas reformas',
     'Construcción de pared',
   ],
-  'Herrería': [
+  Herrería: [
     'Reparación de rejas',
     'Fabricación de portón',
     'Soldadura',
@@ -130,27 +138,27 @@ const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
     'Limpieza de filtros y unidad',
     'Reparación de aire acondicionado',
   ],
-  'Calefacción': [
+  Calefacción: [
     'Instalación de calefactor',
     'Mantenimiento de calefactor',
     'Reparación de calefacción',
     'Revisión de tiraje',
   ],
-  'Cerrajería': [
+  Cerrajería: [
     'Apertura de puerta',
     'Cambio de cerradura',
     'Duplicado de llaves',
     'Instalación de cerrojo',
     'Reparación de cerradura',
   ],
-  'Jardinería': [
+  Jardinería: [
     'Corte de pasto',
     'Poda de árboles',
     'Limpieza de jardín',
     'Diseño de jardín',
     'Mantenimiento mensual',
   ],
-  'Mudanzas': [
+  Mudanzas: [
     'Mudanza dentro de la ciudad',
     'Mudanza con embalaje',
     'Flete pequeño',
@@ -165,12 +173,10 @@ const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
     'Armado de PC',
     'Soporte técnico a domicilio',
   ],
-  'Otros': [
-    'Servicio general a domicilio',
-    'Mantenimiento del hogar',
-    'Arreglos generales',
-  ],
+  Otros: ['Servicio general a domicilio', 'Mantenimiento del hogar', 'Arreglos generales'],
 };
+
+const MAX_DESC = 500;
 
 export default function AddService({ navigation }: Props) {
   const [role, setRole] = useState<AppRole | null>(null);
@@ -184,22 +190,20 @@ export default function AddService({ navigation }: Props) {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
 
-  const filteredSuggestions = useMemo(() => {
-    const q = title.trim().toLowerCase();
-    const base = suggestions.length ? suggestions : (FALLBACK_SUGGESTIONS[category] ?? []);
-    if (!q) return base.slice(0, 10);
-    return base.filter((s) => s.toLowerCase().includes(q)).slice(0, 10);
-  }, [suggestions, title, category]);
-
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [localImageUri, setLocalImageUri] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
+  const [alertMsg, setAlertMsg] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+
+  // =========================
+  // Load role
+  // =========================
   useEffect(() => {
-    const loadRole = async () => {
+    (async () => {
       try {
         const storedRole = (await AsyncStorage.getItem('@role')) as AppRole | null;
         setRole(storedRole);
@@ -208,35 +212,57 @@ export default function AddService({ navigation }: Props) {
       } finally {
         setLoadingRole(false);
       }
-    };
-    loadRole();
+    })();
   }, []);
 
-  const fetchSuggestions = async (cat: string) => {
+  // =========================
+  // Suggestions
+  // =========================
+  const fetchSuggestions = useCallback(async (cat: string) => {
     try {
       setLoadingSuggestions(true);
-      // ✅ endpoint nuevo en backend
       const data = await api.get<SuggestionResponse>(
         `/private/services/suggestions?category=${encodeURIComponent(cat)}`,
       );
       setSuggestions(Array.isArray(data?.suggestions) ? data.suggestions : []);
-    } catch (e) {
-      // si falla, usamos fallback local
+    } catch {
       setSuggestions([]);
     } finally {
       setLoadingSuggestions(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchSuggestions(category);
-  }, [category]);
+  }, [category, fetchSuggestions]);
 
-  const pickImage = async () => {
+  const filteredSuggestions = useMemo(() => {
+    const q = title.trim().toLowerCase();
+    const base = suggestions.length ? suggestions : FALLBACK_SUGGESTIONS[category] ?? [];
+    if (!q) return base.slice(0, 10);
+    return base.filter((s) => s.toLowerCase().includes(q)).slice(0, 10);
+  }, [suggestions, title, category]);
+
+  // =========================
+  // Pick image
+  // =========================
+  const pickImage = useCallback(async () => {
     try {
+      setAlertMsg(null);
+      setOk(false);
+
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== 'granted') {
+        setAlertMsg('Necesitamos permiso para acceder a tus fotos.');
+        setOk(false);
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        quality: 0.8,
+        quality: 0.85,
+        allowsEditing: true,
+        aspect: [4, 3],
       });
 
       if (!result.canceled && result.assets?.length) {
@@ -245,71 +271,108 @@ export default function AddService({ navigation }: Props) {
       }
     } catch (e) {
       console.log('Error seleccionando imagen:', e);
-      setErrorMsg('No se pudo seleccionar la imagen.');
+      setAlertMsg('No se pudo seleccionar la imagen.');
+      setOk(false);
     }
-  };
+  }, []);
 
-  const uploadImage = async (): Promise<string | null> => {
+  // =========================
+  // Upload image
+  // =========================
+  const uploadImage = useCallback(async (): Promise<string | null> => {
     if (!localImageUri) return null;
 
     const token = await AsyncStorage.getItem('@token');
+    if (!token) {
+      setAlertMsg('No hay sesión activa.');
+      setOk(false);
+      return null;
+    }
+
     const uploadUrl = `${API_URL}/uploads/work-image`;
 
     const formData = new FormData();
     formData.append('image', {
       uri: localImageUri,
       type: 'image/jpeg',
-      name: 'photo.jpg',
+      name: 'work.jpg',
     } as any);
 
     try {
+      setUploading(true);
+
       const res = await fetch(uploadUrl, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { Authorization: `Bearer ${token}` } as any,
         body: formData,
       });
 
       const text = await res.text();
-      if (!res.ok) {
-        console.log('🔥 Error upload image', res.status, text);
-        throw new Error('No se pudo subir la imagen');
+      let data: any = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = { raw: text };
       }
 
-      const data = JSON.parse(text);
-      return data.url;
+      if (!res.ok) {
+        console.log('🔥 Error upload image', res.status, data);
+        setAlertMsg(data?.message || 'No se pudo subir la imagen.');
+        setOk(false);
+        return null;
+      }
+
+      if (!data?.url) {
+        setAlertMsg('El servidor no devolvió la URL de la imagen.');
+        setOk(false);
+        return null;
+      }
+
+      return data.url as string;
     } catch (err) {
       console.log('Error al subir imagen', err);
-      setErrorMsg('No se pudo subir la imagen.');
+      setAlertMsg('No se pudo subir la imagen.');
+      setOk(false);
       return null;
+    } finally {
+      setUploading(false);
     }
-  };
+  }, [localImageUri]);
 
-  const handleSave = async () => {
+  // =========================
+  // Save
+  // =========================
+  const canSave = useMemo(() => {
+    if (saving || uploading) return false;
+    if (role !== 'professional') return false;
+    if (!category.trim()) return false;
+    if (!title.trim()) return false;
+    return true;
+  }, [saving, uploading, role, category, title]);
+
+  const handleSave = useCallback(async () => {
     try {
-      setErrorMsg(null);
-      setSuccessMsg(null);
+      setAlertMsg(null);
+      setOk(false);
 
       if (role !== 'professional') {
-        setErrorMsg('Solo los profesionales pueden agregar servicios.');
+        setAlertMsg('Solo los profesionales pueden agregar servicios.');
+        setOk(false);
         return;
       }
-
       if (!category.trim()) {
-        setErrorMsg('La categoría es obligatoria.');
+        setAlertMsg('La categoría es obligatoria.');
+        setOk(false);
         return;
       }
-
       if (!title.trim()) {
-        setErrorMsg('El título es obligatorio (podés elegir uno sugerido o escribirlo).');
+        setAlertMsg('El título es obligatorio (podés elegir uno sugerido o escribirlo).');
+        setOk(false);
         return;
       }
 
       setSaving(true);
 
-      // (Opcional) subir imagen
       let finalImageUrl: string | null = null;
       if (localImageUri) {
         finalImageUrl = await uploadImage();
@@ -324,235 +387,458 @@ export default function AddService({ navigation }: Props) {
         descripcion: description.trim() ? description.trim() : null,
         categoria: category.trim(),
         precio_base: Number.isFinite(priceNum as any) ? priceNum : null,
-        imageUrl: finalImageUrl ?? null, // no se guarda en DB hoy
+        imageUrl: finalImageUrl ?? null,
       };
 
-      // ✅ FIX: pegamos al PRIVATE endpoint
       const created = await api.post<any>('/private/services', { body });
+      console.log('✅ created service', created);
 
-      setSuccessMsg('Servicio agregado correctamente.');
+      setOk(true);
+      setAlertMsg('Servicio agregado correctamente.');
+
       setTitle('');
       setDescription('');
       setPriceBase('');
       setLocalImageUri(null);
       setUploadedImageUrl(finalImageUrl);
 
-      // opcional: refrescar sugerencias (para que se vea en “mis servicios”)
       fetchSuggestions(category);
-
-      console.log('✅ created service', created);
     } catch (e: any) {
       console.log('❌ Error AddService save', e);
-      setErrorMsg('No se pudo guardar el servicio.');
+      setOk(false);
+      setAlertMsg(e?.message || 'No se pudo guardar el servicio.');
     } finally {
       setSaving(false);
     }
-  };
+  }, [role, category, title, description, priceBase, localImageUri, uploadImage, fetchSuggestions]);
 
+  // =========================
+  // Render guards
+  // =========================
   if (loadingRole) {
     return (
-      <SafeAreaView style={styles.screen}>
-        <Text style={{ padding: 20 }}>Cargando...</Text>
-      </SafeAreaView>
+      <Screen>
+        <TopBar title="Agregar servicio" showBack />
+        <View style={styles.center}>
+          <ActivityIndicator />
+          <Text style={[TYPO.bodyMuted, { marginTop: SPACING.md }]}>Cargando…</Text>
+        </View>
+      </Screen>
     );
   }
 
   if (role !== 'professional') {
     return (
-      <SafeAreaView style={styles.screen}>
-        <View style={{ padding: 20 }}>
-          <Text style={{ marginBottom: 12 }}>
-            Solo los profesionales pueden agregar servicios.
-          </Text>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backToProfileBtn}>
-            <Text style={{ color: '#fff', textAlign: 'center' }}>Volver</Text>
-          </TouchableOpacity>
+      <Screen>
+        <TopBar title="Agregar servicio" showBack />
+        <View style={styles.container}>
+          <Card style={styles.blockCard} withShadow>
+            <Text style={TYPO.h3}>Acceso restringido</Text>
+            <Text style={[TYPO.subtitle, { marginTop: SPACING.sm }]}>
+              Solo los profesionales pueden agregar servicios.
+            </Text>
+            <View style={{ marginTop: SPACING.lg }}>
+              <Button title="Volver" variant="primary" size="lg" onPress={() => navigation.goBack()} />
+            </View>
+          </Card>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={{ fontSize: 18 }}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Agregar Servicio</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <Screen>
+      <TopBar title="Agregar servicio" showBack />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
-        {successMsg && <Text style={styles.successText}>{successMsg}</Text>}
-
-        <Text style={styles.label}>Categoría</Text>
-        <View style={styles.categoryWrap}>
-          {CATEGORIES.map((c) => {
-            const selected = c === category;
-            return (
-              <TouchableOpacity
-                key={c}
-                onPress={() => setCategory(c)}
-                activeOpacity={0.85}
-                style={[styles.catPill, selected && styles.catPillSelected]}
-              >
-                <Text style={[styles.catPillText, selected && styles.catPillTextSelected]}>
-                  {c}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <View style={styles.suggestionsHeader}>
-          <Text style={[styles.label, { marginTop: 0 }]}>Servicios sugeridos</Text>
-          {loadingSuggestions ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <ActivityIndicator />
-              <Text style={{ color: '#6b7280' }}>Cargando…</Text>
-            </View>
-          ) : null}
-        </View>
-
-        {filteredSuggestions.length === 0 ? (
-          <Text style={styles.hint}>Podés escribir el nombre que quieras.</Text>
-        ) : (
-          <View style={styles.suggestionsWrap}>
-            {filteredSuggestions.map((s) => (
-              <TouchableOpacity
-                key={s}
-                activeOpacity={0.85}
-                onPress={() => setTitle(s)}
-                style={styles.suggestionChip}
-              >
-                <Text style={styles.suggestionChipText}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        <Text style={styles.label}>Nombre del servicio</Text>
-        <TextInput
-          style={styles.input}
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Ej: Instalación de calefón"
-        />
-
-        <Text style={styles.label}>Descripción (opcional)</Text>
-        <TextInput
-          style={[styles.input, styles.inputMultiline]}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Detalles del servicio…"
-        />
-
-        <Text style={styles.label}>Precio aproximado (opcional)</Text>
-        <TextInput
-          style={styles.input}
-          value={priceBase}
-          onChangeText={setPriceBase}
-          placeholder="Ej: 1500"
-          keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
-        />
-        <Text style={styles.hint}>Podés dejarlo vacío. El precio real se puede negociar.</Text>
-
-        <Text style={styles.label}>Imagen (opcional)</Text>
-
-        {localImageUri && (
-          <Image
-            source={{ uri: localImageUri }}
-            style={{ width: '100%', height: 180, marginTop: 10, borderRadius: 12 }}
-          />
-        )}
-
-        <TouchableOpacity style={styles.uploadBtn} onPress={pickImage}>
-          <Text style={styles.uploadBtnText}>
-            {localImageUri ? 'Cambiar imagen' : 'Seleccionar imagen'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.saveButton, saving && { opacity: 0.6 }]}
-          disabled={saving}
-          onPress={handleSave}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.saveButtonText}>{saving ? 'Guardando...' : 'Guardar servicio'}</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+          <View style={styles.header}>
+            <Text style={TYPO.h2}>Mostrá tu experiencia</Text>
+            <Text style={[TYPO.subtitle, { marginTop: SPACING.xs }]}>
+              Agregá servicios reales para generar confianza y mejorar conversiones.
+            </Text>
+          </View>
+
+          {alertMsg && (
+            <Alert
+              type={ok ? 'success' : 'error'}
+              message={alertMsg}
+              style={{ marginBottom: SPACING.md }}
+            />
+          )}
+
+          {/* Categoría */}
+          <Card style={styles.blockCard} withShadow>
+            <View style={styles.blockTitleRow}>
+              <Text style={styles.blockTitle}>Categoría</Text>
+              <Text style={TYPO.caption}>Elegí una</Text>
+            </View>
+
+            <View style={styles.pillsWrap}>
+              {CATEGORIES.map((c) => {
+                const selected = c === category;
+                return (
+                  <TouchableOpacity
+                    key={c}
+                    onPress={() => setCategory(c)}
+                    activeOpacity={0.85}
+                    style={[styles.pill, selected && styles.pillSelected]}
+                  >
+                    <Text style={[styles.pillText, selected && styles.pillTextSelected]}>
+                      {c}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </Card>
+
+          {/* Sugerencias */}
+          <Card style={styles.blockCard} withShadow>
+            <View style={styles.blockTitleRow}>
+              <Text style={styles.blockTitle}>Servicios sugeridos</Text>
+              {loadingSuggestions ? (
+                <View style={styles.loadingInline}>
+                  <ActivityIndicator size="small" />
+                  <Text style={TYPO.caption}>Cargando…</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => fetchSuggestions(category)}
+                  style={styles.refreshBtn}
+                >
+                  <Ionicons name="refresh-outline" size={16} color={COLORS.textMuted} />
+                  <Text style={styles.refreshText}>Actualizar</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {filteredSuggestions.length === 0 ? (
+              <Text style={TYPO.helper}>Podés escribir el nombre que quieras.</Text>
+            ) : (
+              <View style={styles.chipsWrap}>
+                {filteredSuggestions.map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    activeOpacity={0.85}
+                    onPress={() => setTitle(s)}
+                    style={styles.chip}
+                  >
+                    <Text style={styles.chipText}>{s}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </Card>
+
+          {/* Datos del servicio */}
+          <Card style={styles.blockCard} withShadow>
+            <Text style={styles.blockTitle}>Detalles</Text>
+
+            <Text style={styles.label}>Nombre del servicio</Text>
+            <TextInput
+              style={styles.input}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Ej: Instalación de calefón"
+              placeholderTextColor={COLORS.textMuted}
+            />
+
+            <Text style={[styles.label, { marginTop: SPACING.md }]}>Descripción (opcional)</Text>
+            <View style={styles.textareaWrap}>
+              <TextInput
+                style={styles.textarea}
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Contá qué incluye, tiempos estimados, materiales, etc."
+                placeholderTextColor={COLORS.textMuted}
+                multiline
+                maxLength={MAX_DESC}
+                textAlignVertical="top"
+              />
+            </View>
+            <View style={styles.counterRow}>
+              <Text style={TYPO.caption}>{description.length}/{MAX_DESC}</Text>
+            </View>
+
+            <Text style={[styles.label, { marginTop: SPACING.md }]}>Precio aproximado (opcional)</Text>
+            <TextInput
+              style={styles.input}
+              value={priceBase}
+              onChangeText={setPriceBase}
+              placeholder="Ej: 1500"
+              placeholderTextColor={COLORS.textMuted}
+              keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
+            />
+            <Text style={[TYPO.helper, { marginTop: SPACING.sm }]}>
+              Podés dejarlo vacío. El precio real se negocia con el cliente.
+            </Text>
+          </Card>
+
+          {/* Imagen */}
+          <Card style={styles.blockCard} withShadow>
+            <View style={styles.blockTitleRow}>
+              <Text style={styles.blockTitle}>Imagen (opcional)</Text>
+              {!!localImageUri && (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setLocalImageUri(null);
+                    setUploadedImageUrl(null);
+                  }}
+                  style={styles.linkBtn}
+                >
+                  <Text style={styles.linkText}>Quitar</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {localImageUri ? (
+              <Image source={{ uri: localImageUri }} style={styles.previewImage} />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Ionicons name="image-outline" size={20} color={COLORS.textMuted} />
+                <Text style={[TYPO.helper, { marginTop: SPACING.xs }]}>
+                  Sumá una foto para mejorar la conversión
+                </Text>
+              </View>
+            )}
+
+            <View style={{ marginTop: SPACING.md }}>
+              <Button
+                title={localImageUri ? 'Cambiar imagen' : 'Seleccionar imagen'}
+                variant="neutral"
+                size="lg"
+                onPress={pickImage}
+                disabled={uploading || saving}
+              />
+            </View>
+
+            {!!uploadedImageUrl && (
+              <Text style={[TYPO.caption, { marginTop: SPACING.sm }]}>
+                Imagen subida: {uploadedImageUrl}
+              </Text>
+            )}
+          </Card>
+
+          <View style={{ height: 110 }} />
+        </ScrollView>
+
+        {/* Footer fijo */}
+        <SafeAreaView style={styles.footer}>
+          <Button
+            title={uploading ? 'Subiendo imagen…' : saving ? 'Guardando…' : 'Guardar servicio'}
+            variant="primary"
+            size="lg"
+            onPress={handleSave}
+            disabled={!canSave}
+          />
+          <Text style={[TYPO.caption, { textAlign: 'center', marginTop: SPACING.sm }]}>
+            Asegurate de que el nombre sea claro y específico.
+          </Text>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f5f7fb' },
+  container: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.xl,
+  },
 
-  topBar: {
+  header: {
+    marginBottom: SPACING.md,
+  },
+
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.lg,
+  },
+
+  blockCard: {
+    borderRadius: RADII.lg,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    backgroundColor: COLORS.cardBg,
+    marginBottom: SPACING.md,
+  },
+
+  blockTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
     justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
+    gap: 12,
+    marginBottom: SPACING.md,
   },
-  topBarTitle: { fontSize: 16, fontWeight: '600' },
-  backButton: { padding: 4 },
 
-  content: { paddingHorizontal: 16, paddingVertical: 16 },
+  blockTitle: {
+    ...TYPO.h3,
+  },
 
-  label: { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 6, marginTop: 12 },
-
-  hint: { fontSize: 12, color: '#6b7280', marginTop: 6 },
+  label: {
+    ...TYPO.label,
+    marginBottom: SPACING.sm,
+  },
 
   input: {
-    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    backgroundColor: '#fff',
+    borderColor: COLORS.borderInput,
+    backgroundColor: COLORS.bgInput,
+    borderRadius: RADII.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+    fontFamily: TYPO.body.fontFamily,
+    fontSize: TYPO.body.fontSize,
+    color: COLORS.text,
+  },
+
+  textareaWrap: {
+    borderWidth: 1,
+    borderColor: COLORS.borderInput,
+    backgroundColor: COLORS.bgInput,
+    borderRadius: RADII.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+  },
+
+  textarea: {
+    minHeight: 110,
+    fontFamily: TYPO.body.fontFamily,
+    fontSize: TYPO.body.fontSize,
+    color: COLORS.text,
+  },
+
+  counterRow: {
+    marginTop: SPACING.sm,
+    alignItems: 'flex-end',
+  },
+
+  pillsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  pill: {
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14,
+    borderRadius: RADII.pill,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.graySoft,
   },
-  inputMultiline: { minHeight: 100 },
 
-  categoryWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  catPill: {
+  pillSelected: {
+    borderColor: COLORS.buttonOutlineBorder,
+    backgroundColor: COLORS.cardBg,
+  },
+
+  pillText: {
+    ...TYPO.badge,
+    color: COLORS.inactiveTab,
+  },
+
+  pillTextSelected: {
+    color: COLORS.text,
+  },
+
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: RADII.pill,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.cardBg,
+  },
+
+  chipText: {
+    ...TYPO.badge,
+    color: COLORS.text,
+  },
+
+  loadingInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  refreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: RADII.pill,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    backgroundColor: '#fff',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.cardBg,
   },
-  catPillSelected: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
-  catPillText: { color: '#111827', fontWeight: '600', fontSize: 12 },
-  catPillTextSelected: { color: '#1d4ed8' },
 
-  suggestionsHeader: {
-    marginTop: 14,
-    marginBottom: 6,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  refreshText: {
+    ...TYPO.caption,
+    color: COLORS.textMuted,
+  },
+
+  linkBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADII.pill,
+    backgroundColor: COLORS.graySoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  linkText: {
+    ...TYPO.caption,
+    color: COLORS.text,
+  },
+
+  previewImage: {
+    width: '100%',
+    height: 190,
+    borderRadius: RADII.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    backgroundColor: COLORS.graySoft,
+  },
+
+  imagePlaceholder: {
+    width: '100%',
+    height: 160,
+    borderRadius: RADII.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    backgroundColor: COLORS.graySoft,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  suggestionsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  suggestionChip: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, backgroundColor: '#0ea5e9' },
-  suggestionChipText: { color: '#fff', fontWeight: '700', fontSize: 12 },
 
-  uploadBtn: { marginTop: 12, paddingVertical: 12, borderRadius: 12, backgroundColor: '#0ea5e9', alignItems: 'center' },
-  uploadBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-
-  saveButton: { marginTop: 24, backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 14, alignItems: 'center' },
-  saveButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-
-  errorText: { color: '#b91c1c', marginBottom: 8, fontWeight: '600' },
-  successText: { color: '#166534', marginBottom: 8, fontWeight: '600' },
-
-  backToProfileBtn: { backgroundColor: '#2563eb', paddingVertical: 10, borderRadius: 12 },
+  footer: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: COLORS.borderTab,
+    backgroundColor: COLORS.bgScreen,
+  },
 });

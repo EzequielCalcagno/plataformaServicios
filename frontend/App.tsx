@@ -15,20 +15,18 @@ import Register from './src/screens/Register';
 // Perfil para ver otros profesionales
 import Profile from './src/screens/Profile';
 import Reviews from './src/screens/Reviews';
-
-
 import AddService from './src/screens/AddService';
 import EditProfile from './src/screens/EditProfile';
 import LocationPicker from './src/screens/LocationPicker';
 import Locations from './src/screens/Locations'; // para Locations
 import LocationFormScreen from './src/screens/LocationForm'; // para LocationForm
-import MainTabs from './src/navigation/MainTabs';
 import Bookings from './src/screens/Bookings';
 import ReservationDetail from './src/screens/ReservationDetail';
 import RateReservation from './src/screens/RateReservation';
-
-// ✅ NUEVO
 import CreateRequest from './src/screens/CreateRequest';
+
+import MainTabs from './src/navigation/MainTabs';
+
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;

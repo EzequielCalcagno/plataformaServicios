@@ -16,7 +16,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Circle, Region } from 'react-native-maps';
-import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +25,8 @@ import { COLORS } from '../styles/theme';
 
 // ✅ traer ubicaciones reales del backend
 import { getMyLocations, LocationDto } from '../services/locations.client';
+import { Avatar } from '../components/Avatar';
+import SearchTopCard from '../components/SearchTopCard';
 
 // ✅ usar tu api wrapper (ya maneja token en http si lo tenés así)
 import { api } from '../utils/api';
@@ -312,7 +313,10 @@ export default function Search({ navigation }: any) {
   const startFollowing = useCallback(async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Necesitamos permiso para seguir tu ubicación en tiempo real.');
+      Alert.alert(
+        'Permiso requerido',
+        'Necesitamos permiso para seguir tu ubicación en tiempo real.',
+      );
       return;
     }
 
@@ -626,19 +630,17 @@ export default function Search({ navigation }: any) {
           const category = String(it.category ?? it.categoria ?? '').trim();
 
           const profesionalId = String(it.profesional_id ?? it.profesionalId ?? '').trim();
-
           const profesionalNombre = String(
-            it.profesional_nombre ?? it.profesionalNombre ?? it.professionalName ?? '',
+            it.profesional_nombre ?? it.profesionalNombre ?? '',
           ).trim();
-
           const profesionalApellido = String(
             it.profesional_apellido ?? it.profesionalApellido ?? '',
           ).trim();
-
           const photoUrl = (it.photo_url ?? it.photoUrl ?? null) as string | null;
 
           const ubicacionId = typeof it.ubicacion_id === 'number' ? it.ubicacion_id : null;
-          const ubicacionNombre = typeof it.ubicacion_nombre === 'string' ? it.ubicacion_nombre : null;
+          const ubicacionNombre =
+            typeof it.ubicacion_nombre === 'string' ? it.ubicacion_nombre : null;
 
           let dist =
             typeof it.distanceKm === 'number'
@@ -823,16 +825,6 @@ export default function Search({ navigation }: any) {
   };
 
   // ====== Render helpers ======
-  const Avatar = ({ name, photoUrl }: { name: string; photoUrl: string | null }) => {
-    if (photoUrl) return <Image source={{ uri: photoUrl }} style={styles.avatarImg} />;
-    const initial = (name?.trim()?.[0] || 'P').toUpperCase();
-    return (
-      <View style={styles.avatarPlaceholder}>
-        <Text style={styles.avatarInitial}>{initial}</Text>
-      </View>
-    );
-  };
-
   const MyMarker = () => {
     if (!selectedLocation) return null;
 
@@ -903,13 +895,19 @@ export default function Search({ navigation }: any) {
                 {isFollowing && (
                   <>
                     <Circle
-                      center={{ latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }}
+                      center={{
+                        latitude: selectedLocation.latitude,
+                        longitude: selectedLocation.longitude,
+                      }}
                       radius={radarR1}
                       strokeColor={`rgba(34,197,94,${radarOpacity + 0.25})`}
                       fillColor={`rgba(34,197,94,${radarOpacity})`}
                     />
                     <Circle
-                      center={{ latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }}
+                      center={{
+                        latitude: selectedLocation.latitude,
+                        longitude: selectedLocation.longitude,
+                      }}
                       radius={radarR2}
                       strokeColor={`rgba(34,197,94,${radarOpacity + 0.18})`}
                       fillColor={`rgba(34,197,94,${radarOpacity * 0.7})`}
@@ -960,66 +958,22 @@ export default function Search({ navigation }: any) {
           </View>
         )}
 
-        {/* TARJETA SUPERIOR: UBICACIÓN + RADIO */}
-        <View style={styles.topCardWrapper} pointerEvents="box-none">
-          <View style={styles.topCard}>
-            <View style={styles.topCardHeaderRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.topCardLabel}>Buscando servicios desde</Text>
-
-                <Text style={[styles.topCardLocation, { color: selectedLabelColor }]} numberOfLines={1}>
-                  {selectedLabel}
-                </Text>
-
-                <Text style={styles.topCardRadiusLabel}>Radio: {Math.round(radiusDraft)} km</Text>
-              </View>
-
-              <View style={styles.topButtonsCol}>
-                <TouchableOpacity style={styles.changeLocationButton} onPress={openLocationModal}>
-                  <Ionicons
-                    name="swap-vertical-outline"
-                    size={16}
-                    color="#0369a1"
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text style={styles.changeLocationText}>Cambiar</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.changeLocationButton} onPress={openIntro}>
-                  <Ionicons
-                    name="options-outline"
-                    size={16}
-                    color="#0369a1"
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text style={styles.changeLocationText}>{modeLabel}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.sliderRow}>
-              <Text style={styles.sliderLabel}>Radio de búsqueda</Text>
-              <Text style={styles.sliderValue}>{Math.round(radiusDraft)} km</Text>
-            </View>
-
-            <Slider
-              style={styles.slider}
-              minimumValue={1}
-              maximumValue={30}
-              step={1}
-              value={radiusDraft}
-              onValueChange={handleRadiusValueChange}
-              onSlidingComplete={handleRadiusComplete}
-              minimumTrackTintColor="#0284c7"
-              maximumTrackTintColor="#d1d5db"
-              thumbTintColor="#0284c7"
-            />
-          </View>
-        </View>
+        <SearchTopCard
+          selectedLabel={selectedLabel}
+          selectedLabelColor={selectedLabelColor}
+          radiusDraft={radiusDraft}
+          modeLabel={modeLabel}
+          onOpenLocationModal={openLocationModal}
+          onOpenIntro={openIntro}
+          onRadiusChange={handleRadiusValueChange}
+          onRadiusComplete={handleRadiusComplete}
+        />
 
         {/* CARD PROFESIONAL */}
         {selectedPin && (
-          <View style={[styles.professionalCard, { bottom: BOTTOM_SHEET_MAX_HEIGHT + PIN_CARD_MARGIN }]}>
+          <View
+            style={[styles.professionalCard, { bottom: BOTTOM_SHEET_MAX_HEIGHT + PIN_CARD_MARGIN }]}
+          >
             <TouchableOpacity style={styles.closeCardBtn} onPress={closePinCard}>
               <Ionicons name="close" size={18} color="#6b7280" />
             </TouchableOpacity>
@@ -1161,7 +1115,10 @@ export default function Search({ navigation }: any) {
                         </Text>
 
                         <Text style={styles.resultMiniList} numberOfLines={1}>
-                          {item.services.slice(0, 2).map((s) => s.title).join(' · ')}
+                          {item.services
+                            .slice(0, 2)
+                            .map((s) => s.title)
+                            .join(' · ')}
                           {item.services.length > 2 ? ' · …' : ''}
                         </Text>
                       </View>
@@ -1215,7 +1172,11 @@ export default function Search({ navigation }: any) {
                   <Text style={styles.introBtnText}>Ver todo</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.introBtn} onPress={pickModeWorked} activeOpacity={0.9}>
+                <TouchableOpacity
+                  style={styles.introBtn}
+                  onPress={pickModeWorked}
+                  activeOpacity={0.9}
+                >
                   <Ionicons name="people-outline" size={18} color="#111827" />
                   <Text style={styles.introBtnText}>Con los que trabajé</Text>
                 </TouchableOpacity>
@@ -1290,7 +1251,12 @@ export default function Search({ navigation }: any) {
                 disabled={changingLocation}
                 activeOpacity={0.85}
               >
-                <Ionicons name="locate-outline" size={18} color="#111827" style={{ marginRight: 8 }} />
+                <Ionicons
+                  name="locate-outline"
+                  size={18}
+                  color="#111827"
+                  style={{ marginRight: 8 }}
+                />
                 <Text style={styles.modalOptionText}>Usar ubicación actual (una vez)</Text>
               </TouchableOpacity>
 
@@ -1315,7 +1281,10 @@ export default function Search({ navigation }: any) {
                   return (
                     <Pressable
                       key={loc.id}
-                      style={[styles.modalLocationRow, isSelected && styles.modalLocationRowSelected]}
+                      style={[
+                        styles.modalLocationRow,
+                        isSelected && styles.modalLocationRowSelected,
+                      ]}
                       onPress={() => handleSelectStoredLocation(loc)}
                     >
                       <Ionicons
@@ -1390,7 +1359,12 @@ const styles = StyleSheet.create({
   },
   changeLocationText: { fontSize: 12, color: '#0369a1', fontWeight: '800' },
 
-  sliderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  sliderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
   sliderLabel: { fontSize: 12, color: '#111827', fontWeight: '800' },
   sliderValue: { fontSize: 12, color: '#111827', fontWeight: '700' },
   slider: { marginTop: 2 },
@@ -1472,7 +1446,12 @@ const styles = StyleSheet.create({
   },
 
   rubrosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  rubroChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: '#f3f4f6' },
+  rubroChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#f3f4f6',
+  },
   rubroChipText: { fontSize: 12, color: COLORS?.text ?? '#111827', fontWeight: '700' },
 
   resultsList: { flex: 1 },
@@ -1489,7 +1468,12 @@ const styles = StyleSheet.create({
   resultCategory: { fontSize: 12, color: '#6b7280', marginTop: 2, fontWeight: '700' },
   resultMiniList: { fontSize: 12, color: '#9ca3af', marginTop: 4, fontWeight: '600' },
 
-  smallProfileBtn: { backgroundColor: '#0284c7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  smallProfileBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
   smallProfileText: { color: '#fff', fontSize: 12, fontWeight: '900' },
 
   emptyState: { marginTop: 8 },
@@ -1534,7 +1518,12 @@ const styles = StyleSheet.create({
   introBtnText: { fontSize: 13, fontWeight: '900', color: '#111827' },
   introSection: { marginTop: 14, fontSize: 13, fontWeight: '900', color: '#111827' },
   introChipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
-  introChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: '#f3f4f6' },
+  introChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#f3f4f6',
+  },
   introChipText: { fontSize: 12, fontWeight: '800', color: '#111827' },
 
   // ===== Location modal =====
@@ -1548,10 +1537,20 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     maxHeight: '70%',
   },
-  modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   modalTitle: { fontSize: 16, fontWeight: '900', color: '#111827' },
   modalSubtitle: { fontSize: 13, color: '#6b7280', marginTop: 2, fontWeight: '600' },
-  modalOptionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, marginTop: 10 },
+  modalOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginTop: 10,
+  },
   modalOptionText: { fontSize: 14, color: '#111827', fontWeight: '700' },
   helperText: { fontSize: 12, color: '#9ca3af', marginTop: 4, fontWeight: '600' },
   modalLocationRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },

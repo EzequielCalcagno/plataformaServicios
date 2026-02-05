@@ -79,7 +79,7 @@ function statusUI(estado?: string | null) {
     return { label: e === 'EN_NEGOCIACION' ? 'En negociación' : 'Activa', tone: 'primary' as const, icon: 'flash-outline' as const };
   }
   if (e === 'COMPLETADA' || e === 'DONE' || e === 'CERRADO' || e === 'FINALIZADO') {
-    return { label: e === 'EN_NEGOCIACION' ? 'En negociación' : 'Completada', tone: 'success' as const, icon: 'checkmark-circle-outline' as const };
+    return { label: 'Completada', tone: 'success' as const, icon: 'checkmark-circle-outline' as const };
   }
 
   return { label: estado || 'Estado', tone: 'muted' as const, icon: 'information-circle-outline' as const };
@@ -307,7 +307,7 @@ export default function Bookings({ navigation, route }: Props) {
 
   return (
     <Screen>
-      <TopBar title={headerTitle} showBack onPressBack={() => navigation.goBack()} rightNode={null} />
+      <TopBar title={headerTitle} showBack />
 
       {/* Subheader simple */}
       <View style={styles.header}>

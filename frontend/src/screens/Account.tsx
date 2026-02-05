@@ -153,7 +153,6 @@ export default function Account({ navigation }: Props) {
           setLoadingProfile(true);
           const data: any = await getCurrentUser();
 
-          // ✅ FIX: isProfessional estaba al revés.
           // Prioridad: boolean del backend si existe; sino por id_rol
           // (ajustá los números si tu backend usa otros roles)
           const roleId = Number(data.id_rol);

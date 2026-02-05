@@ -219,8 +219,8 @@ export default function Home() {
     : 'Explorá servicios cerca de tu ubicación.';
 
   const goCTA = () => {
-    if (isProfessional) navigation.navigate('Bookings');
-    else navigation.navigate('Search');
+    if (isProfessional) navigation.navigate('Solicitudes');
+    else navigation.navigate('Buscar');
   };
 
   const openReservation = (reservationId: number) => {
@@ -296,7 +296,7 @@ export default function Home() {
               <TouchableOpacity
                 activeOpacity={0.9}
                 style={styles.quickTile}
-                onPress={() => navigation.navigate('Search')}
+                onPress={() => navigation.navigate('Buscar')}
               >
                 <View style={styles.quickIconWrap}>
                   <Ionicons name="search-outline" size={18} color={COLORS.text} />
@@ -308,7 +308,7 @@ export default function Home() {
               <TouchableOpacity
                 activeOpacity={0.9}
                 style={styles.quickTile}
-                onPress={() => navigation.navigate('Bookings')}
+                onPress={() => navigation.navigate('Solicitudes')}
               >
                 <View style={styles.quickIconWrap}>
                   <Ionicons name="calendar-outline" size={18} color={COLORS.text} />
@@ -322,7 +322,7 @@ export default function Home() {
               <TouchableOpacity
                 activeOpacity={0.9}
                 style={styles.quickTile}
-                onPress={() => navigation.navigate('Bookings')}
+                onPress={() => navigation.navigate('Solicitudes')}
               >
                 <View style={styles.quickIconWrap}>
                   <Ionicons name="notifications-outline" size={18} color={COLORS.text} />

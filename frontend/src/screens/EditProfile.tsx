@@ -285,7 +285,7 @@ export default function EditProfile({ navigation }: Props) {
   }
 
   return (
-    <Screen>
+    <Screen>\
       <TopBar title="Editar perfil" showBack />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {alertMsg && (
