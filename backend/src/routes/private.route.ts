@@ -2,7 +2,6 @@
 import { Router, Request, Response } from 'express';
 import { requireRole } from '../middlewares/requireRole.middleware';
 
-// Controllers
 import { getCurrentUserController } from '../controllers/users.controller';
 import { searchServiciosController } from '../controllers/search.controller';
 
@@ -34,47 +33,74 @@ import {
   listMyReservationsProfesionalController,
   profesionalAcceptReservationController,
   profesionalProposeController,
-
-  // ✅ estos dos son los que existen en tu controller (según el error)
   profesionalCancelController,
   profesionalFinishController,
-
   clientAcceptProposalController,
   clientRejectProposalController,
-
   requesterFinishController,
   confirmFinishController,
   rejectFinishController,
-
   rateReservationController,
   listProfessionalReviewsController,
 } from '../controllers/reservations.controller';
 
+// ✅ LIVE LOCATION controllers (los dos que ya tenés)
+import {
+  upsertLiveLocationController,
+  disableLiveLocationController,
+} from '../controllers/liveLocation.controller';
+
+import {
+  upsertMyProLiveLocationController,
+  disableMyProLiveLocationController,
+} from '../controllers/proLiveLocation.controller';
+
+// ✅ SERVICES CRUD real (tabla public.servicios)
+import {
+  listMyServicesController,
+  createMyServiceController,
+  updateMyServiceController,
+  deleteMyServiceController,
+  getServiceSuggestionsController,
+  bootstrapMyServicesController,
+} from '../controllers/services.controller';
+
 const router = Router();
 
-/**
- * Todas las rutas aquí dentro ya pasan por requireAuth,
- * porque el server las monta bajo: /api/v1/private → requireAuth → private.router
- */
-
-// --------------- USER ROUTES ---------------
+// USER
 router.get('/currentUser', getCurrentUserController);
 
-// --------------- PROFILE ROUTES ---------------
+// PROFILE
 router.get('/profile', requireRole('PROFESIONAL'), getMyProfessionalProfileController);
 router.get('/profile/:userId', getProfessionalProfileByIdController);
 router.post('/profile', requireRole('PROFESIONAL'), createMyProfessionalProfileController);
 router.patch('/profile', requireRole('PROFESIONAL'), updateMyProfessionalProfileController);
 
-// --------------- LOCATION ROUTES ---------------
+// LOCATIONS
 router.get('/locations', getMyLocationsController);
 router.post('/locations', createMyLocationController);
 router.patch('/locations/:id', updateMyLocationController);
 router.delete('/locations/:id', deleteMyLocationController);
 
-// --------------- UPLOADS ROUTES ---------------
+// ✅ LIVE LOCATION (solo profesional)
+router.post('/live-location', requireRole('PROFESIONAL'), upsertLiveLocationController);
+router.delete('/live-location', requireRole('PROFESIONAL'), disableLiveLocationController);
 
-// ✅ Work image: solo profesional
+// --------------- PRO LIVE LOCATION ---------------
+router.patch('/pro-live-location', requireRole('PROFESIONAL'), upsertMyProLiveLocationController);
+router.delete('/pro-live-location', requireRole('PROFESIONAL'), disableMyProLiveLocationController);
+
+// ✅ SERVICES (REAL) - para que AddService inserte en public.servicios
+router.get('/services', requireRole('PROFESIONAL'), listMyServicesController);
+router.post('/services', requireRole('PROFESIONAL'), createMyServiceController);
+router.patch('/services/:id', requireRole('PROFESIONAL'), updateMyServiceController);
+router.delete('/services/:id', requireRole('PROFESIONAL'), deleteMyServiceController);
+
+// ✅ NUEVO: sugerencias por categoría + bootstrap (precargar)
+router.get('/services/suggestions', requireRole('PROFESIONAL'), getServiceSuggestionsController);
+router.post('/services/bootstrap', requireRole('PROFESIONAL'), bootstrapMyServicesController);
+
+// UPLOADS
 router.post(
   '/uploads/work-image',
   requireRole('PROFESIONAL'),
@@ -82,14 +108,13 @@ router.post(
   uploadWorkImageController,
 );
 
-// ✅ Profile image: cliente o profesional (SIN requireRole)
 router.post(
   '/uploads/profile-image',
   uploadImage.single('image'),
   uploadProfileImageController,
 );
 
-// --------------- WORKS (ejemplo que tenías) ---------------
+// WORKS (ejemplo/mock)
 router.post('/app/works', requireRole('PROFESIONAL'), async (req: Request, res: Response) => {
   try {
     const { title, description, date, imageUrls } = req.body;
@@ -119,42 +144,28 @@ router.get('/app/works', requireRole('PROFESIONAL'), async (_req: Request, res: 
   return res.json([]);
 });
 
-// --------------- SEARCH ---------------
+// SEARCH
 router.get('/search/servicios', searchServiciosController);
 
-// --------------- RESERVATIONS ---------------
-
-// Cliente/solicitante: crea solicitud
+// RESERVATIONS...
 router.post('/reservations', createReservationController);
-
-// Solicitante: listar mis reservas
 router.get('/reservations/mine', listMyReservationsClienteController);
-
-// Profesional: listar reservas que me llegan
 router.get('/reservations/pro', requireRole('PROFESIONAL'), listMyReservationsProfesionalController);
 
-// Profesional: acciones
 router.patch('/reservations/:id/accept', requireRole('PROFESIONAL'), profesionalAcceptReservationController);
 router.patch('/reservations/:id/propose', requireRole('PROFESIONAL'), profesionalProposeController);
 router.patch('/reservations/:id/cancel', requireRole('PROFESIONAL'), profesionalCancelController);
 router.patch('/reservations/:id/finish', requireRole('PROFESIONAL'), profesionalFinishController);
 
-// Solicitante: responde a negociación (sin requireRole)
 router.patch('/reservations/:id/accept-proposal', clientAcceptProposalController);
 router.patch('/reservations/:id/reject-proposal', clientRejectProposalController);
 
-// Nuevas: finalizar por solicitante + confirmación del otro (sin requireRole)
 router.patch('/reservations/:id/requester-finish', requesterFinishController);
 router.patch('/reservations/:id/confirm-finish', confirmFinishController);
 router.patch('/reservations/:id/reject-finish', rejectFinishController);
 
-// Detalle
 router.get('/reservations/:id', getReservationByIdController);
-
-// Calificación
 router.patch('/reservations/:id/rate', rateReservationController);
-
-// Reviews
 router.get('/professionals/:id/reviews', listProfessionalReviewsController);
 
 export default router;

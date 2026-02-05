@@ -24,8 +24,11 @@ import { Image } from 'react-native';
 import Constants from 'expo-constants';
 import { COLORS } from '../styles/theme';
 
-// ✅ NUEVO: traer ubicaciones reales del backend
+// ✅ traer ubicaciones reales del backend
 import { getMyLocations, LocationDto } from '../services/locations.client';
+
+// ✅ usar tu api wrapper (ya maneja token en http si lo tenés así)
+import { api } from '../utils/api';
 
 // ====== API ======
 const API_URL =
@@ -157,6 +160,12 @@ function toStoredLocation(row: LocationDto): StoredLocation | null {
   };
 }
 
+type CurrentUser = {
+  id: string;
+  rolId: number; // PROFESIONAL = 2
+  foto_url: string | null;
+};
+
 export default function Search({ navigation }: any) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Service[]>([]);
@@ -186,6 +195,10 @@ export default function Search({ navigation }: any) {
   // Follow live
   const watchSubRef = useRef<Location.LocationSubscription | null>(null);
   const [followEnabled, setFollowEnabled] = useState(false);
+  const lastLiveSentRef = useRef<number>(0);
+
+  // ✅ current user (para marker con foto)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
   // Radar animation
   const [radarPhase, setRadarPhase] = useState(0); // 0..1
@@ -221,8 +234,6 @@ export default function Search({ navigation }: any) {
     setSearchMode('category');
     const c = cat?.trim() || null;
     setSelectedCategory(c);
-    // opcional: si querés completar el input con la categoría:
-    // setQuery(c || '');
     closeIntro();
   };
 
@@ -244,6 +255,8 @@ export default function Search({ navigation }: any) {
     return selectedCategory || 'Categorías';
   }, [searchMode, selectedCategory]);
 
+  const isProfessional = useMemo(() => Number(currentUser?.rolId ?? 0) === 2, [currentUser?.rolId]);
+
   // ====== Radar interval ======
   useEffect(() => {
     if (!isFollowing) return;
@@ -257,14 +270,44 @@ export default function Search({ navigation }: any) {
   const radarR2 = 160 + radarPhase * 240;
   const radarOpacity = Math.max(0.06, (1 - radarPhase) * 0.22);
 
+  // ====== LIVE API helpers ======
+  const sendLiveLocation = useCallback(async (lat: number, lng: number) => {
+    // throttling
+    const now = Date.now();
+    if (now - lastLiveSentRef.current < 3500) return;
+    lastLiveSentRef.current = now;
+
+    try {
+      // usamos api.patchJson (tu http debe agregar token)
+      await api.patchJson('/private/pro-live-location', { enabled: true, lat, lng });
+    } catch (e) {
+      // no cortamos UX si falla, solo log
+      console.log('❌ sendLiveLocation error', e);
+    }
+  }, []);
+
+  const disableLiveLocation = useCallback(async () => {
+    try {
+      await api.delete('/private/pro-live-location');
+    } catch (e) {
+      console.log('❌ disableLiveLocation error', e);
+    }
+  }, []);
+
   const stopFollowing = useCallback(async () => {
     try {
       watchSubRef.current?.remove();
       watchSubRef.current = null;
     } catch {}
+
     setFollowEnabled(false);
     await AsyncStorage.setItem(FOLLOW_LIVE_KEY, '0');
-  }, []);
+
+    // ✅ si sos profesional, apagamos live en backend
+    if (isProfessional) {
+      await disableLiveLocation();
+    }
+  }, [disableLiveLocation, isProfessional]);
 
   const startFollowing = useCallback(async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -273,11 +316,9 @@ export default function Search({ navigation }: any) {
       return;
     }
 
-    // marcar flag
     setFollowEnabled(true);
     await AsyncStorage.setItem(FOLLOW_LIVE_KEY, '1');
 
-    // setear seleccionado a "Siguiendo" (coordenadas se actualizan con watch)
     setSelectedLocation((prev) => {
       const baseLat = prev?.latitude ?? FALLBACK_LOCATION.latitude;
       const baseLng = prev?.longitude ?? FALLBACK_LOCATION.longitude;
@@ -290,7 +331,6 @@ export default function Search({ navigation }: any) {
       };
     });
 
-    // arrancar watch
     watchSubRef.current?.remove();
     watchSubRef.current = await Location.watchPositionAsync(
       {
@@ -298,7 +338,7 @@ export default function Search({ navigation }: any) {
         distanceInterval: 10,
         timeInterval: 1000,
       },
-      (loc) => {
+      async (loc) => {
         const lat = loc.coords.latitude;
         const lng = loc.coords.longitude;
 
@@ -310,7 +350,7 @@ export default function Search({ navigation }: any) {
           principal: true,
         });
 
-        // mantener centrado mientras sigue
+        // ✅ mantener centrado mientras sigue
         if (mapRef.current) {
           mapRef.current.animateToRegion(
             {
@@ -322,11 +362,16 @@ export default function Search({ navigation }: any) {
             350,
           );
         }
+
+        // ✅ si sos profesional: mandar a backend para que TODOS te vean en Search
+        if (isProfessional) {
+          await sendLiveLocation(lat, lng);
+        }
       },
     );
-  }, []);
+  }, [isProfessional, sendLiveLocation]);
 
-  // ✅ Cargar ubicaciones reales + radio + follow
+  // ✅ Cargar currentUser + ubicaciones + radio + follow
   const loadLocations = useCallback(async () => {
     try {
       setLoadingLocations(true);
@@ -338,10 +383,23 @@ export default function Search({ navigation }: any) {
       const follow = storedFollow === '1';
       setFollowEnabled(follow);
 
+      // ✅ currentUser
+      try {
+        const me = await api.get<any>('/private/currentUser');
+        if (me?.id) {
+          setCurrentUser({
+            id: String(me.id),
+            rolId: Number(me.rolId ?? me.id_rol ?? 2),
+            foto_url: me.foto_url ?? null,
+          });
+        }
+      } catch (e) {
+        console.log('❌ load currentUser error', e);
+      }
+
       // ✅ trae ubicaciones de BD
       const dbLocations = await getMyLocations();
 
-      // map + filtra las que no tengan lat/lng
       const parsed = (dbLocations ?? []).map(toStoredLocation).filter(Boolean) as StoredLocation[];
       setLocations(parsed);
 
@@ -389,20 +447,17 @@ export default function Search({ navigation }: any) {
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadLocations();
-      // al entrar por primera vez (si no eligió modo aún), mostrar intro
       if (!searchMode) setIntroVisible(true);
     });
     loadLocations();
     return () => unsubscribe();
   }, [navigation, loadLocations, searchMode]);
 
-  // ====== Recentrar mapa al cambiar ubicación (NO follow, porque follow ya recenteriza solo) ======
+  // ====== Recentrar mapa al cambiar ubicación (NO follow) ======
   useEffect(() => {
     if (!selectedLocation || !mapRef.current) return;
 
-    if (selectedLocation.id === FOLLOW_LIVE_ID) {
-      return;
-    }
+    if (selectedLocation.id === FOLLOW_LIVE_ID) return;
 
     const region: Region = {
       latitude: selectedLocation.latitude,
@@ -499,10 +554,7 @@ export default function Search({ navigation }: any) {
 
     if (lat == null || lng == null) return;
 
-    // 🔥 NO buscar si no eligió modo
     if (!searchMode) return;
-
-    // Si está en categorías y todavía no eligió una, no busques (salvo que escriba algo)
     if (searchMode === 'category' && !selectedCategory && !q) return;
 
     try {
@@ -523,15 +575,10 @@ export default function Search({ navigation }: any) {
 
       if (q) params.set('q', q);
 
-      // ✅ Modo: categoría
       if (searchMode === 'category' && selectedCategory) {
-        // Ideal si backend soporta category
         params.set('category', selectedCategory);
-        // Si NO lo soporta, alternativa:
-        // params.set('q', selectedCategory);
       }
 
-      // ✅ Modo: trabajé con ellos (requiere soporte backend)
       if (searchMode === 'worked') {
         params.set('workedWith', '1');
       }
@@ -579,8 +626,15 @@ export default function Search({ navigation }: any) {
           const category = String(it.category ?? it.categoria ?? '').trim();
 
           const profesionalId = String(it.profesional_id ?? it.profesionalId ?? '').trim();
-          const profesionalNombre = String(it.profesional_nombre ?? it.profesionalNombre ?? '').trim();
-          const profesionalApellido = String(it.profesional_apellido ?? it.profesionalApellido ?? '').trim();
+
+          const profesionalNombre = String(
+            it.profesional_nombre ?? it.profesionalNombre ?? it.professionalName ?? '',
+          ).trim();
+
+          const profesionalApellido = String(
+            it.profesional_apellido ?? it.profesionalApellido ?? '',
+          ).trim();
+
           const photoUrl = (it.photo_url ?? it.photoUrl ?? null) as string | null;
 
           const ubicacionId = typeof it.ubicacion_id === 'number' ? it.ubicacion_id : null;
@@ -628,14 +682,13 @@ export default function Search({ navigation }: any) {
 
           if (!okBase) return false;
 
-          // 🔥 anti “me trae USA”: filtro duro por radio en frontend
           const d = Number(s.distanceKm);
           if (!Number.isFinite(d)) return false;
           if (d > radius + 0.2) return false;
 
-          // refuerzo: si searchMode category y hay selectedCategory, asegurar match
           if (searchMode === 'category' && selectedCategory) {
-            if (String(s.category).toLowerCase() !== String(selectedCategory).toLowerCase()) return false;
+            if (String(s.category).toLowerCase() !== String(selectedCategory).toLowerCase())
+              return false;
           }
 
           return true;
@@ -673,6 +726,18 @@ export default function Search({ navigation }: any) {
 
     return () => clearTimeout(t);
   }, [selectedLocation?.id, query, radiusKm, searchMode, selectedCategory, fetchServicios]);
+
+  // ✅ si está siguiendo, refrescar cada 6s para ver a los demás moverse
+  useEffect(() => {
+    if (!searchMode) return;
+    if (!selectedLocation) return;
+
+    const t = setInterval(() => {
+      fetchServicios();
+    }, 6000);
+
+    return () => clearInterval(t);
+  }, [searchMode, selectedLocation?.id, fetchServicios]);
 
   // ====== Agrupar pines ======
   const groupedPins = useMemo<GroupedPin[]>(() => {
@@ -721,10 +786,8 @@ export default function Search({ navigation }: any) {
   // ====== Handlers ======
   const handleSearchChange = (text: string) => setQuery(text);
   const handleRubrosChipPress = (rubro: string) => {
-    // si estás en modo categorías, esto también selecciona categoría
     if (searchMode === 'category') {
       setSelectedCategory(rubro);
-      // opcional: setQuery(rubro);
       return;
     }
     setQuery(rubro);
@@ -767,6 +830,58 @@ export default function Search({ navigation }: any) {
       <View style={styles.avatarPlaceholder}>
         <Text style={styles.avatarInitial}>{initial}</Text>
       </View>
+    );
+  };
+
+  const MyMarker = () => {
+    if (!selectedLocation) return null;
+
+    const photo = currentUser?.foto_url ?? null;
+
+    return (
+      <Marker
+        coordinate={{
+          latitude: selectedLocation.latitude,
+          longitude: selectedLocation.longitude,
+        }}
+        anchor={{ x: 0.5, y: 1 }}
+        onPress={() => closePinCard()}
+      >
+        {isProfessional && photo ? (
+          <View style={{ alignItems: 'center' }}>
+            <Image
+              source={{ uri: photo }}
+              style={{
+                width: 46,
+                height: 46,
+                borderRadius: 23,
+                borderWidth: 3,
+                borderColor: isFollowing ? '#16a34a' : '#0284c7',
+                backgroundColor: '#fff',
+              }}
+            />
+            <View
+              style={{
+                width: 0,
+                height: 0,
+                borderLeftWidth: 8,
+                borderRightWidth: 8,
+                borderTopWidth: 12,
+                borderLeftColor: 'transparent',
+                borderRightColor: 'transparent',
+                borderTopColor: isFollowing ? '#16a34a' : '#0284c7',
+                marginTop: -2,
+              }}
+            />
+          </View>
+        ) : (
+          <Image
+            source={require('../../assets/icons/mapa/default-pin.png')}
+            style={{ width: 40, height: 40 }}
+            resizeMode="contain"
+          />
+        )}
+      </Marker>
     );
   };
 
@@ -813,21 +928,8 @@ export default function Search({ navigation }: any) {
                   fillColor={isFollowing ? 'rgba(34,197,94,0.10)' : 'rgba(56,189,248,0.18)'}
                 />
 
-                {/* Pin ubicación seleccionada */}
-                <Marker
-                  coordinate={{
-                    latitude: selectedLocation.latitude,
-                    longitude: selectedLocation.longitude,
-                  }}
-                  anchor={{ x: 0.5, y: 1 }}
-                  onPress={() => closePinCard()}
-                >
-                  <Image
-                    source={require('../../assets/icons/mapa/default-pin.png')}
-                    style={{ width: 40, height: 40 }}
-                    resizeMode="contain"
-                  />
-                </Marker>
+                {/* ✅ Mi marker (foto si profesional) */}
+                <MyMarker />
               </>
             )}
 
@@ -1095,7 +1197,10 @@ export default function Search({ navigation }: any) {
             <View style={styles.introCard}>
               <View style={styles.introHeaderRow}>
                 <Text style={styles.introTitle}>¿Qué estás buscando hoy?</Text>
-                <TouchableOpacity onPress={closeIntro} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <TouchableOpacity
+                  onPress={closeIntro}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
                   <Ionicons name="close" size={22} color="#6b7280" />
                 </TouchableOpacity>
               </View>
@@ -1124,7 +1229,9 @@ export default function Search({ navigation }: any) {
                     key={cat}
                     style={[
                       styles.introChip,
-                      selectedCategory?.toLowerCase() === cat.toLowerCase() && { backgroundColor: '#e0f2fe' },
+                      selectedCategory?.toLowerCase() === cat.toLowerCase() && {
+                        backgroundColor: '#e0f2fe',
+                      },
                     ]}
                     onPress={() => pickModeCategory(cat)}
                     activeOpacity={0.9}
@@ -1153,7 +1260,9 @@ export default function Search({ navigation }: any) {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.modalSubtitle}>Elegí una ubicación guardada o usá tu ubicación actual.</Text>
+              <Text style={styles.modalSubtitle}>
+                Elegí una ubicación guardada o usá tu ubicación actual.
+              </Text>
 
               {/* ✅ Seguir ubicación en tiempo real */}
               <TouchableOpacity
@@ -1169,7 +1278,9 @@ export default function Search({ navigation }: any) {
                   style={{ marginRight: 8 }}
                 />
                 <Text style={[styles.modalOptionText, followEnabled && { color: '#16a34a' }]}>
-                  {followEnabled ? '🟢 Siguiendo tu ubicación (en tiempo real)' : 'Seguir mi ubicación (en tiempo real)'}
+                  {followEnabled
+                    ? '🟢 Siguiendo tu ubicación (en tiempo real)'
+                    : 'Seguir mi ubicación (en tiempo real)'}
                 </Text>
               </TouchableOpacity>
 
@@ -1188,7 +1299,9 @@ export default function Search({ navigation }: any) {
               {loadingLocations && <Text style={styles.helperText}>Cargando ubicaciones…</Text>}
 
               {!loadingLocations && locations.length === 0 && (
-                <Text style={styles.helperText}>No tenés ubicaciones guardadas (podés agregarlas en Perfil).</Text>
+                <Text style={styles.helperText}>
+                  No tenés ubicaciones guardadas (podés agregarlas en Perfil).
+                </Text>
               )}
 
               {!loadingLocations &&

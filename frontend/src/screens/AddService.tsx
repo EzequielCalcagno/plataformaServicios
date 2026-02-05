@@ -1,5 +1,5 @@
 // src/screens/AddService.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,26 +8,189 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { API_URL } from '../utils/http'; // ✅ importante
 
-type Props = {
-  navigation: any;
-  route: any;
+import { api } from '../utils/api'; // ✅ usamos tu wrapper
+import { API_URL } from '../utils/http'; // solo para upload
+
+type Props = { navigation: any; route: any };
+type AppRole = 'professional' | 'client';
+
+type SuggestionResponse = {
+  category: string;
+  suggestions: string[];
 };
 
-type AppRole = 'professional' | 'client';
+const CATEGORIES = [
+  'Plomería',
+  'Electricidad',
+  'Gas',
+  'Pintura',
+  'Carpintería',
+  'Albañilería',
+  'Herrería',
+  'Aire acondicionado',
+  'Calefacción',
+  'Cerrajería',
+  'Jardinería',
+  'Limpieza',
+  'Mudanzas',
+  'Redes / Informática',
+  'Otros',
+];
+
+// fallback local por si backend no responde
+const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
+  'Limpieza': [
+    'Limpieza de grasera',
+    'Limpieza profunda de cocina',
+    'Limpieza de baños',
+    'Limpieza post obra',
+    'Limpieza de vidrios',
+    'Limpieza de oficina',
+    'Limpieza de tapizados',
+    'Limpieza de alfombras',
+    'Limpieza de patios',
+    'Limpieza de galpón',
+  ],
+  'Plomería': [
+    'Reparación de pérdidas',
+    'Destapación de cañerías',
+    'Instalación de grifería',
+    'Cambio de flexible',
+    'Arreglo de cisterna/mochila',
+    'Instalación de calefón',
+    'Reparación de calefón',
+    'Instalación de bomba de agua',
+    'Cambio de válvula',
+    'Reparación de canilla',
+  ],
+  'Electricidad': [
+    'Instalación de tomacorriente',
+    'Cambio de llaves térmicas',
+    'Instalación de luminaria',
+    'Reparación de cortocircuito',
+    'Armado de tablero',
+    'Instalación de disyuntor',
+    'Cambio de cableado',
+    'Instalación de portero eléctrico',
+    'Revisión eléctrica general',
+    'Instalación de extractor',
+  ],
+  'Gas': [
+    'Revisión de instalación de gas',
+    'Instalación de cocina a gas',
+    'Instalación de calefón a gas',
+    'Detección de fuga de gas',
+    'Cambio de manguera y abrazaderas',
+    'Mantenimiento de calefactor a gas',
+    'Prueba de hermeticidad',
+  ],
+  'Pintura': [
+    'Pintura interior',
+    'Pintura exterior',
+    'Pintura de rejas',
+    'Enduido y reparación de paredes',
+    'Pintura de techo',
+    'Pintura antihumedad',
+    'Barnizado de madera',
+  ],
+  'Carpintería': [
+    'Armado de muebles',
+    'Reparación de puertas',
+    'Ajuste de bisagras',
+    'Colocación de estantes',
+    'Instalación de placard',
+    'Reparación de muebles',
+  ],
+  'Albañilería': [
+    'Reparación de humedad',
+    'Arreglo de revoque',
+    'Colocación de cerámicas',
+    'Arreglo de pisos',
+    'Pequeñas reformas',
+    'Construcción de pared',
+  ],
+  'Herrería': [
+    'Reparación de rejas',
+    'Fabricación de portón',
+    'Soldadura',
+    'Reparación de cerramientos',
+    'Instalación de barandas',
+  ],
+  'Aire acondicionado': [
+    'Instalación de aire acondicionado',
+    'Mantenimiento de aire acondicionado',
+    'Carga de gas',
+    'Limpieza de filtros y unidad',
+    'Reparación de aire acondicionado',
+  ],
+  'Calefacción': [
+    'Instalación de calefactor',
+    'Mantenimiento de calefactor',
+    'Reparación de calefacción',
+    'Revisión de tiraje',
+  ],
+  'Cerrajería': [
+    'Apertura de puerta',
+    'Cambio de cerradura',
+    'Duplicado de llaves',
+    'Instalación de cerrojo',
+    'Reparación de cerradura',
+  ],
+  'Jardinería': [
+    'Corte de pasto',
+    'Poda de árboles',
+    'Limpieza de jardín',
+    'Diseño de jardín',
+    'Mantenimiento mensual',
+  ],
+  'Mudanzas': [
+    'Mudanza dentro de la ciudad',
+    'Mudanza con embalaje',
+    'Flete pequeño',
+    'Traslado de muebles',
+    'Ayuda para cargar/descargar',
+  ],
+  'Redes / Informática': [
+    'Instalación de router / WiFi',
+    'Configuración de red',
+    'Formateo de PC',
+    'Instalación de software',
+    'Armado de PC',
+    'Soporte técnico a domicilio',
+  ],
+  'Otros': [
+    'Servicio general a domicilio',
+    'Mantenimiento del hogar',
+    'Arreglos generales',
+  ],
+};
 
 export default function AddService({ navigation }: Props) {
   const [role, setRole] = useState<AppRole | null>(null);
   const [loadingRole, setLoadingRole] = useState(true);
 
+  const [category, setCategory] = useState<string>('Plomería');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState('');
+  const [priceBase, setPriceBase] = useState<string>('');
+
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  const filteredSuggestions = useMemo(() => {
+    const q = title.trim().toLowerCase();
+    const base = suggestions.length ? suggestions : (FALLBACK_SUGGESTIONS[category] ?? []);
+    if (!q) return base.slice(0, 10);
+    return base.filter((s) => s.toLowerCase().includes(q)).slice(0, 10);
+  }, [suggestions, title, category]);
+
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [localImageUri, setLocalImageUri] = useState<string | null>(null);
 
@@ -49,9 +212,26 @@ export default function AddService({ navigation }: Props) {
     loadRole();
   }, []);
 
-  // =====================================================
-  // 📸 Seleccionar imagen desde el dispositivo
-  // =====================================================
+  const fetchSuggestions = async (cat: string) => {
+    try {
+      setLoadingSuggestions(true);
+      // ✅ endpoint nuevo en backend
+      const data = await api.get<SuggestionResponse>(
+        `/private/services/suggestions?category=${encodeURIComponent(cat)}`,
+      );
+      setSuggestions(Array.isArray(data?.suggestions) ? data.suggestions : []);
+    } catch (e) {
+      // si falla, usamos fallback local
+      setSuggestions([]);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSuggestions(category);
+  }, [category]);
+
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -61,7 +241,7 @@ export default function AddService({ navigation }: Props) {
 
       if (!result.canceled && result.assets?.length) {
         setLocalImageUri(result.assets[0].uri);
-        setUploadedImageUrl(null); // limpio para evitar confusión
+        setUploadedImageUrl(null);
       }
     } catch (e) {
       console.log('Error seleccionando imagen:', e);
@@ -69,19 +249,13 @@ export default function AddService({ navigation }: Props) {
     }
   };
 
-  // =====================================================
-  // ☁️ Subir imagen al backend
-  // =====================================================
   const uploadImage = async (): Promise<string | null> => {
     if (!localImageUri) return null;
 
     const token = await AsyncStorage.getItem('@token');
     const uploadUrl = `${API_URL}/uploads/work-image`;
 
-    console.log('🌐 Subiendo imagen a:', uploadUrl);
-
     const formData = new FormData();
-
     formData.append('image', {
       uri: localImageUri,
       type: 'image/jpeg',
@@ -99,7 +273,6 @@ export default function AddService({ navigation }: Props) {
       });
 
       const text = await res.text();
-
       if (!res.ok) {
         console.log('🔥 Error upload image', res.status, text);
         throw new Error('No se pudo subir la imagen');
@@ -114,88 +287,68 @@ export default function AddService({ navigation }: Props) {
     }
   };
 
-  // =====================================================
-  // 💾 Guardar servicio/trabajo
-  // =====================================================
   const handleSave = async () => {
     try {
       setErrorMsg(null);
       setSuccessMsg(null);
 
-      if (!title.trim() || !description.trim()) {
-        setErrorMsg('Título y descripción son obligatorios.');
+      if (role !== 'professional') {
+        setErrorMsg('Solo los profesionales pueden agregar servicios.');
         return;
       }
 
-      if (role !== 'professional') {
-        setErrorMsg('Solo los profesionales pueden agregar trabajos.');
+      if (!category.trim()) {
+        setErrorMsg('La categoría es obligatoria.');
+        return;
+      }
+
+      if (!title.trim()) {
+        setErrorMsg('El título es obligatorio (podés elegir uno sugerido o escribirlo).');
         return;
       }
 
       setSaving(true);
 
-      const token = await AsyncStorage.getItem('@token');
-      if (!token) {
-        setErrorMsg('No hay sesión activa.');
-        return;
-      }
-
-      // 1) Subir imagen si existe
+      // (Opcional) subir imagen
       let finalImageUrl: string | null = null;
-
       if (localImageUri) {
         finalImageUrl = await uploadImage();
-        if (!finalImageUrl) return; // error ya mostrado
+        if (!finalImageUrl) return;
       }
 
-      // 2) Enviar el servicio
-      const worksUrl = `${API_URL}/works`;
+      const priceNum =
+        priceBase.trim() === '' ? null : Number(String(priceBase).replace(',', '.'));
 
       const body: any = {
-        title: title.trim(),
-        description: description.trim(),
+        titulo: title.trim(),
+        descripcion: description.trim() ? description.trim() : null,
+        categoria: category.trim(),
+        precio_base: Number.isFinite(priceNum as any) ? priceNum : null,
+        imageUrl: finalImageUrl ?? null, // no se guarda en DB hoy
       };
 
-      if (date.trim()) body.date = date.trim();
-      if (finalImageUrl) body.imageUrls = [finalImageUrl];
+      // ✅ FIX: pegamos al PRIVATE endpoint
+      const created = await api.post<any>('/private/services', { body });
 
-      console.log('🌐 POST servicio a:', worksUrl, 'body:', body);
-
-      const res = await fetch(worksUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
-      const txt = await res.text();
-
-      if (!res.ok) {
-        console.log('Error al crear servicio', res.status, txt);
-        setErrorMsg('No se pudo guardar el servicio.');
-        return;
-      }
-
-      // reset UI
       setSuccessMsg('Servicio agregado correctamente.');
       setTitle('');
       setDescription('');
-      setDate('');
+      setPriceBase('');
       setLocalImageUri(null);
       setUploadedImageUrl(finalImageUrl);
-    } catch (e) {
-      console.log('Error AddService save', e);
-      setErrorMsg('Error de red al guardar el servicio.');
+
+      // opcional: refrescar sugerencias (para que se vea en “mis servicios”)
+      fetchSuggestions(category);
+
+      console.log('✅ created service', created);
+    } catch (e: any) {
+      console.log('❌ Error AddService save', e);
+      setErrorMsg('No se pudo guardar el servicio.');
     } finally {
       setSaving(false);
     }
   };
 
-  // =====================================================
-  // RENDER
-  // =====================================================
   if (loadingRole) {
     return (
       <SafeAreaView style={styles.screen}>
@@ -209,12 +362,9 @@ export default function AddService({ navigation }: Props) {
       <SafeAreaView style={styles.screen}>
         <View style={{ padding: 20 }}>
           <Text style={{ marginBottom: 12 }}>
-            Solo los profesionales pueden agregar trabajos realizados.
+            Solo los profesionales pueden agregar servicios.
           </Text>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backToProfileBtn}
-          >
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backToProfileBtn}>
             <Text style={{ color: '#fff', textAlign: 'center' }}>Volver</Text>
           </TouchableOpacity>
         </View>
@@ -224,12 +374,11 @@ export default function AddService({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      {/* Top bar */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Text style={{ fontSize: 18 }}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Agregar Trabajo</Text>
+        <Text style={styles.topBarTitle}>Agregar Servicio</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -237,7 +386,53 @@ export default function AddService({ navigation }: Props) {
         {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
         {successMsg && <Text style={styles.successText}>{successMsg}</Text>}
 
-        <Text style={styles.label}>Título</Text>
+        <Text style={styles.label}>Categoría</Text>
+        <View style={styles.categoryWrap}>
+          {CATEGORIES.map((c) => {
+            const selected = c === category;
+            return (
+              <TouchableOpacity
+                key={c}
+                onPress={() => setCategory(c)}
+                activeOpacity={0.85}
+                style={[styles.catPill, selected && styles.catPillSelected]}
+              >
+                <Text style={[styles.catPillText, selected && styles.catPillTextSelected]}>
+                  {c}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <View style={styles.suggestionsHeader}>
+          <Text style={[styles.label, { marginTop: 0 }]}>Servicios sugeridos</Text>
+          {loadingSuggestions ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <ActivityIndicator />
+              <Text style={{ color: '#6b7280' }}>Cargando…</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {filteredSuggestions.length === 0 ? (
+          <Text style={styles.hint}>Podés escribir el nombre que quieras.</Text>
+        ) : (
+          <View style={styles.suggestionsWrap}>
+            {filteredSuggestions.map((s) => (
+              <TouchableOpacity
+                key={s}
+                activeOpacity={0.85}
+                onPress={() => setTitle(s)}
+                style={styles.suggestionChip}
+              >
+                <Text style={styles.suggestionChipText}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <Text style={styles.label}>Nombre del servicio</Text>
         <TextInput
           style={styles.input}
           value={title}
@@ -245,7 +440,7 @@ export default function AddService({ navigation }: Props) {
           placeholder="Ej: Instalación de calefón"
         />
 
-        <Text style={styles.label}>Descripción</Text>
+        <Text style={styles.label}>Descripción (opcional)</Text>
         <TextInput
           style={[styles.input, styles.inputMultiline]}
           multiline
@@ -253,18 +448,21 @@ export default function AddService({ navigation }: Props) {
           textAlignVertical="top"
           value={description}
           onChangeText={setDescription}
-          placeholder="Detalles del trabajo..."
+          placeholder="Detalles del servicio…"
         />
 
-        <Text style={styles.label}>Fecha (opcional)</Text>
+        <Text style={styles.label}>Precio aproximado (opcional)</Text>
         <TextInput
           style={styles.input}
-          value={date}
-          onChangeText={setDate}
-          placeholder="YYYY-MM-DD"
+          value={priceBase}
+          onChangeText={setPriceBase}
+          placeholder="Ej: 1500"
+          keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric'}
         />
+        <Text style={styles.hint}>Podés dejarlo vacío. El precio real se puede negociar.</Text>
 
-        {/* Imagen seleccionada */}
+        <Text style={styles.label}>Imagen (opcional)</Text>
+
         {localImageUri && (
           <Image
             source={{ uri: localImageUri }}
@@ -283,18 +481,13 @@ export default function AddService({ navigation }: Props) {
           disabled={saving}
           onPress={handleSave}
         >
-          <Text style={styles.saveButtonText}>
-            {saving ? 'Guardando...' : 'Guardar servicio'}
-          </Text>
+          <Text style={styles.saveButtonText}>{saving ? 'Guardando...' : 'Guardar servicio'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// =====================================================
-// ESTILOS
-// =====================================================
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f5f7fb' },
 
@@ -311,18 +504,11 @@ const styles = StyleSheet.create({
   topBarTitle: { fontSize: 16, fontWeight: '600' },
   backButton: { padding: 4 },
 
-  content: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
+  content: { paddingHorizontal: 16, paddingVertical: 16 },
 
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 6,
-    marginTop: 12,
-  },
+  label: { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 6, marginTop: 12 },
+
+  hint: { fontSize: 12, color: '#6b7280', marginTop: 6 },
 
   input: {
     borderRadius: 12,
@@ -333,51 +519,40 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
   },
+  inputMultiline: { minHeight: 100 },
 
-  inputMultiline: {
-    minHeight: 100,
+  categoryWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  catPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    backgroundColor: '#fff',
   },
+  catPillSelected: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
+  catPillText: { color: '#111827', fontWeight: '600', fontSize: 12 },
+  catPillTextSelected: { color: '#1d4ed8' },
 
-  uploadBtn: {
-    marginTop: 12,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#0ea5e9',
+  suggestionsHeader: {
+    marginTop: 14,
+    marginBottom: 6,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  uploadBtnText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 15,
-  },
+  suggestionsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  suggestionChip: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, backgroundColor: '#0ea5e9' },
+  suggestionChipText: { color: '#fff', fontWeight: '700', fontSize: 12 },
 
-  saveButton: {
-    marginTop: 24,
-    backgroundColor: '#2563eb',
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 15,
-  },
+  uploadBtn: { marginTop: 12, paddingVertical: 12, borderRadius: 12, backgroundColor: '#0ea5e9', alignItems: 'center' },
+  uploadBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
 
-  errorText: {
-    color: '#b91c1c',
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  successText: {
-    color: '#166534',
-    marginBottom: 8,
-    fontWeight: '600',
-  },
+  saveButton: { marginTop: 24, backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 14, alignItems: 'center' },
+  saveButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
 
-  backToProfileBtn: {
-    backgroundColor: '#2563eb',
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
+  errorText: { color: '#b91c1c', marginBottom: 8, fontWeight: '600' },
+  successText: { color: '#166534', marginBottom: 8, fontWeight: '600' },
+
+  backToProfileBtn: { backgroundColor: '#2563eb', paddingVertical: 10, borderRadius: 12 },
 });

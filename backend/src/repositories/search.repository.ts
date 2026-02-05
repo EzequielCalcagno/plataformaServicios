@@ -1,4 +1,3 @@
-// src/repositories/search.repository.ts
 import db from '../config/db';
 
 export type SearchServiciosParams = {
@@ -8,6 +7,10 @@ export type SearchServiciosParams = {
   radiusKm?: number;
   limit?: number;
   offset?: number;
+
+  category?: string | null;
+  requesterId?: string | null;
+  workedWith?: boolean;
 };
 
 export const searchServiciosRepository = async (params: SearchServiciosParams) => {
@@ -18,8 +21,13 @@ export const searchServiciosRepository = async (params: SearchServiciosParams) =
     radiusKm = 10,
     limit = 50,
     offset = 0,
+
+    category = null,
+    requesterId = null,
+    workedWith = false,
   } = params;
 
+  // Importante: Los nombres de params deben coincidir con la función SQL
   const { data, error } = await db.rpc('search_servicios', {
     p_lat: lat,
     p_lng: lng,
@@ -27,25 +35,13 @@ export const searchServiciosRepository = async (params: SearchServiciosParams) =
     p_radius_km: radiusKm,
     p_limit: limit,
     p_offset: offset,
+    p_category: category,
+    p_requester_id: requesterId,
+    p_worked_with: workedWith,
   });
 
   if (error) {
     console.error('❌ Error en searchServiciosRepository:', error);
-    throw error;
-  }
-
-  return data ?? [];
-};
-export const getUsersBasicByIdsRepository = async (ids: string[]) => {
-  if (!ids.length) return [];
-
-  const { data, error } = await db
-    .from('usuarios')
-    .select('id, nombre, apellido, foto_url')
-    .in('id', ids);
-
-  if (error) {
-    console.error('❌ Error en getUsersBasicByIdsRepository:', error);
     throw error;
   }
 
