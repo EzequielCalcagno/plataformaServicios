@@ -40,6 +40,7 @@ const SELECT_FIELDS = `
   precio_base
 `;
 
+/** ✅ Mis servicios (profesional logueado) */
 export async function listMyServicesRepository(profesionalId: string) {
   const { data, error } = await db
     .from('servicios')
@@ -49,6 +50,29 @@ export async function listMyServicesRepository(profesionalId: string) {
 
   if (error) {
     console.error('❌ Error en listMyServicesRepository:', error);
+    throw error;
+  }
+
+  return (data ?? []) as ServiceRow[];
+}
+
+/** ✅ Servicios por profesional (seleccionado desde el front) */
+export async function listServicesByProfessionalIdRepository(
+  profesionalId: string,
+  onlyActive = true,
+) {
+  let q = db
+    .from('servicios')
+    .select(SELECT_FIELDS)
+    .eq('profesional_id', profesionalId)
+    .order('creado_en', { ascending: false });
+
+  if (onlyActive) q = q.eq('activo', true);
+
+  const { data, error } = await q;
+
+  if (error) {
+    console.error('❌ Error en listServicesByProfessionalIdRepository:', error);
     throw error;
   }
 
@@ -118,7 +142,10 @@ export async function deleteMyServiceRepository(profesionalId: string, serviceId
  * - trae hasta 500 servicios, filtra por categoría (case-insensitive)
  * - cuenta repetidos y devuelve top N
  */
-export async function getSuggestionsByCategoryRepository(category: string, limit = 30): Promise<string[]> {
+export async function getSuggestionsByCategoryRepository(
+  category: string,
+  limit = 30,
+): Promise<string[]> {
   const { data, error } = await db
     .from('servicios')
     .select('titulo, categoria')
@@ -146,7 +173,10 @@ export async function getSuggestionsByCategoryRepository(category: string, limit
 /**
  * ✅ Bootstrap: inserta varios servicios de una (bulk)
  */
-export async function createManyServicesRepository(profesionalId: string, payloads: CreateServiceDbPayload[]) {
+export async function createManyServicesRepository(
+  profesionalId: string,
+  payloads: CreateServiceDbPayload[],
+) {
   if (!payloads.length) return [];
 
   const { data, error } = await db
@@ -189,4 +219,20 @@ export async function existsServiceByTitleAndCategoryRepository(
 
   if (error) return false;
   return (data ?? []).length > 0;
+}
+export async function deactivateMyServiceRepository(profesionalId: string, serviceId: number) {
+  const { data, error } = await db
+    .from('servicios')
+    .update({ activo: false })
+    .eq('id', serviceId)
+    .eq('profesional_id', profesionalId)
+    .select(SELECT_FIELDS)
+    .single();
+
+  if (error) {
+    console.error('❌ Error en deactivateMyServiceRepository:', error);
+    throw error;
+  }
+
+  return data as ServiceRow;
 }

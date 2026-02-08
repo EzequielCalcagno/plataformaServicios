@@ -44,17 +44,6 @@ import {
   listProfessionalReviewsController,
 } from '../controllers/reservations.controller';
 
-// ✅ LIVE LOCATION controllers (los dos que ya tenés)
-import {
-  upsertLiveLocationController,
-  disableLiveLocationController,
-} from '../controllers/liveLocation.controller';
-
-import {
-  upsertMyProLiveLocationController,
-  disableMyProLiveLocationController,
-} from '../controllers/proLiveLocation.controller';
-
 // ✅ SERVICES CRUD real (tabla public.servicios)
 import {
   listMyServicesController,
@@ -63,6 +52,8 @@ import {
   deleteMyServiceController,
   getServiceSuggestionsController,
   bootstrapMyServicesController,
+  listServicesByProfessionalIdController,
+  deactivateMyServiceController // ✅ NUEVO
 } from '../controllers/services.controller';
 
 const router = Router();
@@ -82,19 +73,14 @@ router.post('/locations', createMyLocationController);
 router.patch('/locations/:id', updateMyLocationController);
 router.delete('/locations/:id', deleteMyLocationController);
 
-// ✅ LIVE LOCATION (solo profesional)
-router.post('/live-location', requireRole('PROFESIONAL'), upsertLiveLocationController);
-router.delete('/live-location', requireRole('PROFESIONAL'), disableLiveLocationController);
-
-// --------------- PRO LIVE LOCATION ---------------
-router.patch('/pro-live-location', requireRole('PROFESIONAL'), upsertMyProLiveLocationController);
-router.delete('/pro-live-location', requireRole('PROFESIONAL'), disableMyProLiveLocationController);
-
 // ✅ SERVICES (REAL) - para que AddService inserte en public.servicios
 router.get('/services', requireRole('PROFESIONAL'), listMyServicesController);
 router.post('/services', requireRole('PROFESIONAL'), createMyServiceController);
 router.patch('/services/:id', requireRole('PROFESIONAL'), updateMyServiceController);
 router.delete('/services/:id', requireRole('PROFESIONAL'), deleteMyServiceController);
+router.patch('/services/:id/deactivate', requireRole('PROFESIONAL'), deactivateMyServiceController);
+// ✅ NUEVO: listar servicios del profesional seleccionado (para ProfessionalServices)
+router.get('/services/professional/:profesionalId', listServicesByProfessionalIdController);
 
 // ✅ NUEVO: sugerencias por categoría + bootstrap (precargar)
 router.get('/services/suggestions', requireRole('PROFESIONAL'), getServiceSuggestionsController);

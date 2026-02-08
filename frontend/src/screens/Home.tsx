@@ -341,7 +341,7 @@ export default function Home() {
                 <TouchableOpacity
                   activeOpacity={0.9}
                   style={styles.quickTile}
-                  onPress={() => navigation.navigate('AddService')}
+                  onPress={() => navigation.navigate('MyServicesManager')}
                 >
                   <View style={styles.quickIconWrap}>
                     <Ionicons name="add-circle-outline" size={18} color={COLORS.text} />
@@ -357,7 +357,7 @@ export default function Home() {
             <>
               <TipCard
                 message="Agregá fotos de tus trabajos en tu perfil para aumentar la confianza"
-                onPress={() => navigation.navigate('AddService')}
+                onPress={() => navigation.navigate('MyServicesManager')}
               />
             </>
           )}

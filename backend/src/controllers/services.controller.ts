@@ -7,6 +7,8 @@ import {
   deleteMyServiceService,
   getServiceSuggestionsService,
   bootstrapMyServicesService,
+  listServicesByProfessionalIdService,
+  deactivateMyServiceService  // ✅ NUEVO
 } from '../services/services.service';
 
 function getUserId(req: any) {
@@ -22,6 +24,24 @@ export async function listMyServicesController(req: Request, res: Response) {
     return res.json(data);
   } catch (e: any) {
     console.error('❌ listMyServicesController:', e);
+    return res.status(500).json({ message: e?.message ?? 'Error interno' });
+  }
+}
+
+/**
+ * ✅ NUEVO:
+ * GET /private/services/professional/:profesionalId
+ * Devuelve servicios (activos) del profesional seleccionado.
+ */
+export async function listServicesByProfessionalIdController(req: Request, res: Response) {
+  try {
+    const profesionalId = String(req.params.profesionalId ?? '').trim();
+    if (!profesionalId) return res.status(400).json({ message: 'profesionalId es requerido' });
+
+    const data = await listServicesByProfessionalIdService(profesionalId);
+    return res.json(data);
+  } catch (e: any) {
+    console.error('❌ listServicesByProfessionalIdController:', e);
     return res.status(500).json({ message: e?.message ?? 'Error interno' });
   }
 }
@@ -51,6 +71,24 @@ export async function updateMyServiceController(req: Request, res: Response) {
   }
 }
 
+// src/controllers/services.controller.ts
+
+
+export async function deactivateMyServiceController(req: Request, res: Response) {
+  try {
+    const userId = getUserId(req as any);
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: 'id inválido' });
+
+    const updated = await deactivateMyServiceService(userId, id);
+    return res.json(updated);
+  } catch (e: any) {
+    console.error('❌ deactivateMyServiceController:', e);
+    return res.status(500).json({ message: e?.message ?? 'Error interno' });
+  }
+}
+
+// Mejorá delete: si es FK, devolver 409 (conflict) con mensaje claro
 export async function deleteMyServiceController(req: Request, res: Response) {
   try {
     const userId = getUserId(req as any);
@@ -60,10 +98,22 @@ export async function deleteMyServiceController(req: Request, res: Response) {
     await deleteMyServiceService(userId, id);
     return res.status(204).send();
   } catch (e: any) {
+    // FK violation postgres
+    if (e?.code === '23503') {
+      return res.status(409).json({
+        message:
+          'No se puede eliminar este servicio porque ya está asociado a una o más reservas. Podés desactivarlo.',
+        code: 'SERVICE_HAS_RESERVATIONS',
+      });
+    }
+
     console.error('❌ deleteMyServiceController:', e);
     return res.status(500).json({ message: e?.message ?? 'Error interno' });
   }
 }
+
+
+
 
 /**
  * ✅ Sugerencias por categoría (para el front)

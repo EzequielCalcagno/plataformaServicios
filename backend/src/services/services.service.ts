@@ -1,12 +1,14 @@
 // src/services/services.service.ts
 import {
   listMyServicesRepository,
+  listServicesByProfessionalIdRepository, // ✅ NUEVO
   createMyServiceRepository,
   updateMyServiceRepository,
   deleteMyServiceRepository,
   getSuggestionsByCategoryRepository,
   createManyServicesRepository,
   existsServiceByTitleAndCategoryRepository,
+  deactivateMyServiceRepository
 } from '../repositories/services.repository';
 
 function normalize(s: string) {
@@ -154,6 +156,7 @@ const FALLBACK: Record<string, string[]> = {
     'Instalación de software',
     'Armado de PC',
     'Soporte técnico a domicilio',
+    'Soporte técnico a domicilio',
   ],
   'Otros': [
     'Servicio general a domicilio',
@@ -175,6 +178,20 @@ function getFallback(category: string) {
 
 export async function listMyServicesService(profesionalId: string) {
   const rows = await listMyServicesRepository(profesionalId);
+  return rows.map(toServiceDto);
+}
+
+/**
+ * ✅ NUEVO:
+ * lista servicios por profesionalId (seleccionado desde el front)
+ * devuelve DTO igual que el resto
+ */
+export async function listServicesByProfessionalIdService(profesionalId: string) {
+  const id = normalize(profesionalId);
+  if (!id) throw new Error('profesionalId es obligatorio');
+
+  // Por defecto: solo activos (lo normal para perfil público)
+  const rows = await listServicesByProfessionalIdRepository(id, true /* onlyActive */);
   return rows.map(toServiceDto);
 }
 
@@ -236,6 +253,11 @@ export async function updateMyServiceService(profesionalId: string, serviceId: n
 export async function deleteMyServiceService(profesionalId: string, serviceId: number) {
   await deleteMyServiceRepository(profesionalId, serviceId);
   return true;
+}
+
+export async function deactivateMyServiceService(profesionalId: string, serviceId: number) {
+  const updated = await deactivateMyServiceRepository(profesionalId, serviceId);
+  return toServiceDto(updated);
 }
 
 /**

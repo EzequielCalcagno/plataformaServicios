@@ -13,23 +13,21 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Image,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Circle, Region } from 'react-native-maps';
+import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'react-native';
 import Constants from 'expo-constants';
 import { COLORS } from '../styles/theme';
 
-// ✅ traer ubicaciones reales del backend
-import { getMyLocations, LocationDto } from '../services/locations.client';
-import { Avatar } from '../components/Avatar';
 import SearchTopCard from '../components/SearchTopCard';
-
-// ✅ usar tu api wrapper (ya maneja token en http si lo tenés así)
-import { api } from '../utils/api';
+import { getMyLocations, LocationDto } from '../services/locations.client';
 
 // ====== API ======
 const API_URL =
@@ -40,19 +38,26 @@ type Service = {
   id: string;
   title: string;
   category: string;
+
   latitude: number;
   longitude: number;
+
   distanceKm: number;
 
+  // ✅ IMPORTANTE (según tu backend): este profesional_id termina siendo el "userId" del profesional
   profesionalId: string;
+
+  // si el backend lo trae separado, también lo guardamos para filtrar robusto
+  profesionalUserId?: string | null;
+
   profesionalNombre: string;
   profesionalApellido: string;
   photoUrl: string | null;
+
   ubicacionId?: number | null;
   ubicacionNombre?: string | null;
 };
 
-// 🔥 ahora representa ubicaciones de BD + temporales
 type StoredLocation = {
   id: string; // "123" | "current_temp" | "default" | "follow_live"
   label: string;
@@ -63,7 +68,8 @@ type StoredLocation = {
 
 type GroupedPin = {
   key: string;
-  profesionalId: string;
+  profesionalId: string; // userId del profesional
+  profesionalUserId?: string | null;
   profesionalNombre: string;
   profesionalApellido: string;
   photoUrl: string | null;
@@ -81,36 +87,111 @@ type GroupedPin = {
 
 type SearchMode = 'all' | 'category' | 'worked';
 
-const FOLLOW_LIVE_KEY = '@app_follow_live_enabled';
-const FOLLOW_LIVE_ID = 'follow_live';
+// ====== AUTH ======
+const TOKEN_KEY = '@token';
+const CURRENT_USER_KEY = '@current_user_cache';
+
+type CurrentUser = {
+  id?: string | number;
+  userId?: string | number;
+
+  professionalId?: string | number;
+  profesionalId?: string | number;
+  professional?: { id?: string | number } | null;
+
+  rol?: 'CLIENTE' | 'PROFESIONAL' | string;
+  role?: 'CLIENTE' | 'PROFESIONAL' | string;
+  roleId?: number | null;
+  id_rol?: number | null;
+
+  nombre?: string | null;
+  apellido?: string | null;
+  foto_url?: string | null;
+
+  email?: string;
+};
 
 // ====== STORAGE ======
 const SELECTED_LOCATION_ID_KEY = '@app_selected_location_id';
 const SEARCH_RADIUS_KEY = '@app_search_radius_km';
-const TOKEN_KEY = '@token';
+const FOLLOW_LIVE_KEY = '@app_follow_live_enabled';
+const FOLLOW_LIVE_ID = 'follow_live';
 
 // ====== RUBROS ======
 const POPULAR_RUBROS = ['Plomería', 'Electricidad', 'Pintura', 'Carpintería', 'Gas', 'Limpieza'];
-const ALL_RUBROS = ['Plomería', 'Electricidad', 'Pintura', 'Carpintería', 'Gas', 'Limpieza'];
+const ALL_RUBROS = [
+  'Plomería',
+  'Electricidad',
+  'Pintura',
+  'Carpintería',
+  'Gas',
+  'Limpieza',
+  'Albañilería',
+  'Herrería',
+  'Aire acondicionado',
+  'Calefacción',
+  'Cerrajería',
+  'Jardinería',
+  'Mudanzas',
+  'Redes / Informática',
+  'Otros',
+];
 
 // ====== ÍCONO POR CATEGORÍA ======
 const getCategoryIcon = (category: string) => {
   const c = (category || '').toLowerCase();
   switch (c) {
-    case 'plomería':
+ case 'Plomería':
       return require('../../assets/icons/mapa/plumbing-pin.png');
+
     case 'electricidad':
       return require('../../assets/icons/mapa/electricity-pin.png');
-    case 'pintura':
-      return require('../../assets/icons/mapa/painting-pin.png');
-    case 'carpintería':
-      return require('../../assets/icons/mapa/carpentry-pin.png');
+
     case 'gas':
       return require('../../assets/icons/mapa/gas-pin.png');
+
+    case 'pintura':
+      return require('../../assets/icons/mapa/painting-pin.png');
+
+    case 'carpinteria':
+      return require('../../assets/icons/mapa/carpentry-pin.png');
+
+    case 'albanileria':
+      return require('../../assets/icons/mapa/albañileria_pin.png');
+
+    case 'herreria':
+      return require('../../assets/icons/mapa/herreria_pin.png');
+
+    case 'aire acondicionado':
+      return require('../../assets/icons/mapa/aire_acondicionado_pin.png');
+
+    case 'calefaccion':
+      return require('../../assets/icons/mapa/calefaccion_pin.png');
+
+    case 'cerrajeria':
+      return require('../../assets/icons/mapa/cerrajeria_pin.png');
+
+    case 'jardineria':
+      return require('../../assets/icons/mapa/jardineria_pin.png');
+
     case 'limpieza':
       return require('../../assets/icons/mapa/cleaning-pin.png');
+
+    case 'mudanzas':
+      return require('../../assets/icons/mapa/mudanza_pin.png');
+
+    // Redes / Informática (con slash o sin)
+    case 'redes informatica':
+    case 'redes informaticas':
+    case 'redes':
+    case 'informatica':
+      return require('../../assets/icons/mapa/redes_informatica_pin.png');
+
+    case 'otros':
+      return require('../../assets/icons/mapa/otros_pin.png');
+
     default:
-      return require('../../assets/icons/mapa/default-pin.png');
+      return require('../../assets/icons/mapa/otros_pin.png');
   }
 };
 
@@ -129,9 +210,15 @@ const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => 
 
 // ====== UI CONST ======
 const BOTTOM_SHEET_MAX_HEIGHT = 360;
+// ✅ bien chico (casi solo handle)
+const BOTTOM_SHEET_MIN_HEIGHT = 26;
 const PIN_CARD_MARGIN = 12;
 
-// ====== fallback (si no hay ubicaciones guardadas) ======
+// Pins fixed sizing
+const PIN_SIZE = 40;
+const PIN_BADGE_SIZE = 18;
+
+// ====== fallback ======
 const FALLBACK_LOCATION: StoredLocation = {
   id: 'default',
   label: 'Montevideo centro',
@@ -140,7 +227,13 @@ const FALLBACK_LOCATION: StoredLocation = {
   principal: true,
 };
 
-// ✅ helper: convertir LocationDto a StoredLocation (usa lat/lng generated)
+function toStrId(v: any): string {
+  if (v == null) return '';
+  const s = String(v).trim();
+  return s;
+}
+
+// ✅ helper: convertir LocationDto a StoredLocation
 function toStoredLocation(row: LocationDto): StoredLocation | null {
   const lat = typeof row.lat === 'number' ? row.lat : null;
   const lng = typeof row.lng === 'number' ? row.lng : null;
@@ -161,81 +254,98 @@ function toStoredLocation(row: LocationDto): StoredLocation | null {
   };
 }
 
-type CurrentUser = {
-  id: string;
-  rolId: number; // PROFESIONAL = 2
-  foto_url: string | null;
-};
-
 export default function Search({ navigation }: any) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Service[]>([]);
 
-  // Ubicaciones (desde BD)
+  const [myUser, setMyUser] = useState<CurrentUser | null>(null);
+
   const [locations, setLocations] = useState<StoredLocation[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<StoredLocation | null>(null);
 
-  // Radio
   const [radiusKm, setRadiusKm] = useState<number>(10);
   const [radiusDraft, setRadiusDraft] = useState<number>(10);
 
-  // Modal cambio ubicación
   const [locationModalVisible, setLocationModalVisible] = useState(false);
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [changingLocation, setChangingLocation] = useState(false);
 
-  // Loading search
   const [loadingSearch, setLoadingSearch] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  // Pin seleccionado
   const [selectedPin, setSelectedPin] = useState<GroupedPin | null>(null);
 
   const mapRef = useRef<MapView | null>(null);
 
-  // Follow live
   const watchSubRef = useRef<Location.LocationSubscription | null>(null);
   const [followEnabled, setFollowEnabled] = useState(false);
-  const lastLiveSentRef = useRef<number>(0);
 
-  // ✅ current user (para marker con foto)
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-
-  // Radar animation
-  const [radarPhase, setRadarPhase] = useState(0); // 0..1
+  const [radarPhase, setRadarPhase] = useState(0);
   const isFollowing = selectedLocation?.id === FOLLOW_LIVE_ID;
 
-  // ====== Nuevo: “Qué estás buscando hoy” ======
   const [searchMode, setSearchMode] = useState<SearchMode | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [introVisible, setIntroVisible] = useState(true); // antes de cargar el mapa
+  const [introVisible, setIntroVisible] = useState(true);
+
+  // Bottom panel collapse
+  const [bottomCollapsed, setBottomCollapsed] = useState(false);
+  const bottomHeightAnim = useRef(new Animated.Value(BOTTOM_SHEET_MAX_HEIGHT)).current;
+
+  // ====== ID del usuario logueado (ESTE es el que coincide con profesional_id en search) ======
+  const loggedUserId = useMemo(() => {
+    const id = toStrId((myUser as any)?.id) || toStrId((myUser as any)?.userId);
+    return id;
+  }, [myUser]);
+
+  // ====== Determinar si user es profesional (robusto) ======
+  const isMyUserProfessional = useMemo(() => {
+    const rolRaw = String((myUser as any)?.rol ?? (myUser as any)?.role ?? '').toUpperCase();
+    if (rolRaw === 'PROFESIONAL') return true;
+
+    const roleId = (myUser as any)?.roleId;
+    const idRol = (myUser as any)?.id_rol;
+
+    if (typeof roleId === 'number' && roleId === 2) return true;
+    if (typeof idRol === 'number' && idRol === 2) return true;
+
+    return false;
+  }, [myUser]);
 
   // ====== Helpers ======
   const openLocationModal = () => setLocationModalVisible(true);
   const closeLocationModal = () => setLocationModalVisible(false);
-
   const openIntro = () => setIntroVisible(true);
-  const closeIntro = () => setIntroVisible(false);
+
+  // ✅ FIX: si se cierra el modal sin elegir nada => default "Todos"
+  const closeIntro = useCallback(() => {
+    setIntroVisible(false);
+
+    if (!searchMode) {
+      setSearchMode('all');
+      setSelectedCategory(null);
+      setQuery('');
+    }
+  }, [searchMode]);
 
   const pickModeAll = () => {
     setSearchMode('all');
     setSelectedCategory(null);
     setQuery('');
-    closeIntro();
+    setIntroVisible(false);
   };
 
   const pickModeWorked = () => {
     setSearchMode('worked');
     setSelectedCategory(null);
     setQuery('');
-    closeIntro();
+    setIntroVisible(false);
   };
 
   const pickModeCategory = (cat?: string) => {
     setSearchMode('category');
     const c = cat?.trim() || null;
     setSelectedCategory(c);
-    closeIntro();
+    setIntroVisible(false);
   };
 
   const selectedLabel = useMemo(() => {
@@ -256,7 +366,63 @@ export default function Search({ navigation }: any) {
     return selectedCategory || 'Categorías';
   }, [searchMode, selectedCategory]);
 
-  const isProfessional = useMemo(() => Number(currentUser?.rolId ?? 0) === 2, [currentUser?.rolId]);
+  // ====== ✅ current user loader ======
+  const loadCurrentUser = useCallback(async () => {
+    try {
+      const cached = await AsyncStorage.getItem(CURRENT_USER_KEY);
+      if (cached) {
+        try {
+          setMyUser(JSON.parse(cached));
+        } catch {}
+      }
+
+      const token = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!token) return;
+
+      const url = `${API_URL}/private/currentUser`;
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const normalized: CurrentUser = {
+        ...(typeof data === 'object' ? data : {}),
+        id: data?.id ?? data?.user?.id ?? data?.userId ?? data?.user?.userId,
+        userId: data?.userId ?? data?.user?.userId ?? data?.id ?? data?.user?.id,
+
+        rol: data?.rol ?? data?.role ?? data?.user?.rol ?? data?.user?.role,
+        role: data?.role ?? data?.rol ?? data?.user?.role ?? data?.user?.rol,
+        roleId:
+          typeof data?.roleId === 'number'
+            ? data.roleId
+            : typeof data?.user?.roleId === 'number'
+              ? data.user.roleId
+              : null,
+        id_rol:
+          typeof data?.id_rol === 'number'
+            ? data.id_rol
+            : typeof data?.user?.id_rol === 'number'
+              ? data.user.id_rol
+              : null,
+
+        nombre: data?.nombre ?? data?.user?.nombre ?? null,
+        apellido: data?.apellido ?? data?.user?.apellido ?? null,
+        foto_url: data?.foto_url ?? data?.user?.foto_url ?? data?.photoUrl ?? null,
+
+        email: data?.email ?? data?.user?.email,
+      };
+
+      setMyUser(normalized);
+      await AsyncStorage.setItem(CURRENT_USER_KEY, JSON.stringify(normalized));
+    } catch (e) {
+      console.log('loadCurrentUser error', e);
+    }
+  }, []);
 
   // ====== Radar interval ======
   useEffect(() => {
@@ -271,52 +437,19 @@ export default function Search({ navigation }: any) {
   const radarR2 = 160 + radarPhase * 240;
   const radarOpacity = Math.max(0.06, (1 - radarPhase) * 0.22);
 
-  // ====== LIVE API helpers ======
-  const sendLiveLocation = useCallback(async (lat: number, lng: number) => {
-    // throttling
-    const now = Date.now();
-    if (now - lastLiveSentRef.current < 3500) return;
-    lastLiveSentRef.current = now;
-
-    try {
-      // usamos api.patchJson (tu http debe agregar token)
-      await api.patchJson('/private/pro-live-location', { enabled: true, lat, lng });
-    } catch (e) {
-      // no cortamos UX si falla, solo log
-      console.log('❌ sendLiveLocation error', e);
-    }
-  }, []);
-
-  const disableLiveLocation = useCallback(async () => {
-    try {
-      await api.delete('/private/pro-live-location');
-    } catch (e) {
-      console.log('❌ disableLiveLocation error', e);
-    }
-  }, []);
-
   const stopFollowing = useCallback(async () => {
     try {
       watchSubRef.current?.remove();
       watchSubRef.current = null;
     } catch {}
-
     setFollowEnabled(false);
     await AsyncStorage.setItem(FOLLOW_LIVE_KEY, '0');
-
-    // ✅ si sos profesional, apagamos live en backend
-    if (isProfessional) {
-      await disableLiveLocation();
-    }
-  }, [disableLiveLocation, isProfessional]);
+  }, []);
 
   const startFollowing = useCallback(async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Permiso requerido',
-        'Necesitamos permiso para seguir tu ubicación en tiempo real.',
-      );
+      Alert.alert('Permiso requerido', 'Necesitamos permiso para seguir tu ubicación en tiempo real.');
       return;
     }
 
@@ -342,7 +475,7 @@ export default function Search({ navigation }: any) {
         distanceInterval: 10,
         timeInterval: 1000,
       },
-      async (loc) => {
+      (loc) => {
         const lat = loc.coords.latitude;
         const lng = loc.coords.longitude;
 
@@ -354,7 +487,6 @@ export default function Search({ navigation }: any) {
           principal: true,
         });
 
-        // ✅ mantener centrado mientras sigue
         if (mapRef.current) {
           mapRef.current.animateToRegion(
             {
@@ -366,16 +498,11 @@ export default function Search({ navigation }: any) {
             350,
           );
         }
-
-        // ✅ si sos profesional: mandar a backend para que TODOS te vean en Search
-        if (isProfessional) {
-          await sendLiveLocation(lat, lng);
-        }
       },
     );
-  }, [isProfessional, sendLiveLocation]);
+  }, []);
 
-  // ✅ Cargar currentUser + ubicaciones + radio + follow
+  // ✅ Cargar ubicaciones reales + radio + follow
   const loadLocations = useCallback(async () => {
     try {
       setLoadingLocations(true);
@@ -387,27 +514,10 @@ export default function Search({ navigation }: any) {
       const follow = storedFollow === '1';
       setFollowEnabled(follow);
 
-      // ✅ currentUser
-      try {
-        const me = await api.get<any>('/private/currentUser');
-        if (me?.id) {
-          setCurrentUser({
-            id: String(me.id),
-            rolId: Number(me.rolId ?? me.id_rol ?? 2),
-            foto_url: me.foto_url ?? null,
-          });
-        }
-      } catch (e) {
-        console.log('❌ load currentUser error', e);
-      }
-
-      // ✅ trae ubicaciones de BD
       const dbLocations = await getMyLocations();
-
       const parsed = (dbLocations ?? []).map(toStoredLocation).filter(Boolean) as StoredLocation[];
       setLocations(parsed);
 
-      // radio
       if (storedRadius) {
         const num = Number(storedRadius);
         if (!Number.isNaN(num) && num > 0) {
@@ -416,7 +526,6 @@ export default function Search({ navigation }: any) {
         }
       }
 
-      // ✅ PRIORIDAD 1: seguir activo
       if (follow) {
         try {
           await startFollowing();
@@ -424,15 +533,12 @@ export default function Search({ navigation }: any) {
         return;
       }
 
-      // elegir seleccionada
       let selected: StoredLocation | null = null;
 
-      // ✅ PRIORIDAD 2: id guardado
       if (storedSelectedId) {
         selected = parsed.find((l) => l.id === storedSelectedId) || null;
       }
 
-      // ✅ PRIORIDAD 3: principal o primera
       if (!selected) {
         selected = parsed.find((l) => l.principal) || parsed[0] || null;
       }
@@ -447,20 +553,21 @@ export default function Search({ navigation }: any) {
     }
   }, [startFollowing]);
 
-  // ✅ cargar al entrar a la screen
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
+      loadCurrentUser();
       loadLocations();
       if (!searchMode) setIntroVisible(true);
     });
-    loadLocations();
-    return () => unsubscribe();
-  }, [navigation, loadLocations, searchMode]);
 
-  // ====== Recentrar mapa al cambiar ubicación (NO follow) ======
+    loadCurrentUser();
+    loadLocations();
+
+    return () => unsubscribe();
+  }, [navigation, loadLocations, loadCurrentUser, searchMode]);
+
   useEffect(() => {
     if (!selectedLocation || !mapRef.current) return;
-
     if (selectedLocation.id === FOLLOW_LIVE_ID) return;
 
     const region: Region = {
@@ -473,12 +580,9 @@ export default function Search({ navigation }: any) {
     setSelectedPin(null);
   }, [selectedLocation?.id, selectedLocation?.latitude, selectedLocation?.longitude]);
 
-  // ====== Seleccionar ubicación guardada ======
   const handleSelectStoredLocation = async (loc: StoredLocation) => {
     try {
       setChangingLocation(true);
-
-      // si estaba siguiendo, apagar
       if (followEnabled) await stopFollowing();
 
       setSelectedLocation(loc);
@@ -491,12 +595,9 @@ export default function Search({ navigation }: any) {
     }
   };
 
-  // ====== Usar ubicación actual (TEMP) ======
   const handleUseCurrentLocationTemp = async () => {
     try {
       setChangingLocation(true);
-
-      // si estaba siguiendo, apagar
       if (followEnabled) await stopFollowing();
 
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -523,7 +624,6 @@ export default function Search({ navigation }: any) {
     }
   };
 
-  // ====== Toggle seguir ubicación ======
   const handleToggleFollowLive = async () => {
     try {
       setChangingLocation(true);
@@ -531,12 +631,10 @@ export default function Search({ navigation }: any) {
       if (followEnabled) {
         await stopFollowing();
 
-        // volver a principal o primera
         const fallback = locations.find((l) => l.principal) || locations[0] || FALLBACK_LOCATION;
         setSelectedLocation(fallback);
         await AsyncStorage.setItem(SELECTED_LOCATION_ID_KEY, fallback.id);
       } else {
-        // activar follow y dejarlo como principal de búsqueda
         await AsyncStorage.removeItem(SELECTED_LOCATION_ID_KEY);
         await startFollowing();
       }
@@ -557,7 +655,6 @@ export default function Search({ navigation }: any) {
     const radius = radiusKm;
 
     if (lat == null || lng == null) return;
-
     if (!searchMode) return;
     if (searchMode === 'category' && !selectedCategory && !q) return;
 
@@ -620,8 +717,8 @@ export default function Search({ navigation }: any) {
 
       const normalized: Service[] = list
         .map((it: any) => {
-          const latitude = Number(it.latitude ?? it.lat);
-          const longitude = Number(it.longitude ?? it.lng);
+          const latitude = Number(it.profesional_lat ?? it.latitude ?? it.lat);
+          const longitude = Number(it.profesional_lng ?? it.longitude ?? it.lng);
 
           const idRaw = it.id ?? it.servicio_id ?? it.servicios_id;
           const id = String(idRaw ?? '');
@@ -629,18 +726,20 @@ export default function Search({ navigation }: any) {
           const title = String(it.title ?? it.titulo ?? '').trim();
           const category = String(it.category ?? it.categoria ?? '').trim();
 
-          const profesionalId = String(it.profesional_id ?? it.profesionalId ?? '').trim();
-          const profesionalNombre = String(
-            it.profesional_nombre ?? it.profesionalNombre ?? '',
+          const profesionalId = String(
+            it.profesional_id ?? it.profesionalId ?? it.user_id ?? it.usuario_id ?? '',
           ).trim();
-          const profesionalApellido = String(
-            it.profesional_apellido ?? it.profesionalApellido ?? '',
-          ).trim();
+
+          const profesionalUserId = toStrId(
+            it.usuario_id ?? it.user_id ?? it.userId ?? it.id_usuario ?? it.idUser,
+          );
+
+          const profesionalNombre = String(it.profesional_nombre ?? it.profesionalNombre ?? '').trim();
+          const profesionalApellido = String(it.profesional_apellido ?? it.profesionalApellido ?? '').trim();
           const photoUrl = (it.photo_url ?? it.photoUrl ?? null) as string | null;
 
           const ubicacionId = typeof it.ubicacion_id === 'number' ? it.ubicacion_id : null;
-          const ubicacionNombre =
-            typeof it.ubicacion_nombre === 'string' ? it.ubicacion_nombre : null;
+          const ubicacionNombre = typeof it.ubicacion_nombre === 'string' ? it.ubicacion_nombre : null;
 
           let dist =
             typeof it.distanceKm === 'number'
@@ -649,11 +748,7 @@ export default function Search({ navigation }: any) {
                 ? it.distance_km
                 : undefined;
 
-          if (
-            (dist == null || Number.isNaN(dist)) &&
-            Number.isFinite(latitude) &&
-            Number.isFinite(longitude)
-          ) {
+          if ((dist == null || Number.isNaN(dist)) && Number.isFinite(latitude) && Number.isFinite(longitude)) {
             dist = haversineKm(lat, lng, latitude, longitude);
           }
 
@@ -664,8 +759,8 @@ export default function Search({ navigation }: any) {
             latitude,
             longitude,
             distanceKm: Number(dist ?? 0),
-
             profesionalId,
+            profesionalUserId: profesionalUserId || null,
             profesionalNombre,
             profesionalApellido,
             photoUrl,
@@ -689,8 +784,7 @@ export default function Search({ navigation }: any) {
           if (d > radius + 0.2) return false;
 
           if (searchMode === 'category' && selectedCategory) {
-            if (String(s.category).toLowerCase() !== String(selectedCategory).toLowerCase())
-              return false;
+            if (String(s.category).toLowerCase() !== String(selectedCategory).toLowerCase()) return false;
           }
 
           return true;
@@ -706,20 +800,12 @@ export default function Search({ navigation }: any) {
     } finally {
       setLoadingSearch(false);
     }
-  }, [
-    selectedLocation?.latitude,
-    selectedLocation?.longitude,
-    query,
-    radiusKm,
-    searchMode,
-    selectedCategory,
-  ]);
+  }, [selectedLocation?.latitude, selectedLocation?.longitude, query, radiusKm, searchMode, selectedCategory]);
 
-  // Debounce (y NO busca hasta elegir modo)
+  // Debounce
   useEffect(() => {
     if (!selectedLocation) return;
     if (!searchMode) return;
-
     if (searchMode === 'category' && !selectedCategory && !query.trim()) return;
 
     const t = setTimeout(() => {
@@ -729,29 +815,42 @@ export default function Search({ navigation }: any) {
     return () => clearTimeout(t);
   }, [selectedLocation?.id, query, radiusKm, searchMode, selectedCategory, fetchServicios]);
 
-  // ✅ si está siguiendo, refrescar cada 6s para ver a los demás moverse
+  // ====== ✅ Fuente de verdad FINAL: excluir SIEMPRE al profesional logueado (por userId) ======
+  const finalServices = useMemo(() => {
+    if (!isMyUserProfessional || !loggedUserId) return results;
+
+    const me = String(loggedUserId);
+
+    return results.filter((s) => {
+      if (String(s.profesionalId) === me) return false;
+      if (s.profesionalUserId && String(s.profesionalUserId) === me) return false;
+      return true;
+    });
+  }, [results, isMyUserProfessional, loggedUserId]);
+
+  // Si estaba seleccionado mi propio pin por un borde, cerrarlo
   useEffect(() => {
-    if (!searchMode) return;
-    if (!selectedLocation) return;
+    if (!selectedPin) return;
+    if (!isMyUserProfessional || !loggedUserId) return;
 
-    const t = setInterval(() => {
-      fetchServicios();
-    }, 6000);
+    const me = String(loggedUserId);
 
-    return () => clearInterval(t);
-  }, [searchMode, selectedLocation?.id, fetchServicios]);
+    if (String(selectedPin.profesionalId) === me) setSelectedPin(null);
+    if (selectedPin.profesionalUserId && String(selectedPin.profesionalUserId) === me) setSelectedPin(null);
+  }, [selectedPin, isMyUserProfessional, loggedUserId]);
 
-  // ====== Agrupar pines ======
+  // ====== Agrupar pines desde FINAL SERVICES (lista + mapa) ======
   const groupedPins = useMemo<GroupedPin[]>(() => {
     const map = new Map<string, GroupedPin>();
 
-    results.forEach((s) => {
+    finalServices.forEach((s) => {
       const key = `${s.profesionalId}-${s.latitude.toFixed(6)}-${s.longitude.toFixed(6)}`;
 
       if (!map.has(key)) {
         map.set(key, {
           key,
           profesionalId: s.profesionalId,
+          profesionalUserId: s.profesionalUserId ?? null,
           profesionalNombre: s.profesionalNombre || 'Profesional',
           profesionalApellido: s.profesionalApellido || '',
           photoUrl: s.photoUrl ?? null,
@@ -775,7 +874,41 @@ export default function Search({ navigation }: any) {
     });
 
     return Array.from(map.values()).sort((a, b) => a.distanceKm - b.distanceKm);
-  }, [results]);
+  }, [finalServices]);
+
+  // ====== Categoría para el pin ======
+  const getPinCategoryForGroup = useCallback(
+    (pin: GroupedPin): string => {
+      if (searchMode === 'category' && selectedCategory) return selectedCategory;
+
+      const counts = new Map<string, { count: number; label: string }>();
+
+      for (const s of pin.services) {
+        const label = String(s.category || '').trim();
+        const key = label.toLowerCase();
+        if (!key) continue;
+        const prev = counts.get(key);
+        if (!prev) counts.set(key, { count: 1, label });
+        else counts.set(key, { count: prev.count + 1, label: prev.label });
+      }
+
+      if (counts.size === 0) return '';
+
+      const entries = Array.from(counts.entries()).map(([k, v]) => ({
+        key: k,
+        count: v.count,
+        label: v.label,
+      }));
+
+      entries.sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return a.key.localeCompare(b.key);
+      });
+
+      return entries[0].label;
+    },
+    [searchMode, selectedCategory],
+  );
 
   // ====== Slider ======
   const handleRadiusValueChange = (value: number) => setRadiusDraft(value);
@@ -805,6 +938,12 @@ export default function Search({ navigation }: any) {
 
   // ====== Seleccionar pin ======
   const focusPin = (pin: GroupedPin) => {
+    if (isMyUserProfessional && loggedUserId) {
+      const me = String(loggedUserId);
+      if (String(pin.profesionalId) === me) return;
+      if (pin.profesionalUserId && String(pin.profesionalUserId) === me) return;
+    }
+
     setSelectedPin(pin);
 
     if (mapRef.current) {
@@ -820,94 +959,81 @@ export default function Search({ navigation }: any) {
 
   const closePinCard = () => setSelectedPin(null);
 
-  const goToProfile = (profesionalId: string) => {
-    navigation.navigate('ProfessionalProfile', { profesionalId });
+  // ✅ IMPORTANTE: tu profile route es /private/profile/:userId
+  const goToProfile = (profesionalUserId: string) => {
+    navigation.navigate('ProfessionalProfile', { profesionalId: profesionalUserId });
   };
+
+  // ====== Bottom panel collapse ======
+  const animateBottom = useCallback(
+    (toCollapsed: boolean) => {
+      const toValue = toCollapsed ? BOTTOM_SHEET_MIN_HEIGHT : BOTTOM_SHEET_MAX_HEIGHT;
+      Animated.timing(bottomHeightAnim, {
+        toValue,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    },
+    [bottomHeightAnim],
+  );
+
+  const toggleBottomCollapsed = useCallback(() => {
+    setBottomCollapsed((prev) => {
+      const next = !prev;
+      animateBottom(next);
+      return next;
+    });
+  }, [animateBottom]);
+
+  const bottomPanelHeightForCard = bottomCollapsed ? BOTTOM_SHEET_MIN_HEIGHT : BOTTOM_SHEET_MAX_HEIGHT;
 
   // ====== Render helpers ======
-  const MyMarker = () => {
-    if (!selectedLocation) return null;
-
-    const photo = currentUser?.foto_url ?? null;
-
+  const Avatar = ({ name, photoUrl }: { name: string; photoUrl: string | null }) => {
+    if (photoUrl) return <Image source={{ uri: photoUrl }} style={styles.avatarImg} />;
+    const initial = (name?.trim()?.[0] || 'P').toUpperCase();
     return (
-      <Marker
-        coordinate={{
-          latitude: selectedLocation.latitude,
-          longitude: selectedLocation.longitude,
-        }}
-        anchor={{ x: 0.5, y: 1 }}
-        onPress={() => closePinCard()}
-      >
-        {isProfessional && photo ? (
-          <View style={{ alignItems: 'center' }}>
-            <Image
-              source={{ uri: photo }}
-              style={{
-                width: 46,
-                height: 46,
-                borderRadius: 23,
-                borderWidth: 3,
-                borderColor: isFollowing ? '#16a34a' : '#0284c7',
-                backgroundColor: '#fff',
-              }}
-            />
-            <View
-              style={{
-                width: 0,
-                height: 0,
-                borderLeftWidth: 8,
-                borderRightWidth: 8,
-                borderTopWidth: 12,
-                borderLeftColor: 'transparent',
-                borderRightColor: 'transparent',
-                borderTopColor: isFollowing ? '#16a34a' : '#0284c7',
-                marginTop: -2,
-              }}
-            />
-          </View>
-        ) : (
-          <Image
-            source={require('../../assets/icons/mapa/default-pin.png')}
-            style={{ width: 40, height: 40 }}
-            resizeMode="contain"
-          />
-        )}
-      </Marker>
+      <View style={styles.avatarPlaceholder}>
+        <Text style={styles.avatarInitial}>{initial}</Text>
+      </View>
     );
   };
+
+  // ====== Pin usuario estilo Expo (rojo) ======
+  const UserExpoPin = () => {
+    return (
+      <View style={styles.userPinWrap}>
+        <Ionicons name="location-sharp" size={PIN_SIZE} color="#ef4444" />
+        <View style={styles.userPinInnerDot} />
+      </View>
+    );
+  };
+
+  const onPressMyPin = useCallback(() => {
+    if (isMyUserProfessional && loggedUserId) {
+      goToProfile(String(loggedUserId));
+    }
+  }, [isMyUserProfessional, loggedUserId]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.container}>
-        {/* MAPA (solo después de elegir “qué estás buscando hoy”) */}
+        {/* MAPA */}
         {searchMode ? (
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            initialRegion={initialRegion}
-            onPress={() => closePinCard()}
-          >
-            {/* Radio + Radar */}
+          <MapView ref={mapRef} style={styles.map} initialRegion={initialRegion} onPress={() => closePinCard()}>
             {selectedLocation && (
               <>
                 {/* Radar verde cuando sigue */}
                 {isFollowing && (
                   <>
                     <Circle
-                      center={{
-                        latitude: selectedLocation.latitude,
-                        longitude: selectedLocation.longitude,
-                      }}
+                      center={{ latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }}
                       radius={radarR1}
                       strokeColor={`rgba(34,197,94,${radarOpacity + 0.25})`}
                       fillColor={`rgba(34,197,94,${radarOpacity})`}
                     />
                     <Circle
-                      center={{
-                        latitude: selectedLocation.latitude,
-                        longitude: selectedLocation.longitude,
-                      }}
+                      center={{ latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }}
                       radius={radarR2}
                       strokeColor={`rgba(34,197,94,${radarOpacity + 0.18})`}
                       fillColor={`rgba(34,197,94,${radarOpacity * 0.7})`}
@@ -917,40 +1043,48 @@ export default function Search({ navigation }: any) {
 
                 {/* Radio de búsqueda */}
                 <Circle
-                  center={{
-                    latitude: selectedLocation.latitude,
-                    longitude: selectedLocation.longitude,
-                  }}
+                  center={{ latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }}
                   radius={radiusDraft * 1000}
                   strokeColor={isFollowing ? 'rgba(34,197,94,0.55)' : 'rgba(56,189,248,0.70)'}
                   fillColor={isFollowing ? 'rgba(34,197,94,0.10)' : 'rgba(56,189,248,0.18)'}
                 />
 
-                {/* ✅ Mi marker (foto si profesional) */}
-                <MyMarker />
+                {/* ✅ Pin del usuario logueado (siempre rojo) */}
+                <Marker
+                  coordinate={{ latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }}
+                  anchor={{ x: 0.5, y: 1 }}
+                  onPress={onPressMyPin}
+                  tracksViewChanges={false}
+                >
+                  <View style={styles.fixedPinBox}>
+                    <UserExpoPin />
+                  </View>
+                </Marker>
               </>
             )}
 
-            {/* Pines agrupados */}
-            {groupedPins.map((pin) => (
-              <Marker
-                key={pin.key}
-                coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
-                anchor={{ x: 0.5, y: 1 }}
-                onPress={() => focusPin(pin)}
-                title={fullName(pin)}
-                description={`${pin.services.length} servicios · ${pin.distanceKm.toFixed(1)} km`}
-              >
-                <Image
-                  source={getCategoryIcon(pin.services[0]?.category || '')}
-                  style={{ width: 56, height: 56 }}
-                  resizeMode="contain"
-                />
-                <View style={styles.pinBadge}>
-                  <Text style={styles.pinBadgeText}>{pin.services.length}</Text>
-                </View>
-              </Marker>
-            ))}
+            {/* Pines agrupados (profesionales) */}
+            {groupedPins.map((pin) => {
+              const pinCategory = getPinCategoryForGroup(pin);
+              return (
+                <Marker
+                  key={pin.key}
+                  coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
+                  anchor={{ x: 0.5, y: 1 }}
+                  onPress={() => focusPin(pin)}
+                  title={fullName(pin)}
+                  description={`${pin.services.length} servicios · ${pin.distanceKm.toFixed(1)} km`}
+                  tracksViewChanges={false}
+                >
+                  <View style={styles.fixedPinBox}>
+                    <Image source={getCategoryIcon(pinCategory || '')} style={styles.pinIcon} resizeMode="contain" />
+                    <View style={styles.pinBadge}>
+                      <Text style={styles.pinBadgeText}>{pin.services.length}</Text>
+                    </View>
+                  </View>
+                </Marker>
+              );
+            })}
           </MapView>
         ) : (
           <View style={styles.mapPlaceholder}>
@@ -958,7 +1092,9 @@ export default function Search({ navigation }: any) {
           </View>
         )}
 
+        {/* TOP CARD */}
         <SearchTopCard
+          variant="compact"
           selectedLabel={selectedLabel}
           selectedLabelColor={selectedLabelColor}
           radiusDraft={radiusDraft}
@@ -971,9 +1107,7 @@ export default function Search({ navigation }: any) {
 
         {/* CARD PROFESIONAL */}
         {selectedPin && (
-          <View
-            style={[styles.professionalCard, { bottom: BOTTOM_SHEET_MAX_HEIGHT + PIN_CARD_MARGIN }]}
-          >
+          <View style={[styles.professionalCard, { bottom: bottomPanelHeightForCard + PIN_CARD_MARGIN }]}>
             <TouchableOpacity style={styles.closeCardBtn} onPress={closePinCard}>
               <Ionicons name="close" size={18} color="#6b7280" />
             </TouchableOpacity>
@@ -991,10 +1125,7 @@ export default function Search({ navigation }: any) {
                 </Text>
               </View>
 
-              <TouchableOpacity
-                style={styles.viewProfileBtn}
-                onPress={() => goToProfile(selectedPin.profesionalId)}
-              >
+              <TouchableOpacity style={styles.viewProfileBtn} onPress={() => goToProfile(selectedPin.profesionalId)}>
                 <Text style={styles.viewProfileText}>Ver perfil</Text>
               </TouchableOpacity>
             </View>
@@ -1026,126 +1157,129 @@ export default function Search({ navigation }: any) {
           keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
           style={styles.bottomKeyboardWrapper}
         >
-          <View style={styles.bottomPanel}>
-            <View style={styles.searchRow}>
-              <Ionicons name="search-outline" size={18} color="#6b7280" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder={
-                  searchMode === 'category'
-                    ? selectedCategory
-                      ? `Buscar dentro de ${selectedCategory}…`
-                      : 'Elegí una categoría arriba'
-                    : 'Buscar por servicio (plomero, electricista...)'
-                }
-                placeholderTextColor="#9ca3af"
-                value={query}
-                onChangeText={handleSearchChange}
-                autoCapitalize="none"
-                returnKeyType="search"
-                editable={!!searchMode}
-              />
-              {loadingSearch ? (
-                <ActivityIndicator size="small" color="#0284c7" />
-              ) : query.length > 0 ? (
-                <TouchableOpacity
-                  onPress={() => setQuery('')}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name="close-circle" size={18} color="#9ca3af" />
-                </TouchableOpacity>
+          <Animated.View
+            style={[
+              styles.bottomPanel,
+              { height: bottomHeightAnim },
+              bottomCollapsed ? styles.bottomPanelCollapsed : null,
+            ]}
+          >
+            <TouchableOpacity style={styles.bottomHandleRow} onPress={toggleBottomCollapsed} activeOpacity={0.85}>
+              <View style={styles.bottomHandleBar} />
+              <View style={styles.bottomHandleRight}>
+                <Ionicons name={bottomCollapsed ? 'chevron-up' : 'chevron-down'} size={18} color="#6b7280" />
+              </View>
+            </TouchableOpacity>
+
+            <View style={[styles.bottomContent, bottomCollapsed && styles.bottomContentCollapsed]}>
+              <View style={styles.searchRow}>
+                <Ionicons name="search-outline" size={18} color="#6b7280" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder={
+                    searchMode === 'category'
+                      ? selectedCategory
+                        ? `Buscar dentro de ${selectedCategory}…`
+                        : 'Elegí una categoría arriba'
+                      : 'Buscar por servicio (plomero, electricista...)'
+                  }
+                  placeholderTextColor="#9ca3af"
+                  value={query}
+                  onChangeText={handleSearchChange}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                  editable={!!searchMode}
+                />
+                {loadingSearch ? (
+                  <ActivityIndicator size="small" color="#0284c7" />
+                ) : query.length > 0 ? (
+                  <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="close-circle" size={18} color="#9ca3af" />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={{ width: 18, height: 18 }} />
+                )}
+              </View>
+
+              <View style={styles.rubrosRow}>
+                {POPULAR_RUBROS.map((rubro) => (
+                  <TouchableOpacity
+                    key={rubro}
+                    style={[
+                      styles.rubroChip,
+                      searchMode === 'category' &&
+                        selectedCategory &&
+                        selectedCategory.toLowerCase() === rubro.toLowerCase() && { backgroundColor: '#e0f2fe' },
+                    ]}
+                    onPress={() => handleRubrosChipPress(rubro)}
+                    activeOpacity={0.85}
+                    disabled={!searchMode}
+                  >
+                    <Text style={styles.rubroChipText}>{rubro}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {!searchMode ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>Elegí primero “qué estás buscando hoy”.</Text>
+                </View>
+              ) : searchError ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>{searchError}</Text>
+                </View>
+              ) : groupedPins.length > 0 ? (
+                <FlatList
+                  data={groupedPins}
+                  keyExtractor={(item) => item.key}
+                  style={styles.resultsList}
+                  contentContainerStyle={styles.resultsContent}
+                  keyboardShouldPersistTaps="handled"
+                  renderItem={({ item }) => {
+                    const name = fullName(item);
+                    return (
+                      <TouchableOpacity style={styles.resultCard} activeOpacity={0.85} onPress={() => focusPin(item)}>
+                        <Avatar name={name} photoUrl={item.photoUrl} />
+
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.resultTitle} numberOfLines={1}>
+                            {name}
+                          </Text>
+                          <Text style={styles.resultCategory} numberOfLines={1}>
+                            {item.services.length} servicios · {item.distanceKm.toFixed(1)} km
+                            {item.ubicacionNombre ? ` · ${item.ubicacionNombre}` : ''}
+                          </Text>
+
+                          <Text style={styles.resultMiniList} numberOfLines={1}>
+                            {item.services.slice(0, 2).map((s) => s.title).join(' · ')}
+                            {item.services.length > 2 ? ' · …' : ''}
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={styles.smallProfileBtn}
+                          onPress={() => goToProfile(item.profesionalId)}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.smallProfileText}>Ver</Text>
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
               ) : (
-                <View style={{ width: 18, height: 18 }} />
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>
+                    {loadingSearch
+                      ? 'Buscando…'
+                      : searchMode === 'category' && !selectedCategory && !query.trim()
+                        ? 'Elegí una categoría (o escribí algo).'
+                        : `No encontramos servicios para “${query}” dentro de ${Math.round(radiusKm)} km.`}
+                  </Text>
+                </View>
               )}
             </View>
-
-            <View style={styles.rubrosRow}>
-              {POPULAR_RUBROS.map((rubro) => (
-                <TouchableOpacity
-                  key={rubro}
-                  style={[
-                    styles.rubroChip,
-                    searchMode === 'category' &&
-                      selectedCategory &&
-                      selectedCategory.toLowerCase() === rubro.toLowerCase() && {
-                        backgroundColor: '#e0f2fe',
-                      },
-                  ]}
-                  onPress={() => handleRubrosChipPress(rubro)}
-                  activeOpacity={0.85}
-                  disabled={!searchMode}
-                >
-                  <Text style={styles.rubroChipText}>{rubro}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {!searchMode ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>Elegí primero “qué estás buscando hoy”.</Text>
-              </View>
-            ) : searchError ? (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>{searchError}</Text>
-              </View>
-            ) : groupedPins.length > 0 ? (
-              <FlatList
-                data={groupedPins}
-                keyExtractor={(item) => item.key}
-                style={styles.resultsList}
-                contentContainerStyle={styles.resultsContent}
-                keyboardShouldPersistTaps="handled"
-                renderItem={({ item }) => {
-                  const name = fullName(item);
-                  return (
-                    <TouchableOpacity
-                      style={styles.resultCard}
-                      activeOpacity={0.85}
-                      onPress={() => focusPin(item)}
-                    >
-                      <Avatar name={name} photoUrl={item.photoUrl} />
-
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.resultTitle} numberOfLines={1}>
-                          {name}
-                        </Text>
-                        <Text style={styles.resultCategory} numberOfLines={1}>
-                          {item.services.length} servicios · {item.distanceKm.toFixed(1)} km
-                          {item.ubicacionNombre ? ` · ${item.ubicacionNombre}` : ''}
-                        </Text>
-
-                        <Text style={styles.resultMiniList} numberOfLines={1}>
-                          {item.services
-                            .slice(0, 2)
-                            .map((s) => s.title)
-                            .join(' · ')}
-                          {item.services.length > 2 ? ' · …' : ''}
-                        </Text>
-                      </View>
-
-                      <TouchableOpacity
-                        style={styles.smallProfileBtn}
-                        onPress={() => goToProfile(item.profesionalId)}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.smallProfileText}>Ver</Text>
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  );
-                }}
-              />
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>
-                  {loadingSearch
-                    ? 'Buscando…'
-                    : searchMode === 'category' && !selectedCategory && !query.trim()
-                      ? 'Elegí una categoría (o escribí algo).'
-                      : `No encontramos servicios para “${query}” dentro de ${Math.round(radiusKm)} km.`}
-                </Text>
-              </View>
-            )}
-          </View>
+          </Animated.View>
         </KeyboardAvoidingView>
 
         {/* MODAL: ¿Qué estás buscando hoy? */}
@@ -1154,10 +1288,7 @@ export default function Search({ navigation }: any) {
             <View style={styles.introCard}>
               <View style={styles.introHeaderRow}>
                 <Text style={styles.introTitle}>¿Qué estás buscando hoy?</Text>
-                <TouchableOpacity
-                  onPress={closeIntro}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
+                <TouchableOpacity onPress={closeIntro} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <Ionicons name="close" size={22} color="#6b7280" />
                 </TouchableOpacity>
               </View>
@@ -1172,11 +1303,7 @@ export default function Search({ navigation }: any) {
                   <Text style={styles.introBtnText}>Ver todo</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.introBtn}
-                  onPress={pickModeWorked}
-                  activeOpacity={0.9}
-                >
+                <TouchableOpacity style={styles.introBtn} onPress={pickModeWorked} activeOpacity={0.9}>
                   <Ionicons name="people-outline" size={18} color="#111827" />
                   <Text style={styles.introBtnText}>Con los que trabajé</Text>
                 </TouchableOpacity>
@@ -1190,9 +1317,7 @@ export default function Search({ navigation }: any) {
                     key={cat}
                     style={[
                       styles.introChip,
-                      selectedCategory?.toLowerCase() === cat.toLowerCase() && {
-                        backgroundColor: '#e0f2fe',
-                      },
+                      selectedCategory?.toLowerCase() === cat.toLowerCase() && { backgroundColor: '#e0f2fe' },
                     ]}
                     onPress={() => pickModeCategory(cat)}
                     activeOpacity={0.9}
@@ -1206,12 +1331,7 @@ export default function Search({ navigation }: any) {
         </Modal>
 
         {/* MODAL CAMBIAR UBICACIÓN */}
-        <Modal
-          visible={locationModalVisible}
-          transparent
-          animationType="slide"
-          onRequestClose={closeLocationModal}
-        >
+        <Modal visible={locationModalVisible} transparent animationType="slide" onRequestClose={closeLocationModal}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeaderRow}>
@@ -1221,11 +1341,8 @@ export default function Search({ navigation }: any) {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.modalSubtitle}>
-                Elegí una ubicación guardada o usá tu ubicación actual.
-              </Text>
+              <Text style={styles.modalSubtitle}>Elegí una ubicación guardada o usá tu ubicación actual.</Text>
 
-              {/* ✅ Seguir ubicación en tiempo real */}
               <TouchableOpacity
                 style={styles.modalOptionRow}
                 onPress={handleToggleFollowLive}
@@ -1239,9 +1356,7 @@ export default function Search({ navigation }: any) {
                   style={{ marginRight: 8 }}
                 />
                 <Text style={[styles.modalOptionText, followEnabled && { color: '#16a34a' }]}>
-                  {followEnabled
-                    ? '🟢 Siguiendo tu ubicación (en tiempo real)'
-                    : 'Seguir mi ubicación (en tiempo real)'}
+                  {followEnabled ? '🟢 Siguiendo tu ubicación (en tiempo real)' : 'Seguir mi ubicación (en tiempo real)'}
                 </Text>
               </TouchableOpacity>
 
@@ -1251,12 +1366,7 @@ export default function Search({ navigation }: any) {
                 disabled={changingLocation}
                 activeOpacity={0.85}
               >
-                <Ionicons
-                  name="locate-outline"
-                  size={18}
-                  color="#111827"
-                  style={{ marginRight: 8 }}
-                />
+                <Ionicons name="locate-outline" size={18} color="#111827" style={{ marginRight: 8 }} />
                 <Text style={styles.modalOptionText}>Usar ubicación actual (una vez)</Text>
               </TouchableOpacity>
 
@@ -1265,9 +1375,7 @@ export default function Search({ navigation }: any) {
               {loadingLocations && <Text style={styles.helperText}>Cargando ubicaciones…</Text>}
 
               {!loadingLocations && locations.length === 0 && (
-                <Text style={styles.helperText}>
-                  No tenés ubicaciones guardadas (podés agregarlas en Perfil).
-                </Text>
+                <Text style={styles.helperText}>No tenés ubicaciones guardadas (podés agregarlas en Perfil).</Text>
               )}
 
               {!loadingLocations &&
@@ -1281,10 +1389,7 @@ export default function Search({ navigation }: any) {
                   return (
                     <Pressable
                       key={loc.id}
-                      style={[
-                        styles.modalLocationRow,
-                        isSelected && styles.modalLocationRowSelected,
-                      ]}
+                      style={[styles.modalLocationRow, isSelected && styles.modalLocationRowSelected]}
                       onPress={() => handleSelectStoredLocation(loc)}
                     >
                       <Ionicons
@@ -1313,61 +1418,44 @@ const styles = StyleSheet.create({
   map: { flex: 1 },
   mapPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
+  fixedPinBox: {
+    width: PIN_SIZE,
+    height: PIN_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  userPinWrap: {
+    width: PIN_SIZE,
+    height: PIN_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userPinInnerDot: {
+    position: 'absolute',
+    top: 12,
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.10)',
+  },
+
+  pinIcon: { width: PIN_SIZE, height: PIN_SIZE },
+
   pinBadge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: 1,
+    right: 1,
     backgroundColor: '#111827',
     borderRadius: 999,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 18,
+    width: PIN_BADGE_SIZE,
+    height: PIN_BADGE_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pinBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-
-  topCardWrapper: { position: 'absolute', top: 12, left: 12, right: 12 },
-  topCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  topCardHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
-  topCardLabel: { fontSize: 12, color: '#6b7280' },
-  topCardLocation: { fontSize: 15, fontWeight: '800', color: '#111827' },
-  topCardRadiusLabel: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-
-  topButtonsCol: { gap: 8, alignItems: 'flex-end' },
-
-  changeLocationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#bae6fd',
-    backgroundColor: '#ecfeff',
-    marginLeft: 8,
-  },
-  changeLocationText: { fontSize: 12, color: '#0369a1', fontWeight: '800' },
-
-  sliderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  sliderLabel: { fontSize: 12, color: '#111827', fontWeight: '800' },
-  sliderValue: { fontSize: 12, color: '#111827', fontWeight: '700' },
-  slider: { marginTop: 2 },
 
   professionalCard: {
     position: 'absolute',
@@ -1386,12 +1474,7 @@ const styles = StyleSheet.create({
   professionalHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingRight: 30 },
   professionalName: { fontSize: 14, fontWeight: '900', color: '#111827' },
   professionalSubtitle: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  viewProfileBtn: {
-    backgroundColor: '#0284c7',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-  },
+  viewProfileBtn: { backgroundColor: '#0284c7', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
   viewProfileText: { color: '#fff', fontSize: 12, fontWeight: '900' },
   servicesList: { marginTop: 10 },
   serviceRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
@@ -1411,19 +1494,52 @@ const styles = StyleSheet.create({
   avatarInitial: { fontSize: 18, fontWeight: '900', color: '#374151' },
 
   bottomKeyboardWrapper: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+
   bottomPanel: {
-    height: BOTTOM_SHEET_MAX_HEIGHT,
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingTop: 4,
+    paddingBottom: 4,
     shadowColor: '#000',
     shadowOpacity: 0.14,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: -6 },
     elevation: 12,
+    overflow: 'hidden',
+  },
+  bottomPanelCollapsed: {
+    paddingTop: 2,
+    paddingBottom: 2,
+  },
+
+  bottomHandleRow: {
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    marginBottom: 0,
+  },
+  bottomHandleBar: {
+    width: 44,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+  },
+  bottomHandleRight: {
+    position: 'absolute',
+    right: 0,
+    top: -4,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+
+  bottomContent: { flex: 1, marginTop: 8 },
+  bottomContentCollapsed: {
+    opacity: 0,
+    height: 0,
+    marginTop: 0,
   },
 
   searchRow: {
@@ -1438,20 +1554,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 10,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#111827',
-    paddingVertical: 0,
-  },
+  searchInput: { flex: 1, fontSize: 14, color: '#111827', paddingVertical: 0 },
 
   rubrosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  rubroChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#f3f4f6',
-  },
+  rubroChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: '#f3f4f6' },
   rubroChipText: { fontSize: 12, color: COLORS?.text ?? '#111827', fontWeight: '700' },
 
   resultsList: { flex: 1 },
@@ -1468,18 +1574,12 @@ const styles = StyleSheet.create({
   resultCategory: { fontSize: 12, color: '#6b7280', marginTop: 2, fontWeight: '700' },
   resultMiniList: { fontSize: 12, color: '#9ca3af', marginTop: 4, fontWeight: '600' },
 
-  smallProfileBtn: {
-    backgroundColor: '#0284c7',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
+  smallProfileBtn: { backgroundColor: '#0284c7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
   smallProfileText: { color: '#fff', fontSize: 12, fontWeight: '900' },
 
   emptyState: { marginTop: 8 },
   emptyText: { fontSize: 13, color: '#6b7280', fontWeight: '700' },
 
-  // ===== Intro modal =====
   introOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.35)',
@@ -1518,15 +1618,9 @@ const styles = StyleSheet.create({
   introBtnText: { fontSize: 13, fontWeight: '900', color: '#111827' },
   introSection: { marginTop: 14, fontSize: 13, fontWeight: '900', color: '#111827' },
   introChipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
-  introChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: '#f3f4f6',
-  },
+  introChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: '#f3f4f6' },
   introChipText: { fontSize: 12, fontWeight: '800', color: '#111827' },
 
-  // ===== Location modal =====
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.30)', justifyContent: 'flex-end' },
   modalContent: {
     backgroundColor: '#fff',
@@ -1537,20 +1631,10 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     maxHeight: '70%',
   },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
+  modalHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   modalTitle: { fontSize: 16, fontWeight: '900', color: '#111827' },
   modalSubtitle: { fontSize: 13, color: '#6b7280', marginTop: 2, fontWeight: '600' },
-  modalOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    marginTop: 10,
-  },
+  modalOptionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, marginTop: 10 },
   modalOptionText: { fontSize: 14, color: '#111827', fontWeight: '700' },
   helperText: { fontSize: 12, color: '#9ca3af', marginTop: 4, fontWeight: '600' },
   modalLocationRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
