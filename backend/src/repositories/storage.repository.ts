@@ -1,33 +1,28 @@
-// src/repositories/storage.repository.ts
-import supabase from '../config/db';
+import { supabaseAdmin } from '../config/supabaseAdmin';
 
-export const uploadToBucket = async (
-  params: {
-    bucket: string;
-    path: string;
-    buffer: Buffer;
-    contentType: string;
-    upsert: boolean;
+export const uploadToBucket = async (params: {
+  bucket: string;
+  path: string;
+  buffer: Buffer;
+  contentType: string;
+  upsert: boolean;
+}): Promise<string> => {
+  const { bucket, path, buffer, contentType, upsert } = params;
+
+  const { data, error } = await supabaseAdmin.storage.from(bucket).upload(path, buffer, {
+    cacheControl: '3600',
+    upsert,
+    contentType,
+  });
+
+  if (error || !data) {
+    console.error('❌ Storage upload failed', { bucket, path, contentType, upsert, error });
+    throw error ?? new Error('Upload sin data');
   }
-): Promise<string> => {
-    const { bucket, path, buffer, contentType, upsert } = params;
 
-    const { data, error } = await supabase.storage.from(bucket).upload(path, buffer, {
-      cacheControl: '3600',
-      upsert,
-      contentType,
-    });
+  const { data: publicUrlData } = supabaseAdmin.storage.from(bucket).getPublicUrl(data.path);
 
-    if (error || !data) {
-      console.error('❌ Error subiendo a Supabase Storage:', error);
-      throw new Error('No se pudo subir la imagen');
-    }
+  if (!publicUrlData?.publicUrl) throw new Error('No se pudo obtener URL pública');
 
-    const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
-
-    if (!publicUrlData?.publicUrl) {
-      throw new Error('No se pudo obtener URL pública');
-    }
-
-    return publicUrlData.publicUrl;
-  }
+  return publicUrlData.publicUrl;
+};

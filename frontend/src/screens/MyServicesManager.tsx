@@ -75,7 +75,7 @@ function normalizeService(input: any, idx: number): ServiceDto {
   };
 }
 
-export default function MyServicesManager({ navigation }: Props) {
+export default function MyServicesManager({ navigation, route }: Props) {
   const [loading, setLoading] = useState(true);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
@@ -92,6 +92,9 @@ export default function MyServicesManager({ navigation }: Props) {
   const [formCategoria, setFormCategoria] = useState('');
   const [formPrecioBase, setFormPrecioBase] = useState('');
   const [formActivo, setFormActivo] = useState(true);
+
+  const fromBecomePro = !!(route as any)?.params?.fromBecomePro;
+  const base = fromBecomePro ? '/private/pro-onboarding/services' : '/private/services';
 
   // Category select modal
   const [catOpen, setCatOpen] = useState(false);
@@ -113,7 +116,7 @@ export default function MyServicesManager({ navigation }: Props) {
       setAlertMsg(null);
       setOk(false);
 
-      const data = await api.get<any>('/private/services');
+      const data = await api.get<any>(base);
       const arr = Array.isArray(data) ? data : Array.isArray(data?.services) ? data.services : [];
       setServices(arr.map((s: any, idx: number) => normalizeService(s, idx)));
     } catch (e: any) {
@@ -124,7 +127,7 @@ export default function MyServicesManager({ navigation }: Props) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [base]);
 
   useFocusEffect(
     useCallback(() => {
@@ -144,18 +147,15 @@ export default function MyServicesManager({ navigation }: Props) {
 
   const empty = !loading && services.length === 0;
 
-  const openEdit = useCallback(
-    (s: ServiceDto) => {
-      setEditId(s.id);
-      setFormTitulo(s.titulo ?? '');
-      setFormDescripcion(s.descripcion ?? '');
-      setFormCategoria(s.categoria ?? 'Otros');
-      setFormPrecioBase(s.precio_base == null ? '' : String(s.precio_base));
-      setFormActivo(!!s.activo);
-      setEditOpen(true);
-    },
-    [],
-  );
+  const openEdit = useCallback((s: ServiceDto) => {
+    setEditId(s.id);
+    setFormTitulo(s.titulo ?? '');
+    setFormDescripcion(s.descripcion ?? '');
+    setFormCategoria(s.categoria ?? 'Otros');
+    setFormPrecioBase(s.precio_base == null ? '' : String(s.precio_base));
+    setFormActivo(!!s.activo);
+    setEditOpen(true);
+  }, []);
 
   const closeEdit = useCallback(() => {
     setEditOpen(false);
@@ -201,7 +201,7 @@ export default function MyServicesManager({ navigation }: Props) {
       };
 
       // ✅ CLAVE: con tu http.ts, SIEMPRE mandamos objetos en body
-      await api.patch(`/private/services/${editId}`, { body: payload });
+      await api.patch(`${base}/${editId}`, { body: payload });
 
       setOk(true);
       setAlertMsg('Servicio actualizado.');
@@ -226,82 +226,83 @@ export default function MyServicesManager({ navigation }: Props) {
   ]);
 
   const confirmDelete = useCallback(
-  (serviceId: number) => {
-    RNAlert.alert(
-      'Eliminar servicio',
-      '¿Seguro que querés eliminar este servicio? Esta acción no se puede deshacer.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            setDeletingId(serviceId);
-            setAlertMsg(null);
-            setOk(false);
-
-            try {
-              await api.delete(`/private/services/${serviceId}`);
-              setOk(true);
-              setAlertMsg('Servicio eliminado.');
-              await fetchServices();
-            } catch (e: any) {
-              console.log('❌ delete service error', e);
-
-              // ✅ Si el backend devuelve 409 (tiene reservas), ofrecemos DESACTIVAR
-              const status = e?.status;
-              const code = e?.data?.code;
-
-              if (status === 409 && code === 'SERVICE_HAS_RESERVATIONS') {
-                RNAlert.alert(
-                  'No se puede eliminar',
-                  'Este servicio ya tiene reservas asociadas. Podés desactivarlo para que no aparezca en búsquedas.',
-                  [
-                    { text: 'Cancelar', style: 'cancel' },
-                    {
-                      text: 'Desactivar',
-                      style: 'default',
-                      onPress: async () => {
-                        setDeletingId(serviceId);
-                        setAlertMsg(null);
-                        setOk(false);
-
-                        try {
-                          // ✅ endpoint sugerido: PATCH /private/services/:id/deactivate
-                          // OJO: tu http() ya hace JSON.stringify(body), así que body debe ser objeto, NO string.
-                          await api.patch(`/private/services/${serviceId}/deactivate`, { body: {} });
-
-                          setOk(true);
-                          setAlertMsg('Servicio desactivado.');
-                          await fetchServices();
-                        } catch (err: any) {
-                          console.log('❌ deactivate service error', err);
-                          setOk(false);
-                          setAlertMsg(err?.message ?? 'No se pudo desactivar el servicio.');
-                        } finally {
-                          setDeletingId(null);
-                        }
-                      },
-                    },
-                  ],
-                );
-
-                return; // 👈 importante para no pisar el mensaje con el genérico
-              }
-
+    (serviceId: number) => {
+      RNAlert.alert(
+        'Eliminar servicio',
+        '¿Seguro que querés eliminar este servicio? Esta acción no se puede deshacer.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Eliminar',
+            style: 'destructive',
+            onPress: async () => {
+              setDeletingId(serviceId);
+              setAlertMsg(null);
               setOk(false);
-              setAlertMsg(e?.message ?? 'No se pudo eliminar el servicio.');
-            } finally {
-              setDeletingId(null);
-            }
-          },
-        },
-      ],
-    );
-  },
-  [fetchServices],
-);
 
+              try {
+                await api.delete(`${base}/${serviceId}`);
+                setOk(true);
+                setAlertMsg('Servicio eliminado.');
+                await fetchServices();
+              } catch (e: any) {
+                console.log('❌ delete service error', e);
+
+                // ✅ Si el backend devuelve 409 (tiene reservas), ofrecemos DESACTIVAR
+                const status = e?.status;
+                const code = e?.data?.code;
+
+                if (status === 409 && code === 'SERVICE_HAS_RESERVATIONS') {
+                  RNAlert.alert(
+                    'No se puede eliminar',
+                    'Este servicio ya tiene reservas asociadas. Podés desactivarlo para que no aparezca en búsquedas.',
+                    [
+                      { text: 'Cancelar', style: 'cancel' },
+                      {
+                        text: 'Desactivar',
+                        style: 'default',
+                        onPress: async () => {
+                          setDeletingId(serviceId);
+                          setAlertMsg(null);
+                          setOk(false);
+
+                          try {
+                            // ✅ endpoint sugerido: PATCH /private/services/:id/deactivate
+                            // OJO: tu http() ya hace JSON.stringify(body), así que body debe ser objeto, NO string.
+                            await api.patch(`/private/services/${serviceId}/deactivate`, {
+                              body: {},
+                            });
+
+                            setOk(true);
+                            setAlertMsg('Servicio desactivado.');
+                            await fetchServices();
+                          } catch (err: any) {
+                            console.log('❌ deactivate service error', err);
+                            setOk(false);
+                            setAlertMsg(err?.message ?? 'No se pudo desactivar el servicio.');
+                          } finally {
+                            setDeletingId(null);
+                          }
+                        },
+                      },
+                    ],
+                  );
+
+                  return; // 👈 importante para no pisar el mensaje con el genérico
+                }
+
+                setOk(false);
+                setAlertMsg(e?.message ?? 'No se pudo eliminar el servicio.');
+              } finally {
+                setDeletingId(null);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [fetchServices],
+  );
 
   if (loading) {
     return (
@@ -324,7 +325,11 @@ export default function MyServicesManager({ navigation }: Props) {
           <TouchableOpacity
             activeOpacity={0.85}
             style={styles.iconBtn}
-            onPress={() => navigation.navigate('AddService')}
+            onPress={() =>
+              fromBecomePro
+                ? navigation.navigate('AddService', { fromBecomePro })
+                : navigation.navigate('AddService')
+            }
           >
             <Ionicons name="add" size={20} color={COLORS.text} />
           </TouchableOpacity>
@@ -340,15 +345,16 @@ export default function MyServicesManager({ navigation }: Props) {
           />
         ) : null}
 
-        <Card style={styles.headerCard} withShadow>
-          <Text style={styles.hTitle}>Tus servicios</Text>
-          <Text style={styles.hSub}>Podés editarlos o eliminarlos. Para agregar uno nuevo, tocá el +.</Text>
+        <View style={{ marginBottom: SPACING.lg }}>
+          <Text style={styles.hSub}>
+            Podés editarlos o eliminarlos. Para agregar uno nuevo, tocá el +.
+          </Text>
 
           <View style={styles.countRow}>
             <Ionicons name="briefcase-outline" size={16} color={COLORS.textMuted} />
             <Text style={styles.countText}>{services.length} servicio(s)</Text>
           </View>
-        </Card>
+        </View>
 
         {empty ? (
           <Card style={styles.emptyCard} withShadow>
@@ -361,7 +367,11 @@ export default function MyServicesManager({ navigation }: Props) {
             <Button
               title="Agregar servicio"
               style={{ marginTop: SPACING.md }}
-              onPress={() => navigation.navigate('AddService')}
+              onPress={() =>
+                fromBecomePro
+                  ? navigation.navigate('AddService', { fromBecomePro })
+                  : navigation.navigate('AddService')
+              }
             />
           </Card>
         ) : (
@@ -503,7 +513,12 @@ export default function MyServicesManager({ navigation }: Props) {
               </View>
 
               <View style={styles.modalBtns}>
-                <Button title="Cancelar" variant="outline" onPress={closeEdit} style={{ flex: 1 }} />
+                <Button
+                  title="Cancelar"
+                  variant="outline"
+                  onPress={closeEdit}
+                  style={{ flex: 1 }}
+                />
                 <Button
                   title={saving ? 'Guardando…' : 'Guardar'}
                   onPress={onSave}
@@ -581,16 +596,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
 
-  headerCard: {
-    padding: SPACING.lg,
-    borderRadius: RADII.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderCard,
-    backgroundColor: COLORS.cardBg,
-    marginBottom: SPACING.md,
-    ...SHADOWS.soft,
-  },
-
   hTitle: { ...TYPO.h2 },
   hSub: { ...TYPO.subtitle, marginTop: 6 },
 
@@ -655,7 +660,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxWidth: 520,
+    maxWidth: '90%',
     backgroundColor: COLORS.cardBg,
     borderRadius: RADII.lg,
     borderWidth: 1,

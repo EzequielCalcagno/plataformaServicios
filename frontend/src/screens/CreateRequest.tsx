@@ -252,7 +252,7 @@ export default function CreateRequest({ navigation, route }: Props) {
       // auto-navega, pero dejando tiempo a que se vea el éxito
       setTimeout(() => {
         setSentOk(false);
-        navigation.navigate('Bookings');
+        navigation.navigate('Requests');
       }, 900);
     } catch (e) {
       console.log('❌ CreateRequest submit error', e);
@@ -285,7 +285,7 @@ export default function CreateRequest({ navigation, route }: Props) {
         primaryLabel="Ver mis reservas"
         onPrimary={() => {
           setSentOk(false);
-          navigation.navigate('Bookings');
+          navigation.navigate('Requests');
         }}
       />
 

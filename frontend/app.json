@@ -5,8 +5,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "extra": {
-      "API_URL": "https://plataformaservicios.onrender.com/api/v1",
-      "EXPO_PUBLIC_GOOGLE_PLACES_KEY":"AIzaSyDm5skuf8IGMM9p5byYLrWS3Bf11Ntdvds"
+      "API_URL": "http://172.20.10.2:3000/api/v1",
+      "API_PROD_URL": "https://plataformaservicios.onrender.com/api/v1",
+      "EXPO_PUBLIC_GOOGLE_PLACES_KEY": "AIzaSyDm5skuf8IGMM9p5byYLrWS3Bf11Ntdvds"
     },
     "icon": "./assets/images/fixo-logo.png",
     "userInterfaceStyle": "light",
@@ -30,13 +31,7 @@
     "web": {
       "favicon": "./assets/images/fixo-logo.png"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
-    "plugins": [
-      "expo-font"
-    ]
+    "assetBundlePatterns": ["**/*"],
+    "plugins": ["expo-font"]
   }
-
-  
 }

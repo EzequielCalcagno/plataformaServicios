@@ -13,7 +13,6 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -23,9 +22,11 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Alert } from '../components/Alert';
 
+import { getCurrentUser } from '../services/user.client';
+
 import { TYPO, COLORS, SPACING, RADII } from '../styles/theme';
 import { api } from '../utils/api';
-import { API_URL } from '../utils/http';
+import { ApiError } from '../utils/http';
 
 type Props = { navigation: any; route: any };
 type AppRole = 'professional' | 'client';
@@ -178,7 +179,17 @@ const FALLBACK_SUGGESTIONS: Record<string, string[]> = {
 
 const MAX_DESC = 500;
 
-export default function AddService({ navigation }: Props) {
+type CreateServiceBody = {
+  titulo: string;
+  descripcion: string | null;
+  categoria: string;
+  precio_base: number | null;
+  imageUrl: string | null;
+};
+
+export default function AddService({ navigation, route }: Props) {
+  const fromBecomePro = !!route?.params?.fromBecomePro;
+
   const [role, setRole] = useState<AppRole | null>(null);
   const [loadingRole, setLoadingRole] = useState(true);
 
@@ -200,45 +211,78 @@ export default function AddService({ navigation }: Props) {
   const [ok, setOk] = useState(false);
 
   // =========================
+  // Derivados: modo (pro u onboarding)
+  // =========================
+  const isPro = role === 'professional';
+  const isOnboarding = !isPro && fromBecomePro;
+
+  // Endpoints según modo
+  const endpoints = useMemo(() => {
+    if (isPro) {
+      return {
+        suggestions: '/private/services/suggestions',
+        create: '/private/services',
+        upload: '/private/uploads/work-image',
+      };
+    }
+    // onboarding
+    return {
+      suggestions: '/private/pro-onboarding/services/suggestions',
+      create: '/private/pro-onboarding/services',
+      upload: '/private/pro-onboarding/uploads/work-image',
+    };
+  }, [isPro]);
+
+  // =========================
   // Load role
   // =========================
   useEffect(() => {
+    let mounted = true;
     (async () => {
       try {
-        const storedRole = (await AsyncStorage.getItem('@role')) as AppRole | null;
-        setRole(storedRole);
-      } catch (e) {
-        console.log('Error leyendo rol', e);
+        const me = await getCurrentUser();
+        const isProfessional = Number(me?.id_rol) === 2;
+        if (mounted) setRole(isProfessional ? 'professional' : 'client');
+      } catch {
+        if (mounted) setRole('client');
       } finally {
-        setLoadingRole(false);
+        if (mounted) setLoadingRole(false);
       }
     })();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // =========================
   // Suggestions
   // =========================
-  const fetchSuggestions = useCallback(async (cat: string) => {
-    try {
-      setLoadingSuggestions(true);
-      const data = await api.get<SuggestionResponse>(
-        `/private/services/suggestions?category=${encodeURIComponent(cat)}`,
-      );
-      setSuggestions(Array.isArray(data?.suggestions) ? data.suggestions : []);
-    } catch {
-      setSuggestions([]);
-    } finally {
-      setLoadingSuggestions(false);
-    }
-  }, []);
+  const fetchSuggestions = useCallback(
+    async (cat: string) => {
+      try {
+        setLoadingSuggestions(true);
+        const data = await api.get<SuggestionResponse>(endpoints.suggestions, {
+          query: { category: cat },
+        });
+        setSuggestions(Array.isArray(data?.suggestions) ? data.suggestions : []);
+      } catch (e) {
+        setSuggestions([]);
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    },
+    [endpoints.suggestions],
+  );
 
   useEffect(() => {
+    // Si no tiene permiso, ni intentes pegarle a sugerencias pro
+    if (!isPro && !isOnboarding) return;
     fetchSuggestions(category);
-  }, [category, fetchSuggestions]);
+  }, [category, fetchSuggestions, isPro, isOnboarding]);
 
   const filteredSuggestions = useMemo(() => {
     const q = title.trim().toLowerCase();
-    const base = suggestions.length ? suggestions : FALLBACK_SUGGESTIONS[category] ?? [];
+    const base = suggestions.length ? suggestions : (FALLBACK_SUGGESTIONS[category] ?? []);
     if (!q) return base.slice(0, 10);
     return base.filter((s) => s.toLowerCase().includes(q)).slice(0, 10);
   }, [suggestions, title, category]);
@@ -259,7 +303,7 @@ export default function AddService({ navigation }: Props) {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.85,
         allowsEditing: true,
         aspect: [4, 3],
@@ -277,19 +321,10 @@ export default function AddService({ navigation }: Props) {
   }, []);
 
   // =========================
-  // Upload image
+  // Upload image (wrapper)
   // =========================
   const uploadImage = useCallback(async (): Promise<string | null> => {
     if (!localImageUri) return null;
-
-    const token = await AsyncStorage.getItem('@token');
-    if (!token) {
-      setAlertMsg('No hay sesión activa.');
-      setOk(false);
-      return null;
-    }
-
-    const uploadUrl = `${API_URL}/uploads/work-image`;
 
     const formData = new FormData();
     formData.append('image', {
@@ -301,26 +336,10 @@ export default function AddService({ navigation }: Props) {
     try {
       setUploading(true);
 
-      const res = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` } as any,
+      const data = await api.post<{ url: string }>(endpoints.upload, {
         body: formData,
+        // NO Content-Type => fetch lo setea para multipart boundary
       });
-
-      const text = await res.text();
-      let data: any = null;
-      try {
-        data = text ? JSON.parse(text) : null;
-      } catch {
-        data = { raw: text };
-      }
-
-      if (!res.ok) {
-        console.log('🔥 Error upload image', res.status, data);
-        setAlertMsg(data?.message || 'No se pudo subir la imagen.');
-        setOk(false);
-        return null;
-      }
 
       if (!data?.url) {
         setAlertMsg('El servidor no devolvió la URL de la imagen.');
@@ -328,34 +347,36 @@ export default function AddService({ navigation }: Props) {
         return null;
       }
 
-      return data.url as string;
-    } catch (err) {
-      console.log('Error al subir imagen', err);
-      setAlertMsg('No se pudo subir la imagen.');
+      return data.url;
+    } catch (e: any) {
+      console.log('🔥 Error upload image', e);
+      setAlertMsg(e?.message || 'No se pudo subir la imagen.');
       setOk(false);
       return null;
     } finally {
       setUploading(false);
     }
-  }, [localImageUri]);
+  }, [localImageUri, endpoints.upload]);
 
   // =========================
   // Save
   // =========================
+  const canAccess = isPro || isOnboarding;
+
   const canSave = useMemo(() => {
+    if (!canAccess) return false;
     if (saving || uploading) return false;
-    if (role !== 'professional') return false;
     if (!category.trim()) return false;
     if (!title.trim()) return false;
     return true;
-  }, [saving, uploading, role, category, title]);
+  }, [saving, uploading, canAccess, category, title]);
 
   const handleSave = useCallback(async () => {
     try {
       setAlertMsg(null);
       setOk(false);
 
-      if (role !== 'professional') {
+      if (!canAccess) {
         setAlertMsg('Solo los profesionales pueden agregar servicios.');
         setOk(false);
         return;
@@ -376,21 +397,21 @@ export default function AddService({ navigation }: Props) {
       let finalImageUrl: string | null = null;
       if (localImageUri) {
         finalImageUrl = await uploadImage();
-        if (!finalImageUrl) return;
+        if (!finalImageUrl) return; // el upload ya setea msg
       }
 
-      const priceNum =
-        priceBase.trim() === '' ? null : Number(String(priceBase).replace(',', '.'));
+      const priceNum = priceBase.trim() === '' ? null : Number(String(priceBase).replace(',', '.'));
 
-      const body: any = {
+      const body: CreateServiceBody = {
         titulo: title.trim(),
         descripcion: description.trim() ? description.trim() : null,
         categoria: category.trim(),
-        precio_base: Number.isFinite(priceNum as any) ? priceNum : null,
+        precio_base: Number.isFinite(priceNum as any) ? (priceNum as any) : null,
         imageUrl: finalImageUrl ?? null,
       };
 
-      const created = await api.post<any>('/private/services', { body });
+      // ✅ usar postJson para que el body salga bien sí o sí
+      const created = await api.postJson<any>(endpoints.create, body);
       console.log('✅ created service', created);
 
       setOk(true);
@@ -403,14 +424,40 @@ export default function AddService({ navigation }: Props) {
       setUploadedImageUrl(finalImageUrl);
 
       fetchSuggestions(category);
+
+      if (fromBecomePro) {
+        navigation.navigate('BecomePro', { serviceCreated: true });
+      }
     } catch (e: any) {
       console.log('❌ Error AddService save', e);
+
+      // mensaje más útil para 403 onboarding
+      if (e instanceof ApiError && e.status === 403) {
+        setAlertMsg(
+          'No tenés permiso para agregar servicios todavía. Terminá el onboarding y activá tu cuenta profesional.',
+        );
+        setOk(false);
+        return;
+      }
+
       setOk(false);
       setAlertMsg(e?.message || 'No se pudo guardar el servicio.');
     } finally {
       setSaving(false);
     }
-  }, [role, category, title, description, priceBase, localImageUri, uploadImage, fetchSuggestions]);
+  }, [
+    canAccess,
+    category,
+    title,
+    description,
+    priceBase,
+    localImageUri,
+    uploadImage,
+    fetchSuggestions,
+    fromBecomePro,
+    navigation,
+    endpoints.create,
+  ]);
 
   // =========================
   // Render guards
@@ -427,7 +474,7 @@ export default function AddService({ navigation }: Props) {
     );
   }
 
-  if (role !== 'professional') {
+  if (!canAccess) {
     return (
       <Screen>
         <TopBar title="Agregar servicio" showBack />
@@ -450,10 +497,7 @@ export default function AddService({ navigation }: Props) {
     <Screen>
       <TopBar title="Agregar servicio" showBack />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={styles.container}
           showsVerticalScrollIndicator={false}
@@ -467,11 +511,7 @@ export default function AddService({ navigation }: Props) {
           </View>
 
           {alertMsg && (
-            <Alert
-              type={ok ? 'success' : 'error'}
-              message={alertMsg}
-              style={{ marginBottom: SPACING.md }}
-            />
+            <Alert type={ok ? 'success' : 'error'} message={alertMsg} style={{ marginBottom: SPACING.md }} />
           )}
 
           {/* Categoría */}
@@ -491,9 +531,7 @@ export default function AddService({ navigation }: Props) {
                     activeOpacity={0.85}
                     style={[styles.pill, selected && styles.pillSelected]}
                   >
-                    <Text style={[styles.pillText, selected && styles.pillTextSelected]}>
-                      {c}
-                    </Text>
+                    <Text style={[styles.pillText, selected && styles.pillTextSelected]}>{c}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -510,11 +548,7 @@ export default function AddService({ navigation }: Props) {
                   <Text style={TYPO.caption}>Cargando…</Text>
                 </View>
               ) : (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => fetchSuggestions(category)}
-                  style={styles.refreshBtn}
-                >
+                <TouchableOpacity activeOpacity={0.85} onPress={() => fetchSuggestions(category)} style={styles.refreshBtn}>
                   <Ionicons name="refresh-outline" size={16} color={COLORS.textMuted} />
                   <Text style={styles.refreshText}>Actualizar</Text>
                 </TouchableOpacity>
@@ -526,12 +560,7 @@ export default function AddService({ navigation }: Props) {
             ) : (
               <View style={styles.chipsWrap}>
                 {filteredSuggestions.map((s) => (
-                  <TouchableOpacity
-                    key={s}
-                    activeOpacity={0.85}
-                    onPress={() => setTitle(s)}
-                    style={styles.chip}
-                  >
+                  <TouchableOpacity key={s} activeOpacity={0.85} onPress={() => setTitle(s)} style={styles.chip}>
                     <Text style={styles.chipText}>{s}</Text>
                   </TouchableOpacity>
                 ))}
@@ -566,7 +595,9 @@ export default function AddService({ navigation }: Props) {
               />
             </View>
             <View style={styles.counterRow}>
-              <Text style={TYPO.caption}>{description.length}/{MAX_DESC}</Text>
+              <Text style={TYPO.caption}>
+                {description.length}/{MAX_DESC}
+              </Text>
             </View>
 
             <Text style={[styles.label, { marginTop: SPACING.md }]}>Precio aproximado (opcional)</Text>
@@ -606,9 +637,7 @@ export default function AddService({ navigation }: Props) {
             ) : (
               <View style={styles.imagePlaceholder}>
                 <Ionicons name="image-outline" size={20} color={COLORS.textMuted} />
-                <Text style={[TYPO.helper, { marginTop: SPACING.xs }]}>
-                  Sumá una foto para mejorar la conversión
-                </Text>
+                <Text style={[TYPO.helper, { marginTop: SPACING.xs }]}>Sumá una foto para mejorar la conversión</Text>
               </View>
             )}
 
@@ -623,16 +652,13 @@ export default function AddService({ navigation }: Props) {
             </View>
 
             {!!uploadedImageUrl && (
-              <Text style={[TYPO.caption, { marginTop: SPACING.sm }]}>
-                Imagen subida: {uploadedImageUrl}
-              </Text>
+              <Text style={[TYPO.caption, { marginTop: SPACING.sm }]}>Imagen subida: {uploadedImageUrl}</Text>
             )}
           </Card>
 
           <View style={{ height: 110 }} />
         </ScrollView>
 
-        {/* Footer fijo */}
         <SafeAreaView style={styles.footer}>
           <Button
             title={uploading ? 'Subiendo imagen…' : saving ? 'Guardando…' : 'Guardar servicio'}
@@ -656,18 +682,13 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
     paddingBottom: SPACING.xl,
   },
-
-  header: {
-    marginBottom: SPACING.md,
-  },
-
+  header: { marginBottom: SPACING.md },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: SPACING.lg,
   },
-
   blockCard: {
     borderRadius: RADII.lg,
     padding: SPACING.lg,
@@ -676,7 +697,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBg,
     marginBottom: SPACING.md,
   },
-
   blockTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -684,16 +704,8 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: SPACING.md,
   },
-
-  blockTitle: {
-    ...TYPO.h3,
-  },
-
-  label: {
-    ...TYPO.label,
-    marginBottom: SPACING.sm,
-  },
-
+  blockTitle: { ...TYPO.h3 },
+  label: { ...TYPO.label, marginBottom: SPACING.sm },
   input: {
     borderWidth: 1,
     borderColor: COLORS.borderInput,
@@ -705,7 +717,6 @@ const styles = StyleSheet.create({
     fontSize: TYPO.body.fontSize,
     color: COLORS.text,
   },
-
   textareaWrap: {
     borderWidth: 1,
     borderColor: COLORS.borderInput,
@@ -714,25 +725,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
   },
-
   textarea: {
     minHeight: 110,
     fontFamily: TYPO.body.fontFamily,
     fontSize: TYPO.body.fontSize,
     color: COLORS.text,
   },
-
-  counterRow: {
-    marginTop: SPACING.sm,
-    alignItems: 'flex-end',
-  },
-
-  pillsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-
+  counterRow: { marginTop: SPACING.sm, alignItems: 'flex-end' },
+  pillsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   pill: {
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -741,27 +741,10 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: COLORS.graySoft,
   },
-
-  pillSelected: {
-    borderColor: COLORS.buttonOutlineBorder,
-    backgroundColor: COLORS.cardBg,
-  },
-
-  pillText: {
-    ...TYPO.badge,
-    color: COLORS.inactiveTab,
-  },
-
-  pillTextSelected: {
-    color: COLORS.text,
-  },
-
-  chipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-
+  pillSelected: { borderColor: COLORS.buttonOutlineBorder, backgroundColor: COLORS.cardBg },
+  pillText: { ...TYPO.badge, color: COLORS.inactiveTab },
+  pillTextSelected: { color: COLORS.text },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -770,18 +753,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: COLORS.cardBg,
   },
-
-  chipText: {
-    ...TYPO.badge,
-    color: COLORS.text,
-  },
-
-  loadingInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-
+  chipText: { ...TYPO.badge, color: COLORS.text },
+  loadingInline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   refreshBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -793,12 +766,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: COLORS.cardBg,
   },
-
-  refreshText: {
-    ...TYPO.caption,
-    color: COLORS.textMuted,
-  },
-
+  refreshText: { ...TYPO.caption, color: COLORS.textMuted },
   linkBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -807,12 +775,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-
-  linkText: {
-    ...TYPO.caption,
-    color: COLORS.text,
-  },
-
+  linkText: { ...TYPO.caption, color: COLORS.text },
   previewImage: {
     width: '100%',
     height: 190,
@@ -821,7 +784,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderCard,
     backgroundColor: COLORS.graySoft,
   },
-
   imagePlaceholder: {
     width: '100%',
     height: 160,
@@ -832,7 +794,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   footer: {
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.sm,

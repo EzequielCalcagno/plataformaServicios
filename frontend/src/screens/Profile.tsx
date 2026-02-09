@@ -42,7 +42,6 @@ type ReviewItem = {
 
 type ProfessionalProfile = {
   id: string;
-  coverUrl?: string | null;
   photoUrl: string | null;
 
   name: string;
@@ -195,7 +194,6 @@ function normalizeProfessionalProfile(input: any): ProfessionalProfile {
 
   return {
     id,
-    coverUrl,
     photoUrl,
     name: name || 'Profesional',
     specialty,

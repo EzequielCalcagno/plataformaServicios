@@ -35,8 +35,35 @@ type UpdateProfessionalProfileDbPayload = {
   fecha_actualizacion?: string;
 };
 
+export const getProfessionalProfileByUserIdMaybeRepository = async (userId: string) => {
+  const { data, error } = await db
+    .from('perfiles_profesionales')
+    .select(
+      `
+      id,
+      usuario_id,
+      descripcion,
+      especialidad,
+      experiencia,
+      rating_promedio,
+      fecha_actualizacion
+    `,
+    )
+    .eq('usuario_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('❌ Error en getProfessionalProfileByUserIdMaybeRepository:', error);
+    throw error;
+  }
+
+  return data || null;
+};
+
 // Upsert perfil profesional (sin portada_url)
-export const upsertProfessionalProfileRepository = async (payload: UpdateProfessionalProfileDbPayload) => {
+export const upsertProfessionalProfileRepository = async (
+  payload: UpdateProfessionalProfileDbPayload,
+) => {
   const { data, error } = await db
     .from('perfiles_profesionales')
     .upsert(payload, { onConflict: 'usuario_id' })
@@ -143,7 +170,11 @@ export const getProfessionalRatingSummaryRepository = async (profesionalId: stri
 };
 
 // ✅ reviews (RPC)
-export const listProfessionalReviewsRepository = async (profesionalId: string, limit = 10, offset = 0) => {
+export const listProfessionalReviewsRepository = async (
+  profesionalId: string,
+  limit = 10,
+  offset = 0,
+) => {
   const { data, error } = await db.rpc('list_professional_reviews', {
     p_profesional_id: profesionalId,
     p_limit: limit,

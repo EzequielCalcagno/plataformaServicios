@@ -1,22 +1,29 @@
 // src/screens/EditProfile.tsx
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
 import * as ImagePicker from 'expo-image-picker';
+
+import { ApiError } from '../utils/http';
+
+import { uploadProfileImage } from '../services/uploads.client';
+import { getCurrentUser } from '../services/user.client';
+import {
+  getMyProfile,
+  updateProfessionalProfile,
+  getProOnboardingProfile,
+  updateProOnboardingProfile,
+} from '../services/profile.client';
 
 import { Screen } from '../components/Screen';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
-import { COLORS, SPACING, TYPO } from '../styles/theme';
+import { COLORS, SPACING } from '../styles/theme';
 import { TopBar } from '../components/TopBar';
 
-const API_URL = (Constants.expoConfig?.extra?.API_URL as string)?.replace(/\/+$/, '') || '';
-
-type Props = { navigation: any };
+type Props = { navigation: any; route: any };
 type AppRole = 'professional' | 'client';
 
 type ProfessionalForm = {
@@ -24,7 +31,9 @@ type ProfessionalForm = {
   about: string;
 };
 
-export default function EditProfile({ navigation }: Props) {
+export default function EditProfile({ navigation, route }: Props) {
+  const fromBecomePro = !!route?.params?.fromBecomePro;
+
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -41,79 +50,68 @@ export default function EditProfile({ navigation }: Props) {
     about: '',
   });
 
+  const isPro = role === 'professional';
+  const showProSection = isPro || fromBecomePro;
+
   // ========= CARGAR PERFIL ==========
   useEffect(() => {
-    const loadProfileForEdit = async () => {
+    let mounted = true;
+
+    const load = async () => {
       try {
         setLoading(true);
         setAlertMsg(null);
         setOk(false);
 
-        const token = await AsyncStorage.getItem('@token');
-        const storedRole = (await AsyncStorage.getItem('@role')) as AppRole | null;
+        // 1) Fuente de verdad: backend
+        const me = await getCurrentUser();
 
-        if (!token || !storedRole) {
-          setAlertMsg('No hay sesión activa.');
-          setOk(false);
-          return;
-        }
+        const roleId = Number(me.id_rol);
+        const derivedRole: AppRole = roleId === 2 ? 'professional' : 'client';
 
-        setRole(storedRole);
+        setRole(derivedRole);
+        setAvatarUrl(me.foto_url ? `${me.foto_url}?t=${Date.now()}` : null);
 
-        // Avatar SIEMPRE desde currentUser
-        const meRes = await fetch(`${API_URL}/private/currentUser`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        const canSeeProSection = derivedRole === 'professional' || fromBecomePro;
 
-        if (meRes.ok) {
-          const meData = await meRes.json();
-          const url = meData?.foto_url ? `${meData.foto_url}?t=${Date.now()}` : null;
-          setAvatarUrl(url);
-        }
-
-        // Si es cliente, solo foto por ahora (no bloqueamos toda la pantalla con error feo)
-        if (storedRole !== 'professional') {
-          setAlertMsg('Por ahora, en perfil de cliente solo podés actualizar tu foto.');
+        if (!canSeeProSection) {
           setOk(true);
+          setAlertMsg('Por ahora, en perfil de cliente solo podés actualizar tu foto.');
           return;
         }
 
-        // Datos profesionales
-        const res = await fetch(`${API_URL}/private/profile`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+        try {
+          const pro =
+            derivedRole === 'professional' ? await getMyProfile() : await getProOnboardingProfile();
 
-        if (!res.ok) {
-          const txt = await res.text();
-          console.log('❌ Error al cargar perfil profesional', res.status, txt);
-          setAlertMsg('No se pudo cargar el perfil profesional.');
-          setOk(false);
-          return;
+          setProfForm({
+            specialty: pro?.especialidad || '',
+            about: pro?.descripcion || pro?.experiencia || '',
+          });
+        } catch (e: any) {
+          // Si falla, no rompas la pantalla
+          setProfForm({ specialty: '', about: '' });
+          setOk(true);
+          setAlertMsg('Completá tu info profesional para continuar.');
         }
-
-        const data = await res.json();
-
-        setProfForm({
-          specialty: data.especialidad || '',
-          about: data.descripcion || data.experiencia || '',
-        });
-      } catch (error) {
+      } catch (error: any) {
         console.log('❌ Error loadProfileForEdit', error);
-        setAlertMsg('Error al cargar el perfil.');
-        setOk(false);
+        if (mounted) {
+          setAlertMsg(error?.message || 'Error al cargar el perfil.');
+          setOk(false);
+        }
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
-    loadProfileForEdit();
-  }, []);
+    load();
+    return () => {
+      mounted = false;
+    };
+    // IMPORTANTE: showProSection depende de role, pero role se setea acá.
+    // Para evitar loop, usamos fromBecomePro (estable) y NO showProSection.
+  }, [fromBecomePro]);
 
   // ========= SUBIR AVATAR ==========
   const handlePickAvatar = async () => {
@@ -138,63 +136,20 @@ export default function EditProfile({ navigation }: Props) {
       if (result.canceled) return;
 
       const asset = result.assets?.[0];
-      if (!asset?.uri) {
-        setAlertMsg('No se pudo obtener la imagen seleccionada.');
-        setOk(false);
-        return;
-      }
+      if (!asset?.uri) throw new Error('Sin uri');
 
-      const token = await AsyncStorage.getItem('@token');
-      if (!token) {
-        setAlertMsg('No hay sesión activa.');
-        setOk(false);
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('image', {
+      const { url } = await uploadProfileImage({
         uri: asset.uri,
-        type: 'image/jpeg',
-        name: 'avatar.jpg',
-      } as any);
-
-      const uploadUrl = `${API_URL}/uploads/profile-image`;
-
-      const res = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        } as any,
-        body: formData,
+        type: asset.mimeType ?? 'image/jpeg',
+        name: asset.fileName ?? 'avatar.jpg',
       });
 
-      const text = await res.text();
-      let data: any = {};
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        data = { raw: text };
-      }
-
-      if (!res.ok) {
-        console.log('❌ Error subiendo avatar:', res.status, text);
-        setAlertMsg(data.message || 'No se pudo subir la imagen.');
-        setOk(false);
-        return;
-      }
-
-      if (!data.url) {
-        setAlertMsg('El servidor no devolvió la URL.');
-        setOk(false);
-        return;
-      }
-
-      setAvatarUrl(`${data.url}?t=${Date.now()}`);
+      setAvatarUrl(`${url}?t=${Date.now()}`);
       setAlertMsg('Imagen actualizada correctamente.');
       setOk(true);
-    } catch (error) {
+    } catch (error: any) {
       console.log('❌ Error handlePickAvatar:', error);
-      setAlertMsg('Error al subir la imagen.');
+      setAlertMsg(error?.message || 'Error al subir la imagen.');
       setOk(false);
     } finally {
       setUploadingAvatar(false);
@@ -208,47 +163,35 @@ export default function EditProfile({ navigation }: Props) {
       setAlertMsg(null);
       setOk(false);
 
-      const token = await AsyncStorage.getItem('@token');
-      if (!token || !role) {
-        setAlertMsg('No hay sesión activa.');
-        setOk(false);
+      // Cliente normal => solo salir
+      if (!showProSection) {
+        navigation.goBack();
         return;
       }
 
-      if (role !== 'professional') {
-        setAlertMsg('Foto actualizada. (Edición de cliente aún no implementada)');
+      if (isPro) {
+        await updateProfessionalProfile({
+          especialidad: profForm.specialty,
+          descripcion: profForm.about,
+          experiencia: profForm.about,
+        });
         setOk(true);
+        setAlertMsg('Perfil actualizado correctamente.');
         return;
       }
 
-      const body = {
-        descripcion: profForm.about,
+      // onboarding (cliente desde BecomePro)
+      await updateProOnboardingProfile({
         especialidad: profForm.specialty,
+        descripcion: profForm.about,
         experiencia: profForm.about,
-      };
-
-      const res = await fetch(`${API_URL}/private/profile`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
       });
 
-      if (!res.ok) {
-        const t = await res.text();
-        console.log('❌ Error al guardar perfil:', res.status, t);
-        setAlertMsg('No se pudo guardar el perfil.');
-        setOk(false);
-        return;
-      }
-
-      setAlertMsg('Perfil actualizado correctamente.');
       setOk(true);
-    } catch (error) {
-      console.log('❌ Error saving profile', error);
-      setAlertMsg('Error de red al guardar el perfil.');
+      setAlertMsg('Perfil profesional guardado. Volvé para continuar el onboarding.');
+    } catch (e: any) {
+      console.log('❌ Error saving profile', e);
+      setAlertMsg(e?.message || 'Error de red al guardar el perfil.');
       setOk(false);
     } finally {
       setSaving(false);
@@ -259,9 +202,6 @@ export default function EditProfile({ navigation }: Props) {
     const base = (profForm.specialty || 'U').trim();
     return (base[0] || 'U').toUpperCase();
   }, [profForm.specialty]);
-
-  const isPro = role === 'professional';
-  const canEdit = isPro; // por ahora
 
   if (loading) {
     return (
@@ -285,7 +225,7 @@ export default function EditProfile({ navigation }: Props) {
   }
 
   return (
-    <Screen>\
+    <Screen>
       <TopBar title="Editar perfil" showBack />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {alertMsg && (
@@ -337,56 +277,42 @@ export default function EditProfile({ navigation }: Props) {
         </Card>
 
         {/* Form profesional */}
-        <View style={{ marginTop: SPACING.lg }}>
-          <Text style={styles.sectionTitle}>Información profesional</Text>
-          <Text style={styles.sectionSub}>
-            {canEdit
-              ? 'Completá estos datos para aparecer mejor en búsquedas.'
-              : 'Solo disponible para perfiles profesionales.'}
-          </Text>
+        {showProSection && (
+          <View style={{ marginTop: SPACING.lg }}>
+            <Text style={styles.sectionTitle}>Información profesional</Text>
+            <Text style={styles.sectionSub}>
+              Completá estos datos para aparecer mejor en búsquedas.
+            </Text>
 
-          <View style={{ marginTop: SPACING.md, gap: 12 }}>
-            <Input
-              placeholder="Especialidad (ej: Electricidad, Plomería)"
-              value={profForm.specialty}
-              onChangeText={(t: string) => setProfForm((f) => ({ ...f, specialty: t }))}
-              editable={canEdit}
-            />
+            <View style={{ marginTop: SPACING.md, gap: 12 }}>
+              <Input
+                placeholder="Especialidad (ej: Electricidad, Plomería)"
+                value={profForm.specialty}
+                onChangeText={(t: string) => setProfForm((f) => ({ ...f, specialty: t }))}
+                editable
+              />
 
-            <Input
-              placeholder="Sobre mí (tu experiencia, qué ofrecés, cómo trabajás)"
-              value={profForm.about}
-              onChangeText={(t: string) => setProfForm((f) => ({ ...f, about: t }))}
-              editable={canEdit}
-              multiline
-            />
-
-            {isPro && (
-              <Text style={styles.helper}>
-                Tip: escribí 2–3 líneas concretas (años de experiencia, zonas, tiempos de
-                respuesta).
-              </Text>
-            )}
+              <Input
+                placeholder="Sobre mí (tu experiencia, qué ofrecés, cómo trabajás)"
+                value={profForm.about}
+                onChangeText={(t: string) => setProfForm((f) => ({ ...f, about: t }))}
+                editable
+                multiline
+              />
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Guardar */}
         <View style={{ marginTop: SPACING.xl }}>
           <Button
-            title={saving ? 'Guardando…' : isPro ? 'Guardar cambios' : 'Listo'}
+            title={saving ? 'Guardando…' : showProSection ? 'Guardar cambios' : 'Listo'}
             onPress={handleSave}
             disabled={saving || uploadingAvatar}
             variant="primary"
             size="lg"
           />
         </View>
-
-        {/* Cliente: aviso */}
-        {!isPro && (
-          <Text style={[styles.helper, { marginTop: SPACING.md }]}>
-            La edición completa de perfil de cliente la agregamos después. Por ahora, foto.
-          </Text>
-        )}
       </ScrollView>
     </Screen>
   );
@@ -401,24 +327,6 @@ const styles = StyleSheet.create({
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   muted: { color: COLORS.textMuted, fontWeight: '600' },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  headerTitle: { textAlign: 'center', flex: 1 },
-
-  iconBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 999,
-    backgroundColor: COLORS.bgLightGrey,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 
   avatarCard: {
     borderRadius: 18,
@@ -439,6 +347,4 @@ const styles = StyleSheet.create({
 
   sectionTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   sectionSub: { marginTop: 2, fontSize: 12, fontWeight: '600', color: COLORS.textMuted },
-
-  helper: { fontSize: 12, fontWeight: '600', color: COLORS.textMuted, marginTop: 6 },
 });

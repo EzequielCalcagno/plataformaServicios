@@ -19,43 +19,41 @@ import EditProfile from './src/screens/EditProfile';
 import LocationPicker from './src/screens/LocationPicker';
 import Locations from './src/screens/Locations';
 import LocationFormScreen from './src/screens/LocationForm';
-import Bookings from './src/screens/Bookings';
 import ReservationDetail from './src/screens/ReservationDetail';
 import RateReservation from './src/screens/RateReservation';
 import CreateRequest from './src/screens/CreateRequest';
 import MyServicesManager from './src/screens/MyServicesManager';
 
-
-import ProfessionalServices from './src/screens/ProfessionalServices'; // ✅ NUEVO
+import ProfessionalServices from './src/screens/ProfessionalServices';
 
 import MainTabs from './src/navigation/MainTabs';
+import BecomePro from './src/screens/BecomePro';
 
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   MainTabs: undefined;
-
+  BecomePro: undefined;
   Reviews: undefined;
-  EditProfile: undefined;
-  AddService: undefined;
+  EditProfile: { fromBecomePro?: boolean } | undefined;
+  AddService: { fromBecomePro?: boolean } | undefined;
+  Locations: { fromBecomePro?: boolean } | undefined;
   LocationPicker: undefined;
   LocationForm: undefined;
-  Locations: undefined;
 
   // Perfil de otro profesional
   ProfessionalProfile: { profesionalId: string };
 
-  // ✅ Solicitar servicio
+  // Solicitar servicio
   CreateRequest: { profesionalId: string };
 
-  // ✅ Servicios del profesional seleccionado
+  // Servicios del profesional seleccionado
   ProfessionalServices: { profesionalId: string };
 
-  Bookings: undefined;
+  Requests: undefined;
   ReservationDetail: undefined;
   RateReservation: undefined;
   MyServicesManager: undefined;
-
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -92,6 +90,9 @@ export default function App() {
             {/* Contenedor con las tabs inferiores */}
             <Stack.Screen name="MainTabs" component={MainTabs} />
 
+            {/* Pantalla para convertirse en profesional */}
+            <Stack.Screen name="BecomePro" component={BecomePro} />
+
             {/* Pantallas auxiliares que se abren desde tabs */}
             <Stack.Screen name="EditProfile" component={EditProfile} />
             <Stack.Screen name="AddService" component={AddService} />
@@ -112,7 +113,7 @@ export default function App() {
 
             {/* ✅ Solicitar servicio */}
             <Stack.Screen name="CreateRequest" component={CreateRequest as any} />
-             <Stack.Screen name="MyServicesManager" component={MyServicesManager as any} />
+            <Stack.Screen name="MyServicesManager" component={MyServicesManager as any} />
 
             <Stack.Screen name="RateReservation" component={RateReservation as any} />
           </Stack.Navigator>

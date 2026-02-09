@@ -53,8 +53,22 @@ import {
   getServiceSuggestionsController,
   bootstrapMyServicesController,
   listServicesByProfessionalIdController,
-  deactivateMyServiceController // ✅ NUEVO
+  deactivateMyServiceController, // ✅ NUEVO
 } from '../controllers/services.controller';
+
+import {
+  getProOnboardingProfileController,
+  upsertProOnboardingProfileController,
+} from '../controllers/onboarding.controller';
+
+import {
+  createMyOnboardingServiceController,
+  deleteMyOnboardingServiceController,
+  listMyOnboardingServicesController,
+  updateMyOnboardingServiceController,
+} from '../controllers/onboardingServices.controller';
+
+import { activateBecomeProController } from '../controllers/becomePro.controller';
 
 const router = Router();
 
@@ -86,7 +100,7 @@ router.get('/services/professional/:profesionalId', listServicesByProfessionalId
 router.get('/services/suggestions', requireRole('PROFESIONAL'), getServiceSuggestionsController);
 router.post('/services/bootstrap', requireRole('PROFESIONAL'), bootstrapMyServicesController);
 
-// UPLOADS
+// --------------- UPLOADS (ejemplo de manejo de imágenes subidas, no persiste en DB) ---------------
 router.post(
   '/uploads/work-image',
   requireRole('PROFESIONAL'),
@@ -94,13 +108,9 @@ router.post(
   uploadWorkImageController,
 );
 
-router.post(
-  '/uploads/profile-image',
-  uploadImage.single('image'),
-  uploadProfileImageController,
-);
+router.post('/uploads/profile-image', uploadImage.single('image'), uploadProfileImageController);
 
-// WORKS (ejemplo/mock)
+// --------------- WORKS (ejemplo de manejo de imágenes subidas, no persiste en DB) ---------------
 router.post('/app/works', requireRole('PROFESIONAL'), async (req: Request, res: Response) => {
   try {
     const { title, description, date, imageUrls } = req.body;
@@ -130,15 +140,23 @@ router.get('/app/works', requireRole('PROFESIONAL'), async (_req: Request, res: 
   return res.json([]);
 });
 
-// SEARCH
+// --------------- SEARCH ---------------
 router.get('/search/servicios', searchServiciosController);
 
-// RESERVATIONS...
+// --------------- RESERVATIONS ---------------
 router.post('/reservations', createReservationController);
 router.get('/reservations/mine', listMyReservationsClienteController);
-router.get('/reservations/pro', requireRole('PROFESIONAL'), listMyReservationsProfesionalController);
+router.get(
+  '/reservations/pro',
+  requireRole('PROFESIONAL'),
+  listMyReservationsProfesionalController,
+);
 
-router.patch('/reservations/:id/accept', requireRole('PROFESIONAL'), profesionalAcceptReservationController);
+router.patch(
+  '/reservations/:id/accept',
+  requireRole('PROFESIONAL'),
+  profesionalAcceptReservationController,
+);
 router.patch('/reservations/:id/propose', requireRole('PROFESIONAL'), profesionalProposeController);
 router.patch('/reservations/:id/cancel', requireRole('PROFESIONAL'), profesionalCancelController);
 router.patch('/reservations/:id/finish', requireRole('PROFESIONAL'), profesionalFinishController);
@@ -152,6 +170,40 @@ router.patch('/reservations/:id/reject-finish', rejectFinishController);
 
 router.get('/reservations/:id', getReservationByIdController);
 router.patch('/reservations/:id/rate', rateReservationController);
+
+// --------------- REVIEWS & RATINGS ---------------
 router.get('/professionals/:id/reviews', listProfessionalReviewsController);
+
+// --------------- PRO ONBOARDING ---------------
+router.get('/pro-onboarding/profile', getProOnboardingProfileController);
+router.patch('/pro-onboarding/profile', upsertProOnboardingProfileController);
+// ✅ ONBOARDING SERVICES (cliente que se está convirtiendo)
+router.get('/pro-onboarding/services/suggestions', getServiceSuggestionsController);
+
+// router.get('/pro-onboarding/services/mine', listOnboardingServicesMineController);
+// router.post('/pro-onboarding/services', createOnboardingServiceController);
+
+// ✅ listar servicios propios en onboarding (no requiere ser PRO)
+router.get('/pro-onboarding/services', listMyOnboardingServicesController);
+
+// ✅ crear servicio en onboarding (se guarda como activo=false)
+router.post('/pro-onboarding/services', createMyOnboardingServiceController);
+
+// opcional: editar/borrar antes de activarse
+router.patch('/pro-onboarding/services/:id', updateMyOnboardingServiceController);
+router.delete('/pro-onboarding/services/:id', deleteMyOnboardingServiceController);
+
+// // crea servicio en modo onboarding (guardalo como draft o en tabla onboarding)
+// router.post('/pro-onboarding/services', createOnboardingServiceController);
+
+// upload imagen onboarding
+router.post(
+  '/pro-onboarding/uploads/work-image',
+  uploadImage.single('image'),
+  uploadWorkImageController,
+);
+
+// --------------- BECOME PRO ---------------
+router.post('/become-pro/activate', activateBecomeProController);
 
 export default router;

@@ -10,6 +10,18 @@ export type ProfileResponse = {
   jobsCompleted?: number | null;
 };
 
+export type UpdateProfessionalProfilePayload = {
+  especialidad: string;
+  descripcion: string;
+  experiencia?: string; // opcional si querés mantener compatibilidad
+};
+
+export type ProfessionalProfileResponse = {
+  especialidad?: string | null;
+  descripcion?: string | null;
+  experiencia?: string | null;
+};
+
 /**
  * Perfil profesional "completo" del usuario autenticado
  * Backend: GET /api/v1/private/profile (requireAuth + requireRole('PROFESIONAL'))
@@ -82,4 +94,35 @@ export async function getProfessionalProfileById(profesionalId: string) {
  */
 export async function getProfessionalProfileByUserId(userId: string) {
   return getProfessionalProfileById(userId);
+}
+
+export async function updateProfessionalProfile(payload: UpdateProfessionalProfilePayload) {
+  if (!payload?.especialidad?.trim()) {
+    throw new Error('La especialidad es obligatoria.');
+  }
+  if (!payload?.descripcion?.trim()) {
+    throw new Error('La descripción es obligatoria.');
+  }
+
+  // backend: PATCH /private/profile
+  return await api.patchJson<ProfessionalProfileResponse>('/private/profile', {
+    especialidad: payload.especialidad.trim(),
+    descripcion: payload.descripcion.trim(),
+    experiencia: (payload.experiencia ?? payload.descripcion).trim(),
+  });
+}
+
+export async function getProOnboardingProfile() {
+  return await api.get<ProfessionalProfileResponse>('/private/pro-onboarding/profile');
+}
+
+export async function updateProOnboardingProfile(payload: UpdateProfessionalProfilePayload) {
+  if (!payload?.especialidad?.trim()) throw new Error('La especialidad es obligatoria.');
+  if (!payload?.descripcion?.trim()) throw new Error('La descripción es obligatoria.');
+
+  return await api.patchJson<ProfessionalProfileResponse>('/private/pro-onboarding/profile', {
+    especialidad: payload.especialidad.trim(),
+    descripcion: payload.descripcion.trim(),
+    experiencia: (payload.experiencia ?? payload.descripcion).trim(),
+  });
 }

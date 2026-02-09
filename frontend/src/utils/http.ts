@@ -2,9 +2,7 @@
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// 👇 exportamos para usarlo en AddService, Login, etc.
-export const API_URL =
-  (Constants.expoConfig?.extra?.API_URL as string | undefined) ?? '';
+export const API_URL = (Constants.expoConfig?.extra?.API_URL as string | undefined) ?? '';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -24,32 +22,27 @@ export interface HttpOptions {
   method?: HttpMethod;
   headers?: Record<string, string>;
   body?: any;
-  token?: string | null; // si lo pasás, pisa el de AsyncStorage
+  token?: string | null;
   timeoutMs?: number;
   query?: Record<string, string | number | boolean | undefined | null>;
 }
 
 function buildUrl(path: string, query?: HttpOptions['query']): string {
-  const base = API_URL?.replace(/\/+$/, '') ?? ''; // sin / al final
+  const base = API_URL?.replace(/\/+$/, '') ?? '';
   const fullPath = path.startsWith('http') ? path : `${base}${path}`;
 
   if (!query) return fullPath;
 
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      params.append(key, String(value));
-    }
+    if (value !== undefined && value !== null) params.append(key, String(value));
   });
 
   const qs = params.toString();
   return qs ? `${fullPath}?${qs}` : fullPath;
 }
 
-export async function http<T = any>(
-  path: string,
-  opts: HttpOptions = {}
-): Promise<T> {
+export async function http<T = any>(path: string, opts: HttpOptions = {}): Promise<T> {
   const {
     method = 'GET',
     headers = {},
@@ -59,7 +52,6 @@ export async function http<T = any>(
     query,
   } = opts;
 
-  // 👇 si no me pasás token explícito, levanto el de AsyncStorage
   const storedToken = await AsyncStorage.getItem('@token');
   const token = explicitToken ?? storedToken;
 
@@ -70,25 +62,33 @@ export async function http<T = any>(
   const id = setTimeout(() => controller.abort(), timeoutMs);
 
   const finalHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...headers,
   };
 
-  if (token) {
-    finalHeaders.Authorization = `Bearer ${token}`;
+  // Solo setear Content-Type cuando NO sea FormData
+  const isFormData = body instanceof FormData;
+  if (!isFormData && !finalHeaders['Content-Type']) {
+    finalHeaders['Content-Type'] = 'application/json';
   }
+
+  const finalBody =
+    body == null
+      ? undefined
+      : typeof body === 'string' || body instanceof FormData
+        ? body
+        : JSON.stringify(body);
+
+  if (token) finalHeaders.Authorization = `Bearer ${token}`;
 
   try {
     const res = await fetch(url, {
       method,
       headers: finalHeaders,
-      body: body ? JSON.stringify(body) : undefined,
+      body: finalBody,
       signal: controller.signal,
     });
 
-    if (res.status === 204) {
-      return {} as T;
-    }
+    if (res.status === 204) return {} as T;
 
     const text = await res.text();
     let data: any = {};
@@ -99,21 +99,15 @@ export async function http<T = any>(
     }
 
     if (!res.ok) {
-      const msg =
-        (data && (data.error || data.message)) || `HTTP ${res.status}`;
+      const msg = (data && (data.error || data.message)) || `HTTP ${res.status}`;
       throw new ApiError(msg, res.status, data);
     }
 
     return data as T;
   } catch (err: any) {
-    if (err.name === 'AbortError') {
+    if (err.name === 'AbortError')
       throw new ApiError('Tiempo de espera agotado (timeout)', 408, null);
-    }
-
-    if (err instanceof ApiError) {
-      throw err;
-    }
-
+    if (err instanceof ApiError) throw err;
     throw new ApiError(err?.message || 'Error de red', 0, null);
   } finally {
     clearTimeout(id);

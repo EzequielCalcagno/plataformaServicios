@@ -9,7 +9,6 @@ import cors from 'cors';
 import publicRouter from './routes/public.route';
 import authRouter from './routes/auth.route';
 import privateRouter from './routes/private.route';
-import uploadsRouter from './routes/uploads.route';
 
 // Middlewares
 import { requestLogger } from './middlewares/requestLogger.middleware';
@@ -49,7 +48,6 @@ app.use(`${prefix}/auth`, authRouter);
 app.use(`${prefix}/private`, requireAuth, privateRouter);
 //app.use(`${prefix}/app/works`, workUploadsRouter); // TODO: Revisar esta ruta que hace esta ruta y ponerla donde debe
 //app.use('/uploads', express.static(path.join(__dirname, '../uploads'))); // Servir archivos estáticos desde /uploads
-app.use(prefix, uploadsRouter); // expone /api/v1/uploads/*
 
 // Start server
 app.listen(PORT, () => {

@@ -20,7 +20,12 @@ import { TopBar } from '../components/TopBar';
 import { Alert } from '../components/Alert';
 
 import { COLORS, SPACING, RADII, TYPO } from '../styles/theme';
-import { getMyLocations, updateLocation, deleteLocation, LocationDto } from '../services/locations.client';
+import {
+  getMyLocations,
+  updateLocation,
+  deleteLocation,
+  LocationDto,
+} from '../services/locations.client';
 
 const MAX_LOCATIONS = 4;
 
@@ -29,7 +34,8 @@ const FOLLOW_LIVE_KEY = '@app_follow_live_enabled';
 const SELECTED_LOCATION_ID_KEY = '@app_selected_location_id';
 const FOLLOW_LIVE_ID = 'follow_live';
 
-export default function LocationsScreen() {
+export default function LocationsScreen({ route }: any) {
+  const fromBecomePro = !!route?.params?.fromBecomePro;
   const navigation = useNavigation<any>();
 
   const [locations, setLocations] = useState<LocationDto[]>([]);
@@ -71,6 +77,12 @@ export default function LocationsScreen() {
 
   const principalId = useMemo(() => locations.find((l) => l.principal)?.id ?? null, [locations]);
   const canAdd = locations.length < MAX_LOCATIONS;
+
+  const needsPrincipal = useMemo(() => {
+    if (followEnabled) return false;
+    if (locations.length === 0) return false;
+    return principalId == null;
+  }, [followEnabled, locations.length, principalId]);
 
   const handleAddLocation = useCallback(() => {
     setAlertMsg(null);
@@ -117,33 +129,30 @@ export default function LocationsScreen() {
     [followEnabled, loadLocations],
   );
 
-  const handleDelete = useCallback(
-    (id: number) => {
-      RNAlert.alert('Eliminar ubicación', '¿Seguro que querés eliminar esta ubicación?', [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setSubmittingId(id);
-              await deleteLocation(id);
-              setLocations((prev) => prev.filter((l) => l.id !== id));
-              setOk(true);
-              setAlertMsg('Ubicación eliminada.');
-            } catch (err: any) {
-              console.log('❌ Error deleteLocation:', err);
-              setOk(false);
-              setAlertMsg(err?.message || 'No se pudo eliminar la ubicación.');
-            } finally {
-              setSubmittingId(null);
-            }
-          },
+  const handleDelete = useCallback((id: number) => {
+    RNAlert.alert('Eliminar ubicación', '¿Seguro que querés eliminar esta ubicación?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setSubmittingId(id);
+            await deleteLocation(id);
+            setLocations((prev) => prev.filter((l) => l.id !== id));
+            setOk(true);
+            setAlertMsg('Ubicación eliminada.');
+          } catch (err: any) {
+            console.log('❌ Error deleteLocation:', err);
+            setOk(false);
+            setAlertMsg(err?.message || 'No se pudo eliminar la ubicación.');
+          } finally {
+            setSubmittingId(null);
+          }
         },
-      ]);
-    },
-    [],
-  );
+      },
+    ]);
+  }, []);
 
   const handleFollowLive = useCallback(() => {
     setAlertMsg(null);
@@ -266,7 +275,12 @@ export default function LocationsScreen() {
             onPress={() => handleEdit(item)}
             disabled={busy}
             leftIcon={
-              <Ionicons name="create-outline" size={18} color={COLORS.text} style={{ marginRight: 6 }} />
+              <Ionicons
+                name="create-outline"
+                size={18}
+                color={COLORS.text}
+                style={{ marginRight: 6 }}
+              />
             }
           />
 
@@ -288,16 +302,14 @@ export default function LocationsScreen() {
       <TopBar
         title="Mis ubicaciones"
         showBack
-        rightNode={
-          <Button
-            title="+ Agregar"
-            variant="outline"
-            fullWidth={false}
-            onPress={handleAddLocation}
-            disabled={!canAdd}
-            size="md"
-          />
-        }
+        onPressBack={() => {
+          if (fromBecomePro && needsPrincipal) {
+            setOk(false);
+            setAlertMsg('Tenés que marcar una ubicación como principal para aparecer en el mapa.');
+            return;
+          }
+          navigation.goBack();
+        }}
       />
 
       <View style={styles.container}>
@@ -325,7 +337,12 @@ export default function LocationsScreen() {
                   Guardá tus lugares frecuentes para buscar profesionales más rápido.
                 </Text>
                 <View style={{ marginTop: SPACING.md }}>
-                  <Button title="Agregar ubicación" onPress={handleAddLocation} variant="primary" size="lg" />
+                  <Button
+                    title="Agregar ubicación"
+                    onPress={handleAddLocation}
+                    variant="primary"
+                    size="lg"
+                  />
                 </View>
               </Card>
             ) : (
@@ -349,6 +366,17 @@ const styles = StyleSheet.create({
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.lg },
 
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: RADII.pill,
+    backgroundColor: COLORS.bgLightGrey,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
   followCard: {
     marginBottom: SPACING.md,
     borderRadius: RADII.lg,
@@ -357,7 +385,12 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderCard,
     backgroundColor: COLORS.cardBg,
   },
-  followRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  followRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   followLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
 
   dot: { width: 10, height: 10, borderRadius: 999 },

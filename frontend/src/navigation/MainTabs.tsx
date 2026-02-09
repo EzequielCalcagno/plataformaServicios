@@ -5,10 +5,10 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import Home from '../screens/Home';
 import Search from '../screens/Search';
-import Bookings from '../screens/Bookings';
+import Requests from '../screens/Requests';
 import Account from '../screens/Account';
 
-import { COLORS, RADII, SPACING, TYPO, SHADOWS } from '../styles/theme';
+import { COLORS, RADII, TYPO } from '../styles/theme';
 
 const Tab = createBottomTabNavigator();
 
@@ -27,8 +27,13 @@ function TabIcon({ routeName, focused }: { routeName: string; focused: boolean }
       <View style={[styles.indicator, focused && styles.indicatorOn]} />
       <Image
         source={icon}
-        resizeMode="contain"
-        style={[styles.icon, { tintColor: focused ? COLORS.activeTab : COLORS.inactiveTab }]}
+        resizeMode="cover"
+        style={[
+          styles.icon,
+          {
+            tintColor: focused ? COLORS.activeTab : COLORS.inactiveTab,
+          },
+        ]}
       />
     </View>
   );
@@ -58,7 +63,7 @@ export default function MainTabs() {
       <Tab.Screen name="Buscar" component={Search as any} options={{ title: 'Buscar' }} />
       <Tab.Screen
         name="Solicitudes"
-        component={Bookings as any}
+        component={Requests as any}
         options={{ title: 'Solicitudes' }}
       />
       <Tab.Screen name="Cuenta" component={Account as any} options={{ title: 'Cuenta' }} />
@@ -67,7 +72,7 @@ export default function MainTabs() {
 }
 
 const styles = StyleSheet.create({
-  icon: { width: 28, height: 28 },
+  icon: { width: 20, height: 20 },
 
   label: {
     ...TYPO.caption,

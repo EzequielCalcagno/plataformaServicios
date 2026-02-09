@@ -23,8 +23,9 @@ import { Divider } from '../components/Divider';
 import { Loading } from './Loading';
 import { Error } from './Error';
 import { AppModal } from '../components/AppModal';
-import { COLORS } from '../styles/theme';
+import { COLORS, SPACING } from '../styles/theme';
 import { formatMemberSince } from '../utils/date';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Props {
   navigation: any;
@@ -110,11 +111,11 @@ export default function Account({ navigation }: Props) {
       ...(profile?.isProfessional
         ? [
             {
-              key: 'add-service',
-              label: 'Agregar servicio',
-              leftIcon: require('../../assets/icons/cuenta/crear.png'),
+              key: 'my-services',
+              label: 'Mis servicios',
+              leftIcon: require('../../assets/icons/cuenta/servicio.png'),
               rightIcon: require('../../assets/icons/cuenta/flechaDerecha.png'),
-              onPress: () => navigation.navigate('AddService'),
+              onPress: () => navigation.navigate('MyServicesManager'),
             } as RowItem,
           ]
         : []),
@@ -278,7 +279,7 @@ export default function Account({ navigation }: Props) {
           <Card
             style={styles.convertirseContainer}
             withShadow
-            onPress={() => navigation.navigate('Register', { isProfessional: true })}
+            onPress={() => navigation.navigate('BecomePro')}
           >
             <Image
               source={require('../../assets/icons/cuenta/convertirseProfesional.png')}
@@ -366,9 +367,10 @@ export default function Account({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   content: {
-    paddingHorizontal: 18,
     paddingTop: 10,
-    paddingBottom: 30,
+    paddingBottom: SPACING.xl * 2,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
   },
 
   icon: {

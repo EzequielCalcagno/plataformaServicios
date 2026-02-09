@@ -29,12 +29,12 @@ import {
 
 import { Screen } from '../components/Screen';
 import { Card } from '../components/Card';
-import { Button } from '../components/Button';
 import { SectionTitle } from '../components/SectionTitle';
 import { COLORS, SPACING, RADII } from '../styles/theme';
 import { Loading } from './Loading';
 import { Error } from './Error';
 import { TipCard } from '../components/TipCard';
+import { api } from '../utils/api';
 
 type PendingItem = {
   key: string;
@@ -43,6 +43,14 @@ type PendingItem = {
   icon: keyof typeof Ionicons.glyphMap;
   tone?: 'primary' | 'warn' | 'muted';
   reservationId: number;
+};
+
+type ProfessionalProfile = {
+  id: string;
+
+  ratingAvg: number;
+  reviewsCount: number;
+  jobsCompleted: number;
 };
 
 function firstWord(s?: string | null) {
@@ -139,6 +147,35 @@ function buildPendingItems(
   return items.slice(0, 6);
 }
 
+function safeNum(v: any, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeProfessionalStats(input: any): ProfessionalProfile {
+  const stats = input?.stats ?? input?.calificaciones ?? input?.ratings ?? null;
+
+  return {
+    id: String(input?.id ?? input?.userId ?? input?.usuario_id ?? ''),
+    ratingAvg: safeNum(
+      stats?.ratingAvg ?? input?.ratingAvg ?? input?.rating_promedio ?? input?.rating ?? 0,
+      0,
+    ),
+    reviewsCount: safeNum(
+      stats?.reviewsCount ??
+        input?.reviewsCount ??
+        input?.totalReviews ??
+        input?.total_resenas ??
+        0,
+      0,
+    ),
+    jobsCompleted: safeNum(
+      stats?.jobsCompleted ?? input?.jobsCompleted ?? input?.trabajos ?? input?.jobs_completed ?? 0,
+      0,
+    ),
+  };
+}
+
 export default function Home() {
   const navigation = useNavigation<any>();
 
@@ -150,6 +187,8 @@ export default function Home() {
 
   const isProfessional = mapRolFromId(profile?.id_rol) === 'professional';
   const firstName = profile?.nombre ? firstWord(profile.nombre) : 'User';
+
+  const [professionalProfile, setProfessionalProfile] = useState<ProfessionalProfile | null>(null);
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -170,6 +209,21 @@ export default function Home() {
     };
     loadProfile();
   }, [navigation]);
+
+  const loadProStats = useCallback(async () => {
+    if (!isProfessional) {
+      setProfessionalProfile(null);
+      return;
+    }
+
+    try {
+      const data = await api.get<any>('/private/profile'); // MISMO endpoint que Profile.tsx
+      setProfessionalProfile(normalizeProfessionalStats(data));
+    } catch (e) {
+      console.log('❌ loadProStats error', e);
+      setProfessionalProfile(null);
+    }
+  }, [isProfessional]);
 
   const loadPending = useCallback(async () => {
     if (!profile) return;
@@ -202,31 +256,23 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       loadPending();
+      loadProStats();
+
       const t = setInterval(() => {
         loadPending();
       }, 15000);
-      return () => clearInterval(t);
-    }, [loadPending]),
-  );
 
+      return () => clearInterval(t);
+    }, [loadPending, loadProStats]),
+  );
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await loadPending();
+      await Promise.all([loadPending(), loadProStats()]);
     } finally {
       setRefreshing(false);
     }
-  }, [loadPending]);
-
-  const ctaTitle = isProfessional ? 'Ver solicitudes' : 'Buscar profesionales';
-  const ctaSubtitle = isProfessional
-    ? 'Gestioná solicitudes y trabajos activos.'
-    : 'Explorá servicios cerca de tu ubicación.';
-
-  const goCTA = () => {
-    if (isProfessional) navigation.navigate('Solicitudes');
-    else navigation.navigate('Buscar');
-  };
+  }, [loadPending, loadProStats]);
 
   const openReservation = (reservationId: number) => {
     navigation.navigate('ReservationDetail', { reservationId });
@@ -260,7 +306,6 @@ export default function Home() {
   return (
     <Screen>
       <ScrollView
-        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
@@ -287,10 +332,6 @@ export default function Home() {
                   ? 'Tu panel de trabajo.'
                   : 'Encontrá ayuda cerca de vos.'}
             </Text>
-
-            <TouchableOpacity activeOpacity={0.9} style={styles.heroCta} onPress={goCTA}>
-              <Text style={styles.heroCtaText}>{ctaTitle}</Text>
-            </TouchableOpacity>
           </View>
         </ImageBackground>
 
@@ -300,9 +341,9 @@ export default function Home() {
           <View style={styles.quickGrid}>
             {!isProfessional ? (
               <>
-                <TouchableOpacity
-                  activeOpacity={0.9}
+                <Card
                   style={styles.quickTile}
+                  withShadow
                   onPress={() => navigation.navigate('Buscar')}
                 >
                   <View style={styles.quickIconWrap}>
@@ -310,45 +351,53 @@ export default function Home() {
                   </View>
                   <Text style={styles.quickTitle}>Buscar</Text>
                   <Text style={styles.quickSub}>Profesionales cerca</Text>
-                </TouchableOpacity>
+                </Card>
 
-                <TouchableOpacity
-                  activeOpacity={0.9}
+                <Card
                   style={styles.quickTile}
+                  withShadow
                   onPress={() => navigation.navigate('Solicitudes')}
                 >
                   <View style={styles.quickIconWrap}>
-                    <Ionicons name="calendar-outline" size={18} color={COLORS.text} />
-                  </View>
-                  <Text style={styles.quickTitle}>Reservas</Text>
-                  <Text style={styles.quickSub}>Activas y pasadas</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  style={styles.quickTile}
-                  onPress={() => navigation.navigate('Solicitudes')}
-                >
-                  <View style={styles.quickIconWrap}>
-                    <Ionicons name="notifications-outline" size={18} color={COLORS.text} />
+                    <Image
+                      source={require('../../assets/icons/cuenta/solicitudes.png')}
+                      style={styles.quickIcon}
+                    />
                   </View>
                   <Text style={styles.quickTitle}>Solicitudes</Text>
                   <Text style={styles.quickSub}>Pendientes y activas</Text>
-                </TouchableOpacity>
+                </Card>
+              </>
+            ) : (
+              <>
+                <Card
+                  style={styles.quickTile}
+                  withShadow
+                  onPress={() => navigation.navigate('Solicitudes')}
+                >
+                  <View style={styles.quickIconWrap}>
+                    <Image
+                      source={require('../../assets/icons/cuenta/solicitudes.png')}
+                      style={styles.quickIcon}
+                    />
+                  </View>
+                  <Text style={styles.quickTitle}>Solicitudes</Text>
+                  <Text style={styles.quickSub}>Pendientes y activas</Text>
+                </Card>
 
-                <TouchableOpacity
-                  activeOpacity={0.9}
+                <Card
                   style={styles.quickTile}
                   onPress={() => navigation.navigate('MyServicesManager')}
                 >
                   <View style={styles.quickIconWrap}>
-                    <Ionicons name="add-circle-outline" size={18} color={COLORS.text} />
+                    <Image
+                      source={require('../../assets/icons/cuenta/servicio.png')}
+                      style={styles.quickIcon}
+                    />
                   </View>
-                  <Text style={styles.quickTitle}>Servicio</Text>
-                  <Text style={styles.quickSub}>Agregar nuevo</Text>
-                </TouchableOpacity>
+                  <Text style={styles.quickTitle}>Servicios</Text>
+                  <Text style={styles.quickSub}>Ver y administrar</Text>
+                </Card>
               </>
             )}
           </View>
@@ -363,7 +412,7 @@ export default function Home() {
           )}
 
           {/* ===== Pendientes ===== */}
-          <View style={{ marginTop: 8 }}>
+          <View style={{ marginTop: SPACING.lg }}>
             <SectionTitle>Pendientes</SectionTitle>
 
             {pendingLoading ? (
@@ -407,20 +456,30 @@ export default function Home() {
 
           {/* ===== Profesional: resumen (placeholder serio) ===== */}
           {isProfessional && (
-            <View style={{ marginTop: 10 }}>
+            <View style={{ marginTop: SPACING.lg }}>
               <SectionTitle>Resumen rápido</SectionTitle>
 
               <View style={styles.summaryRow}>
                 <Card style={styles.summaryCard}>
                   <Text style={styles.summaryLabel}>Trabajos completados</Text>
-                  <Text style={styles.summaryValue}>—</Text>
-                  <Text style={styles.summaryHint}>Próximamente</Text>
+                  <Text style={styles.summaryValue}>
+                    {professionalProfile ? professionalProfile.jobsCompleted : '—'}
+                  </Text>
+                  <Text style={styles.summaryHint}>
+                    {professionalProfile ? 'Total' : 'Cargando…'}
+                  </Text>
                 </Card>
 
                 <Card style={styles.summaryCard}>
                   <Text style={styles.summaryLabel}>Rating</Text>
-                  <Text style={styles.summaryValue}>—</Text>
-                  <Text style={styles.summaryHint}>Próximamente</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.summaryValue}>
+                      {professionalProfile ? professionalProfile.ratingAvg.toFixed(1) : '—'}
+                    </Text>
+                    {professionalProfile ? (
+                      <Ionicons name="star" size={16} color="#F7B500" />
+                    ) : null}
+                  </View>
                 </Card>
               </View>
             </View>
@@ -432,11 +491,6 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  content: {
-    paddingTop: 10,
-    paddingBottom: SPACING.xl * 2,
-  },
-
   hero: {
     height: 260,
     overflow: 'hidden',
@@ -531,6 +585,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
+  },
+  quickIcon: {
+    width: 18,
+    height: 18,
+    tintColor: COLORS.text,
   },
   quickTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   quickSub: { marginTop: 2, fontSize: 12, fontWeight: '600', color: COLORS.textMuted },

@@ -30,6 +30,7 @@ import {
   LocationDto,
   CreateLocationPayload,
   UpdateLocationPayload,
+  getMyLocations,
 } from '../services/locations.client';
 
 import Constants from 'expo-constants';
@@ -177,7 +178,12 @@ export default function LocationForm() {
 
           // centrar mapa
           mapRef.current?.animateToRegion(
-            { latitude: la, longitude: lo, latitudeDelta: region.latitudeDelta, longitudeDelta: region.longitudeDelta },
+            {
+              latitude: la,
+              longitude: lo,
+              latitudeDelta: region.latitudeDelta,
+              longitudeDelta: region.longitudeDelta,
+            },
             350,
           );
         },
@@ -295,22 +301,25 @@ export default function LocationForm() {
     return () => clearTimeout(t);
   }, [query, fetchPredictions, canUseGoogle, followLive]);
 
-  const onPressMap = useCallback(async (latitude: number, longitude: number) => {
-    if (followLive) return; // en seguimiento no permitimos mover
-    setLat(latitude);
-    setLng(longitude);
-    setRegion((r) => ({ ...r, latitude, longitude }));
+  const onPressMap = useCallback(
+    async (latitude: number, longitude: number) => {
+      if (followLive) return; // en seguimiento no permitimos mover
+      setLat(latitude);
+      setLng(longitude);
+      setRegion((r) => ({ ...r, latitude, longitude }));
 
-    const { address, city } = await reverseGeocodeToText(latitude, longitude);
-    if (address) {
-      setDireccion(address);
-      setQuery(address);
-    }
-    if (city) setCiudad(city);
+      const { address, city } = await reverseGeocodeToText(latitude, longitude);
+      if (address) {
+        setDireccion(address);
+        setQuery(address);
+      }
+      if (city) setCiudad(city);
 
-    setPredictions([]);
-    Keyboard.dismiss();
-  }, [followLive]);
+      setPredictions([]);
+      Keyboard.dismiss();
+    },
+    [followLive],
+  );
 
   const onSave = async () => {
     try {
@@ -339,6 +348,19 @@ export default function LocationForm() {
         principal,
       };
 
+      // Si es la primera ubicación, marcala como principal automáticamente
+      if (!editing) {
+        try {
+          const existing = await getMyLocations(); // importalo
+          const list = Array.isArray(existing) ? existing : [];
+          if (list.length === 0) {
+            basePayload.principal = true;
+          }
+        } catch {
+          // si falla, no bloquees
+        }
+      }
+
       if (editing && params.location) {
         const patch: UpdateLocationPayload = basePayload;
         await updateLocation(params.location.id, patch);
@@ -358,7 +380,9 @@ export default function LocationForm() {
   return (
     <Screen>
       <TopBar
-        title={followLive ? 'Seguir mi ubicación' : editing ? 'Editar ubicación' : 'Nueva ubicación'}
+        title={
+          followLive ? 'Seguir mi ubicación' : editing ? 'Editar ubicación' : 'Nueva ubicación'
+        }
         showBack
         onPressBack={() => navigation.goBack()}
       />
@@ -438,9 +462,13 @@ export default function LocationForm() {
                     >
                       <Ionicons name="location-outline" size={18} color={COLORS.textMuted} />
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.suggestionMain} numberOfLines={1}>{main}</Text>
+                        <Text style={styles.suggestionMain} numberOfLines={1}>
+                          {main}
+                        </Text>
                         {!!secondary && (
-                          <Text style={styles.suggestionSecondary} numberOfLines={1}>{secondary}</Text>
+                          <Text style={styles.suggestionSecondary} numberOfLines={1}>
+                            {secondary}
+                          </Text>
                         )}
                       </View>
                     </TouchableOpacity>
@@ -451,11 +479,12 @@ export default function LocationForm() {
           ) : null}
 
           <Text style={[styles.label, { marginTop: 12 }]}>
-            {followLive ? 'Tu ubicación en tiempo real' : 'Elegí en el mapa (tocá para mover el pin)'}
+            {followLive
+              ? 'Tu ubicación en tiempo real'
+              : 'Elegí en el mapa (tocá para mover el pin)'}
           </Text>
 
           <MapView
-            ref={(r) => (mapRef.current = r)}
             style={styles.map}
             region={region}
             onPress={(e) => {
@@ -517,7 +546,13 @@ export default function LocationForm() {
 
           <Button
             title={
-              saving ? 'Guardando…' : followLive ? 'Activar seguimiento' : editing ? 'Guardar cambios' : 'Guardar ubicación'
+              saving
+                ? 'Guardando…'
+                : followLive
+                  ? 'Activar seguimiento'
+                  : editing
+                    ? 'Guardar cambios'
+                    : 'Guardar ubicación'
             }
             onPress={onSave}
             disabled={saving}
@@ -613,15 +648,31 @@ const styles = StyleSheet.create({
   },
   markerDot: { width: 10, height: 10, borderRadius: 999, backgroundColor: '#22c55e' },
 
-  rowBetween: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rowBetween: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   checkbox: {
-    width: 20, height: 20, borderRadius: 6, borderWidth: 1, borderColor: COLORS.border,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff',
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
   },
   checkboxOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   checkboxText: { fontSize: 13, fontWeight: '700', color: COLORS.text },
 
-  coordsPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: '#f3f4f6' },
+  coordsPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#f3f4f6',
+  },
   coordsText: { fontSize: 12, fontWeight: '800', color: COLORS.textMuted },
 });

@@ -1,4 +1,4 @@
-// src/screens/Bookings.tsx
+// src/screens/Requests.tsx
 import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import {
   View,
@@ -99,7 +99,7 @@ function statusUI(estado?: string | null) {
   };
 }
 
-export default function Bookings({ navigation, route }: Props) {
+export default function Requests({ navigation, route }: Props) {
   const [roleUI, setRoleUI] = useState<RoleUI>('CLIENTE');
   const [proMailbox, setProMailbox] = useState<ProMailbox>('COMO_PRO');
 
@@ -169,7 +169,7 @@ export default function Bookings({ navigation, route }: Props) {
 
       setItems(Array.isArray(list) ? list : []);
     } catch (e) {
-      console.log('❌ Bookings fetch error', e);
+      console.log('❌ Requests fetch error', e);
       setItems([]);
     } finally {
       setLoading(false);
@@ -299,10 +299,13 @@ export default function Bookings({ navigation, route }: Props) {
   const EmptyState = () => (
     <View style={styles.empty}>
       <View style={styles.emptyIcon}>
-        <Ionicons name="calendar-outline" size={18} color={COLORS.textMuted} />
+        <Image
+          source={require('../../assets/icons/cuenta/solicitudes.png')}
+          style={styles.icon}
+        />
       </View>
       <Text style={styles.emptyTitle}>
-        {loading ? 'Cargando…' : 'No hay reservas en esta pestaña.'}
+        {loading ? 'Cargando…' : 'No hay solicitudes en esta pestaña.'}
       </Text>
       <Text style={styles.emptyText}>
         {roleUI === 'CLIENTE'
@@ -396,6 +399,7 @@ export default function Bookings({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
+  icon: { width: 18, height: 18, tintColor: COLORS.textMuted },
   header: {
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.md,

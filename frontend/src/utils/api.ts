@@ -49,7 +49,7 @@ export const api = {
     http<T>(path, {
       ...opts,
       method: 'PATCH',
-      body: JSON.stringify(body),
+      body,
       headers: {
         'Content-Type': 'application/json',
         ...(opts.headers || {}),
