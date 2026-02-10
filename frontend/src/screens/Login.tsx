@@ -54,9 +54,8 @@ function InputRow({
 }
 
 const Login = ({ navigation }: any) => {
-  // ❌ SACÁ ESTO en prod. Si querés, condicioná por __DEV__.
-  const [email, setEmail] = useState(__DEV__ ? 'ezequielcalcagno@gmail.com' : '');
-  const [password, setPassword] = useState(__DEV__ ? '123456789' : '');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const [showPass, setShowPass] = useState(false);
 

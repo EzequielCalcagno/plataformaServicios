@@ -1,6 +1,7 @@
 // src/screens/LocationForm.tsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ScrollView,
   View,
   Text,
   StyleSheet,
@@ -22,7 +23,7 @@ import { Screen } from '../components/Screen';
 import { TopBar } from '../components/TopBar';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import { COLORS, SPACING, RADII } from '../styles/theme';
+import { COLORS, SPACING, RADII, TYPO } from '../styles/theme';
 
 import {
   createLocation,
@@ -130,10 +131,10 @@ export default function LocationForm() {
       });
     }, 60);
     return () => clearInterval(t);
-  }, [followLive]);
+  },  [followLive]);
 
   const radarRadius = 80 + radarPhase * 220; // metros
-  const radarOpacity = Math.max(0.05, (1 - radarPhase) * 0.25);
+  const radarOpacity = Math.max(0.05, (1 - radarPhase) * 0.22);
 
   // ===== Seguimiento realtime =====
   const [watching, setWatching] = useState(false);
@@ -176,7 +177,6 @@ export default function LocationForm() {
             if (city && !ciudad.trim()) setCiudad(city);
           }
 
-          // centrar mapa
           mapRef.current?.animateToRegion(
             {
               latitude: la,
@@ -303,7 +303,7 @@ export default function LocationForm() {
 
   const onPressMap = useCallback(
     async (latitude: number, longitude: number) => {
-      if (followLive) return; // en seguimiento no permitimos mover
+      if (followLive) return;
       setLat(latitude);
       setLng(longitude);
       setRegion((r) => ({ ...r, latitude, longitude }));
@@ -329,7 +329,7 @@ export default function LocationForm() {
       if (followLive) {
         await AsyncStorage.setItem(FOLLOW_LIVE_KEY, '1');
         await AsyncStorage.setItem(SELECTED_LOCATION_ID_KEY, FOLLOW_LIVE_ID);
-        Alert.alert('🟢 Siguiendo', 'Listo, ahora la búsqueda usará tu ubicación en tiempo real.');
+        Alert.alert('Listo', 'Ahora la búsqueda usará tu ubicación en tiempo real.');
         navigation.goBack();
         return;
       }
@@ -348,16 +348,13 @@ export default function LocationForm() {
         principal,
       };
 
-      // Si es la primera ubicación, marcala como principal automáticamente
       if (!editing) {
         try {
-          const existing = await getMyLocations(); // importalo
+          const existing = await getMyLocations();
           const list = Array.isArray(existing) ? existing : [];
-          if (list.length === 0) {
-            basePayload.principal = true;
-          }
+          if (list.length === 0) basePayload.principal = true;
         } catch {
-          // si falla, no bloquees
+          // no bloquees
         }
       }
 
@@ -377,173 +374,230 @@ export default function LocationForm() {
     }
   };
 
+  const title = followLive ? 'Seguir mi ubicación' : editing ? 'Editar ubicación' : 'Nueva ubicación';
+
   return (
     <Screen>
-      <TopBar
-        title={
-          followLive ? 'Seguir mi ubicación' : editing ? 'Editar ubicación' : 'Nueva ubicación'
-        }
-        showBack
-        onPressBack={() => navigation.goBack()}
-      />
+      <TopBar title={title} showBack onPressBack={() => navigation.goBack()} />
 
       {!canUseGoogle ? (
-        <View style={{ padding: SPACING.lg }}>
-          <Text style={{ color: COLORS.danger, fontWeight: '700' }}>
-            Falta configurar EXPO_PUBLIC_GOOGLE_PLACES_KEY
-          </Text>
-          <Text style={{ marginTop: 6, color: COLORS.textMuted }}>
-            Agregala en tu .env para habilitar sugerencias de direcciones.
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={styles.container}>
-        <Card withShadow style={styles.card}>
-          {followLive ? (
-            <View style={styles.followBanner}>
-              <View style={styles.followDot} />
-              <Text style={styles.followText}>{watching ? 'Siguiendo…' : 'Activando…'}</Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.label}>Nombre (opcional)</Text>
-              <TextInput
-                value={nombreUbicacion}
-                onChangeText={setNombreUbicacion}
-                placeholder="Ej: Casa / Trabajo"
-                style={styles.input}
-                placeholderTextColor={COLORS.textMuted}
-              />
-            </>
-          )}
-
-          <Text style={[styles.label, { marginTop: 12 }]}>Dirección</Text>
-
-          <View style={styles.searchRow}>
-            <Ionicons name="search" size={18} color={COLORS.textMuted} />
-            <TextInput
-              value={query}
-              onChangeText={(t) => {
-                if (followLive) return;
-                setQuery(t);
-                setDireccion(t);
-                setLat(null);
-                setLng(null);
-              }}
-              placeholder="Escribí una dirección (ej: Soca 1232)"
-              style={styles.searchInput}
-              placeholderTextColor={COLORS.textMuted}
-              autoCorrect={false}
-              autoCapitalize="none"
-              editable={!followLive}
-            />
-            {loadingPred || loadingDetails ? <ActivityIndicator /> : null}
-          </View>
-
-          {!followLive && predictions.length > 0 ? (
-            <View style={styles.suggestions}>
-              <FlatList
-                keyboardShouldPersistTaps="handled"
-                data={predictions}
-                keyExtractor={(it) => it.place_id}
-                renderItem={({ item }) => {
-                  const main = item.structured_formatting?.main_text ?? item.description;
-                  const secondary = item.structured_formatting?.secondary_text ?? '';
-                  return (
-                    <TouchableOpacity
-                      style={styles.suggestionRow}
-                      activeOpacity={0.85}
-                      onPress={() => {
-                        const guessedCity = pickCityFromSecondary(secondary);
-                        if (guessedCity) setCiudad(guessedCity);
-                        fetchPlaceDetails(item.place_id);
-                      }}
-                    >
-                      <Ionicons name="location-outline" size={18} color={COLORS.textMuted} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.suggestionMain} numberOfLines={1}>
-                          {main}
-                        </Text>
-                        {!!secondary && (
-                          <Text style={styles.suggestionSecondary} numberOfLines={1}>
-                            {secondary}
-                          </Text>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                }}
-              />
-            </View>
-          ) : null}
-
-          <Text style={[styles.label, { marginTop: 12 }]}>
-            {followLive
-              ? 'Tu ubicación en tiempo real'
-              : 'Elegí en el mapa (tocá para mover el pin)'}
-          </Text>
-
-          <MapView
-            style={styles.map}
-            region={region}
-            onPress={(e) => {
-              const { latitude, longitude } = e.nativeEvent.coordinate;
-              onPressMap(latitude, longitude);
-            }}
-          >
-            {lat != null && lng != null && (
-              <>
-                {/* Radar (solo en seguir) */}
-                {followLive && (
-                  <Circle
-                    center={{ latitude: lat, longitude: lng }}
-                    radius={radarRadius}
-                    strokeColor={`rgba(34,197,94,${Math.min(0.75, radarOpacity + 0.25)})`}
-                    fillColor={`rgba(34,197,94,${radarOpacity})`}
-                  />
-                )}
-
-                <Marker coordinate={{ latitude: lat, longitude: lng }}>
-                  <View style={styles.markerBubble}>
-                    <View style={styles.markerDot} />
-                  </View>
-                </Marker>
-              </>
-            )}
-          </MapView>
-
-          <Text style={[styles.label, { marginTop: 12 }]}>Ciudad (opcional)</Text>
-          <TextInput
-            value={ciudad}
-            onChangeText={(t) => !followLive && setCiudad(t)}
-            placeholder="Ej: Montevideo"
-            style={styles.input}
-            placeholderTextColor={COLORS.textMuted}
-            editable={!followLive}
-          />
-
-          {!followLive && (
-            <View style={styles.rowBetween}>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => setPrincipal((p) => !p)}
-                style={styles.checkboxRow}
-              >
-                <View style={[styles.checkbox, principal ? styles.checkboxOn : null]}>
-                  {principal ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
-                </View>
-                <Text style={styles.checkboxText}>Marcar como principal</Text>
-              </TouchableOpacity>
-
-              <View style={styles.coordsPill}>
-                <Text style={styles.coordsText}>
-                  {lat != null && lng != null ? '📍 con coordenadas' : '📍 sin coordenadas'}
+        <View style={{ paddingHorizontal: SPACING.lg, paddingTop: SPACING.md }}>
+          <Card withShadow style={styles.warnCard}>
+            <View style={styles.warnRow}>
+              <View style={styles.warnIcon}>
+                <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.warnTitle}>Falta configurar Google Places</Text>
+                <Text style={styles.warnText}>
+                  Agregá <Text style={{ fontFamily: TYPO.label.fontFamily }}>EXPO_PUBLIC_GOOGLE_PLACES_KEY</Text> en tu
+                  .env para habilitar sugerencias.
                 </Text>
               </View>
             </View>
+          </Card>
+        </View>
+      ) : null}
+
+            <ScrollView
+  style={styles.container}
+  contentContainerStyle={{ paddingBottom: SPACING.xl * 2 }}
+  keyboardShouldPersistTaps="handled"
+  showsVerticalScrollIndicator={false}
+  nestedScrollEnabled
+>
+        <Card withShadow style={styles.card}>
+          {/* Header / modo seguir */}
+          {followLive ? (
+            <View style={styles.followCard}>
+              <View style={[styles.dot, watching ? styles.dotOn : styles.dotOff]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.followTitle}>Seguimiento en tiempo real</Text>
+                <Text style={styles.followSubtitle}>
+                  {watching ? 'Activo · se actualizará automáticamente' : 'Activando permisos…'}
+                </Text>
+              </View>
+              <View style={styles.followPill}>
+                <Ionicons name="navigate-outline" size={16} color={COLORS.buttonOutlineText} />
+                <Text style={styles.followPillText}>Live</Text>
+              </View>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.label}>Nombre</Text>
+              <Text style={styles.helper}>Opcional. Te ayuda a reconocerla rápido.</Text>
+
+              <View style={styles.inputWrap}>
+                <Ionicons name="pricetag-outline" size={18} color={COLORS.textMuted} />
+                <TextInput
+                  value={nombreUbicacion}
+                  onChangeText={setNombreUbicacion}
+                  placeholder="Ej: Casa / Trabajo"
+                  style={styles.input}
+                  placeholderTextColor={COLORS.textMuted}
+                />
+              </View>
+            </>
           )}
 
+          {/* Dirección */}
+          <View style={styles.section}>
+            <Text style={styles.label}>Dirección</Text>
+            <Text style={styles.helper}>
+              {followLive ? 'Se detectará a partir de tu ubicación.' : 'Escribí y elegí una sugerencia para mayor precisión.'}
+            </Text>
+
+            <View style={[styles.inputWrap, followLive && styles.inputWrapDisabled]}>
+              <Ionicons name="search" size={18} color={COLORS.textMuted} />
+              <TextInput
+                value={query}
+                onChangeText={(t) => {
+                  if (followLive) return;
+                  setQuery(t);
+                  setDireccion(t);
+                  setLat(null);
+                  setLng(null);
+                }}
+                placeholder="Ej: Soca 1232"
+                style={styles.input}
+                placeholderTextColor={COLORS.textMuted}
+                autoCorrect={false}
+                autoCapitalize="none"
+                editable={!followLive}
+              />
+              {loadingPred || loadingDetails ? <ActivityIndicator /> : null}
+            </View>
+
+            {!followLive && predictions.length > 0 ? (
+              <View style={styles.suggestions}>
+                  {predictions.map((item, index) => {
+                    const main = item.structured_formatting?.main_text ?? item.description;
+                    const secondary = item.structured_formatting?.secondary_text ?? '';
+                    const showDivider = index !== predictions.length - 1;
+
+                    return (
+                      <TouchableOpacity
+                        key={item.place_id}
+                        style={[styles.suggestionRow, showDivider && styles.suggestionDivider]}
+                        activeOpacity={0.85}
+                        onPress={() => {
+                          const guessedCity = pickCityFromSecondary(secondary);
+                          if (guessedCity) setCiudad(guessedCity);
+                          fetchPlaceDetails(item.place_id);
+                        }}
+                      >
+                        <View style={styles.suggestionIcon}>
+                          <Ionicons name="location-outline" size={18} color={COLORS.text} />
+                        </View>
+
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.suggestionMain} numberOfLines={1}>
+                            {main}
+                          </Text>
+                          {!!secondary && (
+                            <Text style={styles.suggestionSecondary} numberOfLines={1}>
+                              {secondary}
+                            </Text>
+                          )}
+                        </View>
+
+                        <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+            ) : null}
+          </View>
+
+          {/* Mapa */}
+          <View style={styles.section}>
+            <Text style={styles.label}>
+              {followLive ? 'Tu ubicación actual' : 'Elegí en el mapa'}
+            </Text>
+            <Text style={styles.helper}>
+              {followLive
+                ? 'Se actualizará en vivo. No podés mover el pin.'
+                : 'Tocá el mapa para mover el pin y completar coordenadas.'}
+            </Text>
+
+            <View style={styles.mapWrap}>
+              <MapView
+                style={styles.map}
+                region={region}
+                onPress={(e) => {
+                  const { latitude, longitude } = e.nativeEvent.coordinate;
+                  onPressMap(latitude, longitude);
+                }}
+              >
+                {lat != null && lng != null && (
+                  <>
+                    {followLive && (
+                      <Circle
+                        center={{ latitude: lat, longitude: lng }}
+                        radius={radarRadius}
+                        strokeColor={`rgba(34,148,242,${Math.min(0.70, radarOpacity + 0.25)})`}
+                        fillColor={`rgba(34,148,242,${radarOpacity})`}
+                      />
+                    )}
+
+                    <Marker coordinate={{ latitude: lat, longitude: lng }}>
+                      <View style={styles.markerBubble}>
+                        <View style={styles.markerDot} />
+                      </View>
+                    </Marker>
+                  </>
+                )}
+              </MapView>
+            </View>
+
+            {/* Estado coords */}
+            {!followLive ? (
+              <View style={styles.rowBetween}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setPrincipal((p) => !p)}
+                  style={styles.checkboxRow}
+                >
+                  <View style={[styles.checkbox, principal ? styles.checkboxOn : null]}>
+                    {principal ? <Ionicons name="checkmark" size={16} color={COLORS.buttonPrimaryText} /> : null}
+                  </View>
+                  <Text style={styles.checkboxText}>Marcar como principal</Text>
+                </TouchableOpacity>
+
+                <View style={styles.coordsPill}>
+                  <Ionicons
+                    name={lat != null && lng != null ? 'locate-outline' : 'help-circle-outline'}
+                    size={16}
+                    color={COLORS.textMuted}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={styles.coordsText}>
+                    {lat != null && lng != null ? 'Con coordenadas' : 'Sin coordenadas'}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Ciudad */}
+          <View style={styles.section}>
+            <Text style={styles.label}>Ciudad</Text>
+            <Text style={styles.helper}>Opcional.</Text>
+
+            <View style={[styles.inputWrap, followLive && styles.inputWrapDisabled]}>
+              <Ionicons name="business-outline" size={18} color={COLORS.textMuted} />
+              <TextInput
+                value={ciudad}
+                onChangeText={(t) => !followLive && setCiudad(t)}
+                placeholder="Ej: Montevideo"
+                style={styles.input}
+                placeholderTextColor={COLORS.textMuted}
+                editable={!followLive}
+              />
+            </View>
+          </View>
+
+          {/* CTA */}
           <Button
             title={
               saving
@@ -556,64 +610,117 @@ export default function LocationForm() {
             }
             onPress={onSave}
             disabled={saving}
-            style={{ marginTop: 14 }}
+            style={{ marginTop: SPACING.md }}
           />
+
+          {!followLive ? (
+            <Text style={styles.footerHint}>
+              Tip: guardá “Casa” y “Trabajo” y dejá una como principal para aparecer mejor en el mapa.
+            </Text>
+          ) : (
+            <Text style={styles.footerHint}>
+              Cuando esté activo, se usará tu ubicación real como principal en búsquedas.
+            </Text>
+          )}
         </Card>
-      </View>
+      </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: SPACING.lg },
-  card: { padding: SPACING.lg },
+  container: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.md },
 
-  label: { fontSize: 12, fontWeight: '800', color: COLORS.textMuted, marginBottom: 6 },
+  card: {
+    borderRadius: RADII.lg,
+    padding: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    backgroundColor: COLORS.cardBg,
+  },
 
+  // Warning (no google key)
+  warnCard: {
+    borderRadius: RADII.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    backgroundColor: COLORS.cardBg,
+  },
+  warnRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  warnIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: COLORS.bgLightGrey,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  warnTitle: { ...TYPO.h3 },
+  warnText: { ...TYPO.subtitle, marginTop: 2 },
+
+  // Follow card
+  followCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: SPACING.md,
+    borderRadius: RADII.lg,
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    backgroundColor: COLORS.cardBg,
+    marginBottom: SPACING.sm,
+  },
+  dot: { width: 10, height: 10, borderRadius: 999 },
+  dotOn: { backgroundColor: COLORS.buttonPrimaryBg },
+  dotOff: { backgroundColor: COLORS.border },
+  followTitle: { ...TYPO.label },
+  followSubtitle: { ...TYPO.helper, marginTop: 2 },
+  followPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADII.pill,
+    backgroundColor: COLORS.graySoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  followPillText: { ...TYPO.badge, color: COLORS.buttonOutlineText },
+
+  section: { marginTop: SPACING.md },
+
+  label: { ...TYPO.label, fontFamily: TYPO.label.fontFamily, marginBottom: 4 },
+  helper: { ...TYPO.helper, marginBottom: 8 },
+
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    borderRadius: RADII.lg,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: COLORS.cardBg,
+  },
+  inputWrapDisabled: { opacity: 0.7 },
   input: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADII.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: COLORS.text,
-    backgroundColor: '#fff',
+    flex: 1,
+    ...TYPO.body,
+    paddingVertical: 0,
   },
-
-  followBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(34,197,94,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(34,197,94,0.35)',
-  },
-  followDot: { width: 10, height: 10, borderRadius: 999, backgroundColor: '#22c55e' },
-  followText: { fontSize: 13, fontWeight: '900', color: '#166534' },
-
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADII.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-  },
-  searchInput: { flex: 1, color: COLORS.text },
 
   suggestions: {
     marginTop: 8,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADII.md,
+    borderColor: COLORS.borderCard,
+    borderRadius: RADII.lg,
     overflow: 'hidden',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.cardBg,
   },
   suggestionRow: {
     flexDirection: 'row',
@@ -621,58 +728,73 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
   },
-  suggestionMain: { fontSize: 13, fontWeight: '800', color: COLORS.text },
-  suggestionSecondary: { marginTop: 2, fontSize: 12, color: COLORS.textMuted },
-
-  map: {
-    height: 200,
+  suggestionDivider: { borderBottomWidth: 1, borderBottomColor: COLORS.bgDivider },
+  suggestionIcon: {
+    width: 38,
+    height: 38,
     borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.bgLightGrey,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  suggestionMain: { ...TYPO.label },
+  suggestionSecondary: { ...TYPO.helper, marginTop: 2 },
+
+  mapWrap: {
+    borderWidth: 1,
+    borderColor: COLORS.borderCard,
+    borderRadius: RADII.lg,
+    overflow: 'hidden',
+    backgroundColor: COLORS.cardBg,
+  },
+  map: { height: 220, backgroundColor: COLORS.cardBg },
 
   markerBubble: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: 'rgba(34,197,94,0.20)',
+    backgroundColor: 'rgba(34,148,242,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(34,197,94,0.50)',
+    borderColor: 'rgba(34,148,242,0.45)',
   },
-  markerDot: { width: 10, height: 10, borderRadius: 999, backgroundColor: '#22c55e' },
+  markerDot: { width: 10, height: 10, borderRadius: 999, backgroundColor: COLORS.buttonPrimaryBg },
 
   rowBetween: {
-    marginTop: 12,
+    marginTop: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 10,
   },
-  checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+
+  checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   checkbox: {
     width: 20,
     height: 20,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.borderCard,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.cardBg,
   },
-  checkboxOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  checkboxText: { fontSize: 13, fontWeight: '700', color: COLORS.text },
+  checkboxOn: { backgroundColor: COLORS.buttonPrimaryBg, borderColor: COLORS.buttonPrimaryBg },
+  checkboxText: { ...TYPO.body, fontFamily: TYPO.label.fontFamily },
 
   coordsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#f3f4f6',
+    paddingVertical: 8,
+    borderRadius: RADII.pill,
+    backgroundColor: COLORS.graySoft,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  coordsText: { fontSize: 12, fontWeight: '800', color: COLORS.textMuted },
+  coordsText: { ...TYPO.helper, fontFamily: TYPO.label.fontFamily },
+
+  footerHint: { ...TYPO.helper, marginTop: SPACING.md, textAlign: 'center' },
 });
