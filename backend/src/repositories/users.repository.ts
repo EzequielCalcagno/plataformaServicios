@@ -38,7 +38,7 @@ export const getAllUsersRepository = async () => {
   return UsersArraySchema.parse(data ?? []);
 };
 
-// ✅ guardar la url pública en usuarios.foto_url
+// guarda la url pública en usuarios.foto_url
 export const updateUserPhotoUrlRepository = async (id: string, foto_url: string) => {
   const { data, error } = await db
     .from('usuarios')
@@ -55,7 +55,6 @@ export const updateUserPhotoUrlRepository = async (id: string, foto_url: string)
   return UserSchema.parse(data);
 };
 
-// ✅ esto faltaba y tu login lo necesita
 export const updateLastLogin = async (id: string) => {
   const { error } = await db
     .from('usuarios')
@@ -78,7 +77,6 @@ export type NewUser = {
   telefono: string | null;
 };
 
-// ✅ esto también faltaba y tu register lo necesita
 export const createUserRepository = async (user: NewUser) => {
   const payload = {
     id: user.id,
@@ -100,7 +98,7 @@ export const createUserRepository = async (user: NewUser) => {
   return UserSchema.parse(data);
 };
 
-// ✅ traer usuarios básicos por IDs (para Search)
+// traer usuarios básicos por IDs (para Search)
 export const getUsersBasicByIdsRepository = async (ids: string[]) => {
   if (!ids || ids.length === 0) return [];
 

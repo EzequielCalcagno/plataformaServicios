@@ -1,7 +1,7 @@
 // src/services/services.service.ts
 import {
   listMyServicesRepository,
-  listServicesByProfessionalIdRepository, // ✅ NUEVO
+  listServicesByProfessionalIdRepository,
   createMyServiceRepository,
   updateMyServiceRepository,
   deleteMyServiceRepository,
@@ -28,10 +28,6 @@ function toServiceDto(row: any) {
   };
 }
 
-/**
- * ✅ Fallback grande (se usa si DB está vacía)
- * Podés ampliarlo más cuando quieras.
- */
 const FALLBACK: Record<string, string[]> = {
   'Plomería': [
     'Reparación de pérdidas',
@@ -168,8 +164,6 @@ const FALLBACK: Record<string, string[]> = {
 function getFallback(category: string) {
   const exact = FALLBACK[category];
   if (exact?.length) return exact;
-
-  // si viene una categoría con distinta mayúscula o algo raro, intentamos match case-insensitive
   const key = Object.keys(FALLBACK).find((k) => k.toLowerCase() === category.toLowerCase());
   if (key) return FALLBACK[key];
 
@@ -181,28 +175,21 @@ export async function listMyServicesService(profesionalId: string) {
   return rows.map(toServiceDto);
 }
 
-/**
- * ✅ NUEVO:
- * lista servicios por profesionalId (seleccionado desde el front)
- * devuelve DTO igual que el resto
- */
+// lista servicios por profesionalId 
+
 export async function listServicesByProfessionalIdService(profesionalId: string) {
   const id = normalize(profesionalId);
   if (!id) throw new Error('profesionalId es obligatorio');
 
-  // Por defecto: solo activos (lo normal para perfil público)
-  const rows = await listServicesByProfessionalIdRepository(id, true /* onlyActive */);
+  // Por defecto: solo activos 
+  const rows = await listServicesByProfessionalIdRepository(id, true /* solo activos */);
   return rows.map(toServiceDto);
 }
 
 export async function createMyServiceService(profesionalId: string, payload: any) {
   const titulo = normalize(payload?.titulo ?? payload?.title ?? '');
   const descripcion = payload?.descripcion ?? payload?.description ?? null;
-
-  // ✅ tu tabla requiere categoria NOT NULL
   const categoria = normalize(payload?.categoria ?? payload?.category ?? 'Otros') || 'Otros';
-
-  // precio_base opcional
   const precio_base_raw = payload?.precio_base ?? payload?.price_base ?? payload?.priceBase ?? null;
   const precio_base =
     precio_base_raw == null
@@ -260,26 +247,16 @@ export async function deactivateMyServiceService(profesionalId: string, serviceI
   return toServiceDto(updated);
 }
 
-/**
- * ✅ suggestions:
- * 1) intenta DB (top repetidos)
- * 2) si DB viene vacío => fallback hardcodeado
- * 3) aplica filtro por q si viene
- */
 export async function getServiceSuggestionsService(input: { category: string; q?: string; limit?: number }) {
   const category = normalize(input.category);
   const q = normalize(input.q ?? '');
   const limit = Number.isFinite(Number(input.limit)) ? Number(input.limit) : 30;
-
-  // DB suggestions
   const db = await getSuggestionsByCategoryRepository(category, Math.min(100, limit));
   const base = db.length ? db : getFallback(category);
 
   const filtered = q
     ? base.filter((t) => t.toLowerCase().includes(q.toLowerCase()))
     : base;
-
-  // únicos + limit
   const uniq: string[] = [];
   const seen = new Set<string>();
   for (const t of filtered) {
@@ -293,19 +270,17 @@ export async function getServiceSuggestionsService(input: { category: string; q?
   return uniq;
 }
 
-/**
- * ✅ bootstrap:
- * - crea servicios típicos para el profesional (por categoría o varias)
- * - evita duplicados (profesional + categoria + titulo)
- */
+
+// bootstrap:
+// crea servicios típicos para el profesional (por categoría o varias)
+// evita duplicados (profesional + categoria + titulo)
+ 
 export async function bootstrapMyServicesService(
   profesionalId: string,
   input?: { category?: string | null; titles?: string[] | null; max?: number; priceBase?: number | null },
 ) {
   const max = Number.isFinite(Number(input?.max)) ? Number(input?.max) : 8;
   const category = input?.category ? normalize(input.category) : null;
-
-  // Si el usuario manda títulos explícitos, usamos eso.
   const customTitles =
     input?.titles?.map((t) => normalize(t)).filter(Boolean) ?? null;
 

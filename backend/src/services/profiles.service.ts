@@ -14,7 +14,7 @@ import {
   UpdateProfessionalProfileSchema,
 } from '../schemas/profile.schema';
 
-// Obtener perfil profesional (privado)
+// Obtener perfil profesional
 export const getProfessionalProfileByUserIdService = async (userId: string) => {
   const professional = await getProfessionalProfileByUserIdRepository(userId);
   if (!professional) return null;
@@ -56,11 +56,8 @@ export const updateMyProfessionalProfileService = async (userId: string, payload
   return getProfessionalProfileByUserIdService(userId);
 };
 
-/**
- * ✅ Perfil para la APP (private/profile)
- * - devuelve datos del authUser + rating real + jobs real
- * - SIN portada_url
- */
+//devuelve datos del authUser + rating + jobs 
+ 
 export const getAppProfileByUserService = async (authUser: any) => {
   const userId = String(authUser.id);
 
@@ -72,17 +69,15 @@ export const getAppProfileByUserService = async (authUser: any) => {
 
   const rawRoleId = authUser.rolId ?? authUser.id_rol ?? 2;
   const roleId = typeof rawRoleId === 'string' ? Number(rawRoleId) : Number(rawRoleId);
-
-  // Intentamos leer perfil profesional (puede no existir)
   let professionalProfile: any = null;
   try {
     professionalProfile = await getProfessionalProfileByUserIdRepository(userId);
   } catch {}
 
-  // rating real (si existe RPC)
+  // rating 
   const ratingSummary = await getProfessionalRatingSummaryRepository(userId);
 
-  // ✅ Foto: priorizamos foto del usuario (o avatar_url), NO portada_url
+  // Foto
   const photoUrl = authUser.foto_url ?? authUser.avatar_url ?? null;
 
   return {
@@ -90,7 +85,6 @@ export const getAppProfileByUserService = async (authUser: any) => {
     id: userId,
     name: fullName,
     photoUrl,
-    // ✅ sin coverUrl
     coverUrl: null,
     location: 'Montevideo, Uruguay',
     professionalProfile: professionalProfile
@@ -109,10 +103,8 @@ export const getAppProfileByUserService = async (authUser: any) => {
   };
 };
 
-/**
- * ✅ Perfil público del profesional (public/professionals/:id/profile)
- * - SIN portada_url
- */
+//Perfil público del profesional
+
 export const getProfessionalPublicProfileByUserIdService = async (userId: string) => {
   const profile = await getProfessionalPublicProfileByUserIdRepository(userId);
   if (!profile) return null;
@@ -128,13 +120,10 @@ export const getProfessionalPublicProfileByUserIdService = async (userId: string
     id: userId,
     name,
     photoUrl: user?.foto_url ?? null,
-    // ✅ sin coverUrl
     coverUrl: null,
-
     specialty: profile.especialidad ?? null,
     location: 'Montevideo, Uruguay',
     about: profile.descripcion ?? null,
-
     services: (servicesDb ?? []).map((s: any) => ({
       id: String(s.id),
       title: String(s.titulo ?? ''),

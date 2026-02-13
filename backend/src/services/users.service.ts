@@ -17,7 +17,6 @@ export const getUserByIdService = async (id: string) => {
   return user;
 };
 
-// ✅ NUEVO
 export const updateUserPhotoUrlService = async (id: string, fotoUrl: string) => {
   return updateUserPhotoUrlRepository(id, fotoUrl);
 };

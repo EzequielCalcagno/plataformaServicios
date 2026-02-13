@@ -43,13 +43,13 @@ export const uploadProfileImageController = async (req: Request, res: Response) 
       return res.status(401).json({ message: 'No autenticado' });
     }
 
-    // 1) Subir a Storage y obtener URL pública
+    //  Subir a Storage y obtener URL pública
     const url = await uploadProfileImageService({
       file: mReq.file,
       userId,
     });
 
-    // 2) ✅ Guardar la URL en la tabla usuarios.foto_url
+    //  Guarda la URL en la tabla usuarios.foto_url
     await updateUserPhotoUrlRepository(userId, url);
 
     return res.json({ url });

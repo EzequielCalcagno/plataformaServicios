@@ -27,7 +27,6 @@ export const searchServiciosRepository = async (params: SearchServiciosParams) =
     workedWith = false,
   } = params;
 
-  // Importante: Los nombres de params deben coincidir con la función SQL
   const { data, error } = await db.rpc('search_servicios', {
     p_lat: lat,
     p_lng: lng,

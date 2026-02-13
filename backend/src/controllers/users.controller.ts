@@ -13,7 +13,7 @@ export const getAllUsersController = async (_req: Request, res: Response) => {
 
 export const getCurrentUserController = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id; // Asumiendo que el middleware de autenticación añade el usuario a la solicitud
+    const userId = req.user?.id; 
     if (!userId || typeof userId !== 'string') {
       return res.status(400).json({ error: 'ID de usuario no válido' });
     }

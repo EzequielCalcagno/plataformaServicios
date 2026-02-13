@@ -27,7 +27,6 @@ export const loginService = async (email: string, password: string) => {
 
   if (!user.id) throw new Error('USER_ID_MISSING');
 
-  // ✅ ya existe en users.repository.ts
   await updateLastLogin(String(user.id));
 
   const token = jwt.sign(

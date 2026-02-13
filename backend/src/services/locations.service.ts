@@ -9,14 +9,13 @@ import {
   clearPrincipalForUserRepository,
 } from '../repositories/locations.repository';
 
-type GeoPoint = { type: 'Point'; coordinates: [number, number] }; // [lng, lat]
+type GeoPoint = { type: 'Point'; coordinates: [number, number] };
 
 function geoPointToEWKT(p?: GeoPoint | null): string | null {
   if (!p) return null;
   if (p.type !== 'Point') return null;
   const [lng, lat] = p.coordinates ?? [];
   if (typeof lat !== 'number' || typeof lng !== 'number') return null;
-  // ✅ geography expects SRID + POINT(lng lat)
   return `SRID=4326;POINT(${lng} ${lat})`;
 }
 
@@ -27,18 +26,12 @@ function toLocationDto(row: any) {
     nombre_ubicacion: row.nombre_ubicacion ?? null,
     ciudad: row.ciudad ?? null,
     direccion: row.direccion ?? null,
-
-    // Si tu SELECT no trae coordenadas no pasa nada
     coordenadas: row.coordenadas ?? null,
-
     tipo: row.tipo ?? null,
     activa: row.activa ?? null,
     fecha_registro: row.fecha_registro ?? null,
-
-    // ✅ generated columns (solo lectura)
     lat: row.lat ?? null,
     lng: row.lng ?? null,
-
     principal: !!row.principal,
   };
 }
@@ -62,8 +55,6 @@ export async function updateMyLocationService(userId: string, locationId: number
     nombre_ubicacion: payload?.nombre_ubicacion ?? undefined,
     ciudad: payload?.ciudad ?? undefined,
     direccion: payload?.direccion ?? undefined,
-
-    // ✅ si viene coordenadas, la actualizamos (EWKT); si no viene, no tocamos
     coordenadas: ewkt,
 
     tipo: payload?.tipo ?? undefined,
@@ -83,13 +74,9 @@ export async function deleteMyLocationService(userId: string, locationId: number
 }
 export async function createMyLocationService(userId: string, payload: any) {
   const makePrincipal = !!payload?.principal;
-
-  // ✅ 1. LIMPIAR ANTES (clave para evitar el error 23505)
   if (makePrincipal) {
     await clearPrincipalForUserRepository(userId);
   }
-
-  // ✅ 2. convertir coordenadas a EWKT si vienen
   const ewkt =
     payload?.coordenadas?.type === 'Point'
       ? `SRID=4326;POINT(${payload.coordenadas.coordinates[0]} ${payload.coordenadas.coordinates[1]})`

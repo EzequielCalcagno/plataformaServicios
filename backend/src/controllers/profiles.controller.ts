@@ -87,9 +87,6 @@ export const updateMyProfessionalProfileController = async (req: Request, res: R
   }
 };
 
-/**
- * 🔹 Perfil compacto para la app (Home / MyAccount)
- */
 export const getMyAppProfileController = async (req: Request, res: Response) => {
   try {
     const authUser: any = (req as any).user;
@@ -132,12 +129,11 @@ export const getMyAppProfileController = async (req: Request, res: Response) => 
   }
 };
 
-// ================= NUEVO (AGREGADO) =================
 
-/**
- * 🔹 Obtener perfil profesional por ID (para Search → Ver perfil)
- * GET /api/v1/private/professionals/:userId
- */
+
+// Obtener perfil profesional por ID (para Search → Ver perfil)
+
+
 export const getProfessionalProfileByIdController = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;

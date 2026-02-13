@@ -20,5 +20,5 @@ export const getNextProfesionalId = async () => {
     throw error;
   }
 
-  return data as string; // ej: "p_00001"
+  return data as string; 
 };

@@ -12,12 +12,12 @@ export const login = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('❌ Error en login controller:', error);
 
-    // ✅ Solo esto es 401
+
     if (error?.message === 'INVALID_CREDENTIALS') {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
-    // ✅ El resto es error real del backend
+ 
     return res.status(500).json({ error: 'Error interno en login' });
   }
 };

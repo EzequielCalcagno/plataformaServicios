@@ -7,13 +7,11 @@ export type LocationRow = {
   nombre_ubicacion: string | null;
   ciudad: string | null;
   direccion: string | null;
-  coordenadas: any | null; // geography(Point, 4326)
+  coordenadas: any | null; 
   tipo: string | null;
   principal: boolean;
   activa: boolean;
   fecha_registro: string | null;
-
-  // generated columns
   lat?: number | null;
   lng?: number | null;
 };
@@ -23,7 +21,7 @@ export type CreateLocationDbPayload = {
   nombre_ubicacion?: string | null;
   ciudad?: string | null;
   direccion?: string | null;
-  coordenadas?: any | null; // EWKT string recomendado
+  coordenadas?: any | null; 
   tipo?: string | null;
   principal?: boolean;
   activa?: boolean;
@@ -33,7 +31,7 @@ export type UpdateLocationDbPayload = Partial<{
   nombre_ubicacion: string | null;
   ciudad: string | null;
   direccion: string | null;
-  coordenadas: any | null; // EWKT
+  coordenadas: any | null; 
   tipo: string | null;
   principal: boolean;
   activa: boolean;
@@ -66,7 +64,7 @@ export async function listLocationsByUserRepository(userId: string) {
   return (data ?? []) as LocationRow[];
 }
 
-// ✅ ESTE es el que te falta (service lo importa)
+
 export async function getLocationByIdForUserRepository(userId: string, id: number) {
   const { data, error } = await db
     .from('ubicaciones')
@@ -88,7 +86,7 @@ export async function createLocationRepository(payload: CreateLocationDbPayload)
       ciudad: payload.ciudad ?? null,
       direccion: payload.direccion ?? null,
 
-      // ✅ NO mandes lat/lng (son generated)
+
       coordenadas: payload.coordenadas ?? null,
 
       tipo: payload.tipo ?? null,
@@ -111,7 +109,6 @@ export async function updateLocationForUserRepository(
     .from('ubicaciones')
     .update({
       ...patch,
-      // ✅ NO mandes lat/lng
     })
     .eq('id', id)
     .eq('usuario_id', userId)
@@ -122,7 +119,6 @@ export async function updateLocationForUserRepository(
   return data as LocationRow;
 }
 
-// ✅ ESTE es el que te falta (service lo importa)
 export async function deleteLocationForUserRepository(userId: string, id: number) {
   const { error } = await db
     .from('ubicaciones')
@@ -134,7 +130,7 @@ export async function deleteLocationForUserRepository(userId: string, id: number
   return true;
 }
 
-// ✅ helper: deja en false la principal anterior del usuario
+
 export async function clearPrincipalForUserRepository(userId: string) {
   const { error } = await db
     .from('ubicaciones')

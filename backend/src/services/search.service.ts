@@ -56,8 +56,6 @@ export const searchServiciosService = async (input: {
 
     return {
       ...row,
-
-      // normalizamos para el Front (Search.tsx ya lo lee)
       profesional_id: professionalId ?? row.profesional_id ?? null,
       profesional_nombre: profesionalNombre,
       profesional_apellido: profesionalApellido,

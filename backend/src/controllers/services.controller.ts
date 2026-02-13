@@ -8,7 +8,7 @@ import {
   getServiceSuggestionsService,
   bootstrapMyServicesService,
   listServicesByProfessionalIdService,
-  deactivateMyServiceService  // ✅ NUEVO
+  deactivateMyServiceService 
 } from '../services/services.service';
 
 function getUserId(req: any) {
@@ -28,11 +28,8 @@ export async function listMyServicesController(req: Request, res: Response) {
   }
 }
 
-/**
- * ✅ NUEVO:
- * GET /private/services/professional/:profesionalId
- * Devuelve servicios (activos) del profesional seleccionado.
- */
+// Devuelve servicios (activos) del profesional seleccionado.
+ 
 export async function listServicesByProfessionalIdController(req: Request, res: Response) {
   try {
     const profesionalId = String(req.params.profesionalId ?? '').trim();
@@ -71,7 +68,7 @@ export async function updateMyServiceController(req: Request, res: Response) {
   }
 }
 
-// src/controllers/services.controller.ts
+
 
 
 export async function deactivateMyServiceController(req: Request, res: Response) {
@@ -88,7 +85,6 @@ export async function deactivateMyServiceController(req: Request, res: Response)
   }
 }
 
-// Mejorá delete: si es FK, devolver 409 (conflict) con mensaje claro
 export async function deleteMyServiceController(req: Request, res: Response) {
   try {
     const userId = getUserId(req as any);
@@ -98,7 +94,6 @@ export async function deleteMyServiceController(req: Request, res: Response) {
     await deleteMyServiceService(userId, id);
     return res.status(204).send();
   } catch (e: any) {
-    // FK violation postgres
     if (e?.code === '23503') {
       return res.status(409).json({
         message:
@@ -115,10 +110,8 @@ export async function deleteMyServiceController(req: Request, res: Response) {
 
 
 
-/**
- * ✅ Sugerencias por categoría (para el front)
- * GET /private/services/suggestions?category=Plomería&q=insta&limit=30
- */
+//Sugerencias por categoría (para el front)
+
 export async function getServiceSuggestionsController(req: Request, res: Response) {
   try {
     const category = String(req.query.category ?? '').trim();
@@ -142,11 +135,8 @@ export async function getServiceSuggestionsController(req: Request, res: Respons
   }
 }
 
-/**
- * ✅ Precargar varios servicios típicos al profesional
- * POST /private/services/bootstrap
- * body: { category?: string, titles?: string[], max?: number, priceBase?: number|null }
- */
+//Precargar varios servicios típicos al profesional
+
 export async function bootstrapMyServicesController(req: Request, res: Response) {
   try {
     const userId = getUserId(req as any);

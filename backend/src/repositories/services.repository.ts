@@ -40,7 +40,7 @@ const SELECT_FIELDS = `
   precio_base
 `;
 
-/** ✅ Mis servicios (profesional logueado) */
+// Mis servicios (profesional logueado)
 export async function listMyServicesRepository(profesionalId: string) {
   const { data, error } = await db
     .from('servicios')
@@ -56,7 +56,7 @@ export async function listMyServicesRepository(profesionalId: string) {
   return (data ?? []) as ServiceRow[];
 }
 
-/** ✅ Servicios por profesional (seleccionado desde el front) */
+// Servicios por profesional (seleccionado desde el front)
 export async function listServicesByProfessionalIdRepository(
   profesionalId: string,
   onlyActive = true,
@@ -137,11 +137,9 @@ export async function deleteMyServiceRepository(profesionalId: string, serviceId
   return true;
 }
 
-/**
- * ✅ Sugerencias desde DB:
- * - trae hasta 500 servicios, filtra por categoría (case-insensitive)
- * - cuenta repetidos y devuelve top N
- */
+ //trae hasta 500 servicios, filtra por categoría (case-insensitive)
+ //cuenta repetidos y devuelve top 
+ 
 export async function getSuggestionsByCategoryRepository(
   category: string,
   limit = 30,
@@ -149,7 +147,7 @@ export async function getSuggestionsByCategoryRepository(
   const { data, error } = await db
     .from('servicios')
     .select('titulo, categoria')
-    .ilike('categoria', category) // case-insensitive
+    .ilike('categoria', category) 
     .limit(500);
 
   if (error) {
@@ -170,9 +168,8 @@ export async function getSuggestionsByCategoryRepository(
     .map(([t]) => t);
 }
 
-/**
- * ✅ Bootstrap: inserta varios servicios de una (bulk)
- */
+// Bootstrap: inserta varios servicios de una (bulk)
+
 export async function createManyServicesRepository(
   profesionalId: string,
   payloads: CreateServiceDbPayload[],
@@ -201,9 +198,8 @@ export async function createManyServicesRepository(
   return (data ?? []) as ServiceRow[];
 }
 
-/**
- * ✅ helper: evitar duplicados (profesional + categoría + título)
- */
+// helper: evitar duplicados (profesional + categoría + título)
+ 
 export async function existsServiceByTitleAndCategoryRepository(
   profesionalId: string,
   titulo: string,
