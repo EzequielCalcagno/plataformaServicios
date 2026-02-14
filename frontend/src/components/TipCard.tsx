@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ViewStyle, Image } from 'reac
 import { COLORS, RADII, SPACING, TYPO, SHADOWS } from '../styles/theme';
 import { Card } from './Card';
 
-const BULB_IMG = require('../../assets/icons/bombita.png'); // <-- ajustá si corresponde
+const BULB_IMG = require('../../assets/icons/bombita.png'); 
 
 type Props = {
   title?: string;

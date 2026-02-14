@@ -162,7 +162,7 @@ export default function LocationsScreen({ route }: any) {
 
   const handleDisableFollow = useCallback(async () => {
     try {
-      setSubmittingId(-1); // “modo submit global”
+      setSubmittingId(-1); 
 
       await AsyncStorage.setItem(FOLLOW_LIVE_KEY, '0');
       const sel = await AsyncStorage.getItem(SELECTED_LOCATION_ID_KEY);

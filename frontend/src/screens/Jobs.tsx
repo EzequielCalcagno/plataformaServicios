@@ -44,7 +44,6 @@ export default function Jobs({ navigation }: Props) {
           return;
         }
 
-        // api ya incluye /api/v1
         const res = await fetch(`${api}/profiles/${userId}/works`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -90,7 +89,6 @@ export default function Jobs({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      {/* TOP BAR con back */}
       <View style={styles.topBar}>
         <TouchableOpacity style={{ padding: 4 }} onPress={() => navigation.goBack()}>
           <Text style={{ fontSize: 18 }}>←</Text>

@@ -69,13 +69,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 56,
-    borderRadius: RADII.md, // más redondito como la foto
+    borderRadius: RADII.md,
     borderWidth: 1,
     borderColor: COLORS.borderInput,
     backgroundColor: COLORS.bgInput,
     paddingHorizontal: 16,
 
-    // “sombrín” suave
+    
     ...SHADOWS.soft,
     shadowOpacity: 0.06,
     shadowRadius: 10,
@@ -93,17 +93,17 @@ const styles = StyleSheet.create({
     fontSize: TYPO.body.fontSize,
     lineHeight: TYPO.body.lineHeight,
     color: COLORS.textInput,
-    marginTop: 1, // alineación óptica
+    marginTop: 1, 
   },
 
   input: {
-    flex: 1, // para que ocupe el resto del ancho
-    minWidth: 0, // para que no rompa en row
+    flex: 1, 
+    minWidth: 0, 
     fontFamily: TYPO.body.fontFamily,
     fontSize: TYPO.body.fontSize,
     lineHeight: TYPO.body.lineHeight,
     color: COLORS.textInput,
-    padding: 0, // importante para que no meta padding extra RN
+    padding: 0, 
     margin: 0,
   },
 

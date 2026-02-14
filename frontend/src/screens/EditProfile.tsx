@@ -53,7 +53,7 @@ export default function EditProfile({ navigation, route }: Props) {
   const isPro = role === 'professional';
   const showProSection = isPro || fromBecomePro;
 
-  // ========= CARGAR PERFIL ==========
+  // == CARGAR PERFIL ==
   useEffect(() => {
     let mounted = true;
 
@@ -63,7 +63,6 @@ export default function EditProfile({ navigation, route }: Props) {
         setAlertMsg(null);
         setOk(false);
 
-        // 1) Fuente de verdad: backend
         const me = await getCurrentUser();
 
         const roleId = Number(me.id_rol);
@@ -89,7 +88,6 @@ export default function EditProfile({ navigation, route }: Props) {
             about: pro?.descripcion || pro?.experiencia || '',
           });
         } catch (e: any) {
-          // Si falla, no rompas la pantalla
           setProfForm({ specialty: '', about: '' });
           setOk(true);
           setAlertMsg('Completá tu info profesional para continuar.');
@@ -109,8 +107,7 @@ export default function EditProfile({ navigation, route }: Props) {
     return () => {
       mounted = false;
     };
-    // IMPORTANTE: showProSection depende de role, pero role se setea acá.
-    // Para evitar loop, usamos fromBecomePro (estable) y NO showProSection.
+
   }, [fromBecomePro]);
 
   // ========= SUBIR AVATAR ==========
@@ -180,7 +177,6 @@ export default function EditProfile({ navigation, route }: Props) {
         return;
       }
 
-      // onboarding (cliente desde BecomePro)
       await updateProOnboardingProfile({
         especialidad: profForm.specialty,
         descripcion: profForm.about,

@@ -51,7 +51,7 @@ type Side = 'SOLICITANTE' | 'PRESTADOR' | 'UNKNOWN';
 type VisitStatus = 'REALIZADA' | 'CANCELADA' | 'REPROGRAMADA';
 type Visit = {
   id: string;
-  dateIso: string; // ISO
+  dateIso: string; 
   status: VisitStatus;
   notes?: string;
   durationMin?: number;
@@ -133,10 +133,7 @@ function moneyUYU(n?: number | null) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** ✅ Overlay premium con Lottie (loading o success)
- *  - En success: NO cierra hasta que termina la animación (onAnimationFinish)
- *  - Reset+play para asegurar que arranque desde 0
- */
+/*Animacion */
 function LottieOverlay({
   visible,
   mode,
@@ -150,13 +147,12 @@ function LottieOverlay({
   title: string;
   subtitle?: string;
   onDone?: () => void;
-  successSource: any; // require(...)
+  successSource: any; 
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.96)).current;
   const lottieRef = useRef<LottieView>(null);
 
-  // Fade in
   useEffect(() => {
     if (!visible) {
       opacity.setValue(0);
@@ -180,12 +176,10 @@ function LottieOverlay({
     ]).start();
   }, [visible, opacity, scale]);
 
-  // Cuando cambia a success: reset + play
   useEffect(() => {
     if (!visible) return;
     if (mode !== 'success') return;
 
-    // Asegura start desde 0 incluso si se montó antes
     requestAnimationFrame(() => {
       lottieRef.current?.reset();
       lottieRef.current?.play();
@@ -211,11 +205,10 @@ function LottieOverlay({
               <LottieView
                 ref={lottieRef}
                 source={successSource}
-                autoPlay={false} // lo manejamos con reset+play
+                autoPlay={false} 
                 loop={false}
                 style={{ width: 180, height: 180 }}
                 onAnimationFinish={() => {
-                  // IMPORTANTE: cerrar solo al terminar
                   setTimeout(() => onDone?.(), 220);
                 }}
               />
@@ -262,8 +255,6 @@ export default function ReservationDetail({ navigation, route }: Props) {
 
   const [allowVisitsAfterClose, setAllowVisitsAfterClose] = useState(false);
 
-  // ✅ Overlay único: loading + checklist success
-  // IMPORTANTÍSIMO: path correcto desde /src/screens -> /src/assets = ../assets/...
   const CHECKLIST_ANIM = useMemo(() => require('../../assets/lottie/checklist.json'), []);
 
   const [overlay, setOverlay] = useState<{
@@ -434,7 +425,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
     return 1;
   }, [item]);
 
-  // ✅ Rating
+  //  Rating
   const isClosed = !!item && item.estado === 'CERRADO';
   const iAmRequester = mySide === 'SOLICITANTE';
   const iAmProvider = mySide === 'PRESTADOR';
@@ -511,7 +502,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
     );
   };
 
-  // ✅ Visitas: reglas
+  // Visitas: reglas
   const canLogVisitsByState = useMemo(() => {
     if (!item) return false;
     return ['EN_PROCESO', 'FINALIZADO', 'CERRADO'].includes(item.estado);
@@ -586,10 +577,8 @@ export default function ReservationDetail({ navigation, route }: Props) {
     try {
       openOverlayLoading('Aceptando…', 'Un momento…');
 
-      // ✅ Evita "flash": loading mínimo 600ms (si responde muy rápido)
       await Promise.all([proAcceptReservation(item.id), sleep(600)]);
 
-      // ✅ Éxito: checklist (se cierra SOLO cuando termina el Lottie)
       goOverlaySuccess('¡Reserva confirmada!', 'Quedó todo coordinado.');
     } catch (e) {
       console.log('❌ accept error', e);
@@ -711,7 +700,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
     ]);
   };
 
-  // ✅ Checklist al confirmar el servicio (SOLICITANTE)
+  // Checklist al confirmar el servicio (SOLICITANTE)
   const onConfirmFinish = async () => {
     if (!item) return;
     if (!canConfirmFinish) return;
@@ -721,7 +710,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
 
       await Promise.all([confirmFinish(item.id), sleep(600)]);
 
-      // ✅ Éxito: checklist (cierra al terminar)
+      //  Éxito: checklist (cierra al terminar)
       goOverlaySuccess('¡Servicio confirmado!', 'Gracias por confirmar.');
     } catch (e) {
       console.log('❌ confirmFinish error', e);
@@ -764,7 +753,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
     <Screen>
       <TopBar title="Detalles de la reserva" showBack />
 
-      {/* ✅ Overlay (solo checklist para success) */}
+      {/*Animacion*/}
       <LottieOverlay
         visible={overlay.visible}
         mode={overlay.mode}
@@ -1053,7 +1042,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
               </>
             )}
 
-            {/* ✅ Vista de calificaciones */}
+            {/* Vista de calificaciones */}
             {isClosed && !canRateNow && (
               <Card withShadow style={styles.rateCardInfo}>
                 <Text style={styles.rateInfoTitle}>Calificación</Text>
@@ -1279,7 +1268,6 @@ export default function ReservationDetail({ navigation, route }: Props) {
               </>
             )}
 
-            {/* ✅ Link al final: habilitar visitas si estaba cerrado */}
             {isClosed && !allowVisitsAfterClose && (
               <TouchableOpacity activeOpacity={0.85} onPress={() => setAllowVisitsAfterClose(true)} style={styles.forgotVisitsLink}>
                 <Ionicons name="add-circle-outline" size={18} color={COLORS.textMuted} />
@@ -1290,7 +1278,7 @@ export default function ReservationDetail({ navigation, route }: Props) {
         )}
       </ScrollView>
 
-      {/* ✅ Bottom sheet rating */}
+      {/* Bottom sheet rating */}
       <RateReservationSheet
         visible={showRateSheet}
         loading={ratingSending}

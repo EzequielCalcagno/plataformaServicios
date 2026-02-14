@@ -639,7 +639,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBg,
   },
 
-  // Warning (no google key)
   warnCard: {
     borderRadius: RADII.lg,
     padding: SPACING.md,

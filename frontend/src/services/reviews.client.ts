@@ -8,8 +8,8 @@ export type ProfessionalReviewItem = {
   id: string;
   authorName: string;
   authorPhotoUrl?: string | null;
-  createdAt: string; // ISO
-  rating: number; // 1..5
+  createdAt: string; 
+  rating: number; 
   comment?: string | null;
 };
 
@@ -23,7 +23,7 @@ export async function listProfessionalReviews(
   profesionalId: string,
   params?: {
     sort?: ReviewSort;
-    rating?: ReviewRatingFilter; // 0 = todas
+    rating?: ReviewRatingFilter; 
     limit?: number;
     offset?: number;
   },
@@ -32,9 +32,6 @@ export async function listProfessionalReviews(
   const rating = params?.rating ?? 0;
   const limit = params?.limit ?? 10;
   const offset = params?.offset ?? 0;
-
-  // ✅ endpoint recomendado:
-  // GET /public/professionals/:id/reviews?sort=recent|best|worst&rating=0..5&limit=10&offset=0
   const r = await api.get<ListReviewsResponse>(
     `/private/professionals/${profesionalId}/reviews?sort=${sort}&rating=${rating}&limit=${limit}&offset=${offset}`,
   );

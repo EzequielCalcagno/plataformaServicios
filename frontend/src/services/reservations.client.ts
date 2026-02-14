@@ -18,7 +18,6 @@ export type ReservationListItem = {
   servicioTitulo?: string | null;
   servicioCategoria?: string | null;
 
-  // ✅ NUEVO: precio base
   servicioPrecioBase?: number | null;
 
   profesionalId: string;
@@ -44,18 +43,15 @@ export type ReservationListItem = {
   canceladoPor?: 'CLIENTE' | 'PROFESIONAL' | null;
   motivoCancelacion?: string | null;
 
-  // ✅ flags de calificación
   clienteCalifico?: boolean;
   profesionalCalifico?: boolean;
 
-  // ✅ NUEVO: ratings (el backend puede devolverlos en null hasta que ambos califiquen)
   clientePuntaje?: number | null;
   clienteComentario?: string | null;
 
   profesionalPuntaje?: number | null;
   profesionalComentario?: string | null;
 
-  // ✅ NUEVO: helper del backend
   canSeeRatings?: boolean;
 
   creadoEn?: string | null;
@@ -67,9 +63,9 @@ export type ReservationListItem = {
 
 export type CreateReservationPayload = {
   servicioId: number;
-  profesionalId: string; // (en backend no lo usás; se infiere del servicio, pero lo dejamos)
+  profesionalId: string;
   descripcionCliente?: string;
-  fechaHoraSolicitada?: string | null; // ISO
+  fechaHoraSolicitada?: string | null; 
 };
 
 export async function createReservation(payload: CreateReservationPayload) {
@@ -153,9 +149,9 @@ export async function rejectFinish(id: number, payload: { mensaje?: string }) {
   });
 }
 
-// ✅ NUEVO: calificar (cliente o profesional, según quién esté logueado)
+//calificar (cliente o profesional, según quién esté logueado)
 export type RateReservationPayload = {
-  puntaje: number; // 1..5
+  puntaje: number; 
   comentario?: string;
 };
 

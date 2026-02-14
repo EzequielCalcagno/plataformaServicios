@@ -39,7 +39,6 @@ const normalizeUyPhone = (rawDigits: string) => {
   return `+598${digits}`;
 };
 
-// 🔥 mini-wrapper reutilizable: Input + rightNode (sin tocar tu componente Input)
 function InputRow({
   label,
   error,
@@ -98,7 +97,6 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
 
   const handleChange = (key: string, setter: (v: string) => void) => (v: string) => {
     setter(v);
-    // opcional: mientras escribe, no muestres error si no está submitted
     if (!submitted) setTouched((p) => ({ ...p, [key]: false }));
   };
 
@@ -155,7 +153,6 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header compacto (como pantalla seria) */}
           <View style={styles.header}>
             <Image
               source={require('../../assets/images/fixo-logo.png')}
@@ -262,7 +259,6 @@ const Register: React.FC<RegisterProps> = ({ navigation }) => {
           <View style={{ height: 130 }} />
         </ScrollView>
 
-        {/* Footer fijo (mismo patrón que AddService) */}
         <View style={styles.footer}>
           <Button
             title={loading ? 'Creando…' : 'Crear cuenta'}
@@ -305,7 +301,7 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    ...TYPO.h2, // 👈 menos gigante: register no es landing page
+    ...TYPO.h2, 
     textAlign: 'center',
   },
 

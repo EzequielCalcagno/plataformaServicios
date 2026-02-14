@@ -82,7 +82,6 @@ export default function Reviews({ route }: Props) {
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // ✅ Offset y control anti-loop via refs (no dependen del render)
   const nextOffsetRef = useRef<number | null>(0);
   const hasMoreRef = useRef<boolean>(true);
   const isFetchingRef = useRef<boolean>(false);
@@ -98,7 +97,6 @@ export default function Reviews({ route }: Props) {
     async (mode: 'initial' | 'refresh' | 'more') => {
       if (!profesionalId) return;
 
-      // ✅ evita dobles requests (focus, endReached, refresh)
       if (isFetchingRef.current) return;
       isFetchingRef.current = true;
 
@@ -137,7 +135,6 @@ export default function Reviews({ route }: Props) {
         const newNextOffset = res?.nextOffset ?? null;
 
         if (mode === 'more') {
-          // ✅ evitar duplicar si el backend devolvió algo raro
           setItems((prev) => {
             const seen = new Set(prev.map((x) => x.id));
             const merged = [...prev];
@@ -152,7 +149,6 @@ export default function Reviews({ route }: Props) {
 
         nextOffsetRef.current = newNextOffset;
 
-        // ✅ si no hay nextOffset o no vinieron resultados, cortamos paginación
         hasMoreRef.current = newNextOffset != null && newResults.length > 0;
       } catch (e: any) {
         console.log('❌ Reviews fetch error', e);
@@ -170,15 +166,12 @@ export default function Reviews({ route }: Props) {
     [profesionalId, sort, ratingFilter, loadingMore],
   );
 
-  // ✅ 1 sola carga por foco + cada vez que cambian filtros
   useFocusEffect(
     useCallback(() => {
       fetchPage('initial');
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [profesionalId, sort, ratingFilter]),
   );
 
-  // cuando cambia sort o rating -> SOLO setState, la recarga la hace useFocusEffect de arriba
   const onChangeSort = (s: ReviewSort) => {
     if (s === sort) return;
     setSort(s);
@@ -293,12 +286,11 @@ export default function Reviews({ route }: Props) {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchPage('refresh')} />}
           onEndReachedThreshold={0.4}
           onEndReached={() => {
-            // ✅ súper defensivo para evitar spam
             if (loading) return;
             if (refreshing) return;
             if (loadingMore) return;
             if (!hasMoreRef.current) return;
-            if (items.length < limit) return; // si hay pocos, evita endReached en loop
+            if (items.length < limit) return; 
             fetchPage('more');
           }}
           ListFooterComponent={

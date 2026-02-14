@@ -48,7 +48,6 @@ type RowItem = {
   onPress?: () => void;
 };
 
-// ====== API URL (para normalizar foto si viene relativa) ======
 const API_URL =
   ((Constants.expoConfig?.extra as any)?.API_URL as string)?.replace(/\/+$/, '') || '';
 
@@ -98,7 +97,6 @@ export default function Account({ navigation }: Props) {
         onPress: () => navigation.navigate('EditProfile'),
       },
 
-      // ✅ NUEVO: Ubicaciones
       {
         key: 'locations',
         label: 'Mis ubicaciones',
@@ -154,11 +152,10 @@ export default function Account({ navigation }: Props) {
           setLoadingProfile(true);
           const data: any = await getCurrentUser();
 
-          // Prioridad: boolean del backend si existe; sino por id_rol
-          // (ajustá los números si tu backend usa otros roles)
+
           const roleId = Number(data.id_rol);
           const isProfessional =
-            typeof data.is_professional === 'boolean' ? data.is_professional : roleId === 2; // <--- común: 1 = cliente, 2 = profesional
+            typeof data.is_professional === 'boolean' ? data.is_professional : roleId === 2; 
 
           const profileVm: ProfileVM = {
             fullName: `${data.nombre ?? 'Usuario'} ${data.apellido ?? ''}`.trim(),
@@ -170,13 +167,11 @@ export default function Account({ navigation }: Props) {
 
           if (mounted) {
             setProfile(profileVm);
-            // Reset del avatar (por si cambió la foto)
             setAvatarError(false);
           }
         } catch (err) {
           console.error('Error cargando perfil en Account:', err);
           if (err instanceof ApiError && err.status === 401) {
-            // opcional: navegación a login
           }
         } finally {
           if (mounted) setLoadingProfile(false);
@@ -214,7 +209,7 @@ export default function Account({ navigation }: Props) {
     );
   }
 
-  const shouldShowConvertCard = !profile.isProfessional; // ✅ ahora funciona si isProfessional está bien
+  const shouldShowConvertCard = !profile.isProfessional; 
 
   return (
     <Screen>

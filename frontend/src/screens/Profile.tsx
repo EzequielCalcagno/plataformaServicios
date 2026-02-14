@@ -68,10 +68,6 @@ type ClientProfile = {
   pendingRequests: any[];
 };
 
-/* ===========================
-   URL NORMALIZATION
-=========================== */
-
 const API_URL =
   ((Constants.expoConfig?.extra as any)?.API_URL as string)?.replace(/\/+$/, '') || '';
 
@@ -87,9 +83,7 @@ function normalizePhotoUrl(photoUrl: string | null): string | null {
   return `${API_URL}${path}`;
 }
 
-/* ===========================
-   HELPERS
-=========================== */
+/* =====HELPERS==== */
 
 function clamp01(n: number) {
   if (Number.isNaN(n)) return 0;
@@ -254,9 +248,7 @@ function Pill({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: stri
   );
 }
 
-/* ===========================
-   SCREEN
-=========================== */
+/* =====SCREEN===== */
 
 export default function Profile({ route, navigation }: Props) {
   const profesionalIdFromRoute = route?.params?.profesionalId ?? null;
@@ -326,7 +318,7 @@ export default function Profile({ route, navigation }: Props) {
     const d = professionalProfile.starDist;
     const total = d[5] + d[4] + d[3] + d[2] + d[1];
 
-    if (total > 95 && total < 105) return d; // parece venir en %
+    if (total > 95 && total < 105) return d; 
 
     if (total <= 0) return { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
 
@@ -424,7 +416,6 @@ export default function Profile({ route, navigation }: Props) {
         {/* ====== PROFESIONAL ====== */}
         {professionalProfile ? (
           <>
-            {/* INFO CARD (foto dentro) */}
             <Card style={styles.profileCard} withShadow>
               <View style={styles.profileHeader}>
                 <View style={styles.avatarInCardWrap}>
@@ -521,7 +512,6 @@ export default function Profile({ route, navigation }: Props) {
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={() => {
-                    // OJO: si no existe esta screen, sacalo.
                     navigation.navigate('ProfessionalServices', {
                       profesionalId: professionalProfile.id,
                     });

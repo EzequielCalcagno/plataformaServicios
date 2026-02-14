@@ -218,7 +218,7 @@ export default function LocationPicker({ navigation }: Props) {
           />
         </MapView>
 
-        {/* Panel inferior (se mueve con el teclado) */}
+        {/* Panel inferior */}
         <View style={styles.bottomPanel}>
           <Text style={styles.label}>Buscar dirección</Text>
           <View style={styles.searchRow}>
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   borderColor: '#d1d5db',
   backgroundColor: '#fff',
   paddingHorizontal: 12,
-  paddingVertical: 10,   // 👈 más alto, antes seguro era ~6
+  paddingVertical: 10, 
   fontSize: 14,
   marginTop: 6,
 },

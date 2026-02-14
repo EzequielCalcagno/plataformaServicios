@@ -44,10 +44,8 @@ type Service = {
 
   distanceKm: number;
 
-  // ✅ IMPORTANTE (según tu backend): este profesional_id termina siendo el "userId" del profesional
   profesionalId: string;
 
-  // si el backend lo trae separado, también lo guardamos para filtrar robusto
   profesionalUserId?: string | null;
 
   profesionalNombre: string;
@@ -59,7 +57,7 @@ type Service = {
 };
 
 type StoredLocation = {
-  id: string; // "123" | "current_temp" | "default" | "follow_live"
+  id: string; 
   label: string;
   latitude: number;
   longitude: number;
@@ -68,7 +66,7 @@ type StoredLocation = {
 
 type GroupedPin = {
   key: string;
-  profesionalId: string; // userId del profesional
+  profesionalId: string; 
   profesionalUserId?: string | null;
   profesionalNombre: string;
   profesionalApellido: string;
@@ -180,7 +178,6 @@ const getCategoryIcon = (category: string) => {
     case 'mudanzas':
       return require('../../assets/icons/mapa/mudanza_pin.png');
 
-    // Redes / Informática (con slash o sin)
     case 'redes informatica':
     case 'redes informaticas':
     case 'redes':
@@ -210,7 +207,6 @@ const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => 
 
 // ====== UI CONST ======
 const BOTTOM_SHEET_MAX_HEIGHT = 360;
-// ✅ bien chico (casi solo handle)
 const BOTTOM_SHEET_MIN_HEIGHT = 26;
 const PIN_CARD_MARGIN = 12;
 
@@ -233,7 +229,7 @@ function toStrId(v: any): string {
   return s;
 }
 
-// ✅ helper: convertir LocationDto a StoredLocation
+// convertir LocationDto a StoredLocation
 function toStoredLocation(row: LocationDto): StoredLocation | null {
   const lat = typeof row.lat === 'number' ? row.lat : null;
   const lng = typeof row.lng === 'number' ? row.lng : null;
@@ -291,13 +287,13 @@ export default function Search({ navigation }: any) {
   const [bottomCollapsed, setBottomCollapsed] = useState(false);
   const bottomHeightAnim = useRef(new Animated.Value(BOTTOM_SHEET_MAX_HEIGHT)).current;
 
-  // ====== ID del usuario logueado (ESTE es el que coincide con profesional_id en search) ======
+
   const loggedUserId = useMemo(() => {
     const id = toStrId((myUser as any)?.id) || toStrId((myUser as any)?.userId);
     return id;
   }, [myUser]);
 
-  // ====== Determinar si user es profesional (robusto) ======
+
   const isMyUserProfessional = useMemo(() => {
     const rolRaw = String((myUser as any)?.rol ?? (myUser as any)?.role ?? '').toUpperCase();
     if (rolRaw === 'PROFESIONAL') return true;
@@ -316,7 +312,6 @@ export default function Search({ navigation }: any) {
   const closeLocationModal = () => setLocationModalVisible(false);
   const openIntro = () => setIntroVisible(true);
 
-  // ✅ FIX: si se cierra el modal sin elegir nada => default "Todos"
   const closeIntro = useCallback(() => {
     setIntroVisible(false);
 
@@ -366,7 +361,6 @@ export default function Search({ navigation }: any) {
     return selectedCategory || 'Categorías';
   }, [searchMode, selectedCategory]);
 
-  // ====== ✅ current user loader ======
   const loadCurrentUser = useCallback(async () => {
     try {
       const cached = await AsyncStorage.getItem(CURRENT_USER_KEY);
@@ -502,7 +496,7 @@ export default function Search({ navigation }: any) {
     );
   }, []);
 
-  // ✅ Cargar ubicaciones reales + radio + follow
+  // Cargar ubicaciones reales + radio + follow
   const loadLocations = useCallback(async () => {
     try {
       setLoadingLocations(true);
@@ -815,7 +809,6 @@ export default function Search({ navigation }: any) {
     return () => clearTimeout(t);
   }, [selectedLocation?.id, query, radiusKm, searchMode, selectedCategory, fetchServicios]);
 
-  // ====== ✅ Fuente de verdad FINAL: excluir SIEMPRE al profesional logueado (por userId) ======
   const finalServices = useMemo(() => {
     if (!isMyUserProfessional || !loggedUserId) return results;
 
@@ -828,7 +821,6 @@ export default function Search({ navigation }: any) {
     });
   }, [results, isMyUserProfessional, loggedUserId]);
 
-  // Si estaba seleccionado mi propio pin por un borde, cerrarlo
   useEffect(() => {
     if (!selectedPin) return;
     if (!isMyUserProfessional || !loggedUserId) return;
@@ -839,7 +831,6 @@ export default function Search({ navigation }: any) {
     if (selectedPin.profesionalUserId && String(selectedPin.profesionalUserId) === me) setSelectedPin(null);
   }, [selectedPin, isMyUserProfessional, loggedUserId]);
 
-  // ====== Agrupar pines desde FINAL SERVICES (lista + mapa) ======
   const groupedPins = useMemo<GroupedPin[]>(() => {
     const map = new Map<string, GroupedPin>();
 
@@ -959,7 +950,6 @@ export default function Search({ navigation }: any) {
 
   const closePinCard = () => setSelectedPin(null);
 
-  // ✅ IMPORTANTE: tu profile route es /private/profile/:userId
   const goToProfile = (profesionalUserId: string) => {
     navigation.navigate('ProfessionalProfile', { profesionalId: profesionalUserId });
   };
@@ -1049,7 +1039,7 @@ export default function Search({ navigation }: any) {
                   fillColor={isFollowing ? 'rgba(34,197,94,0.10)' : 'rgba(56,189,248,0.18)'}
                 />
 
-                {/* ✅ Pin del usuario logueado (siempre rojo) */}
+                {/*  Pin rojo del usuario logueado */}
                 <Marker
                   coordinate={{ latitude: selectedLocation.latitude, longitude: selectedLocation.longitude }}
                   anchor={{ x: 0.5, y: 1 }}

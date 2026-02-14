@@ -2,8 +2,8 @@
 
 // Payload del JWT tal como lo usamos en la app/backend
 export interface JwtPayload {
-  id?: string | number;   // 👈 AHORA sí existe 'id'
-  sub?: string;           // por si alguna vez lo usás también
+  id?: string | number;   
+  sub?: string;          
   email?: string;
   rolId?: number;
   iat?: number;

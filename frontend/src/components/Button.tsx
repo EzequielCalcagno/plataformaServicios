@@ -20,7 +20,7 @@ type Props = {
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
-  leftIcon?: React.ReactNode; // 👈 para Apple/Google
+  leftIcon?: React.ReactNode; 
 };
 
 export const Button: React.FC<Props> = ({
@@ -131,7 +131,6 @@ const styles = StyleSheet.create({
   },
 
   text: {
-    // default, se pisa por textMd/textLg
     fontFamily: TYPO.body.fontFamily,
   },
   textSm: {

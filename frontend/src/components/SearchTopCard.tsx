@@ -30,7 +30,7 @@ export default function SearchTopCard({
 }: Props) {
   const isCompact = variant === 'compact';
 
-  // en compacto ocultamos el slider por defecto (expandible)
+
   const [showRadius, setShowRadius] = useState(!isCompact);
 
   return (
@@ -102,7 +102,7 @@ export default function SearchTopCard({
 const styles = StyleSheet.create({
   topCardWrapper: {
     position: 'absolute',
-    top: SPACING.md, // más cerca
+    top: SPACING.md,
     left: SPACING.lg,
     right: SPACING.lg,
   },

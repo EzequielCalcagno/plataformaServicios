@@ -43,7 +43,6 @@ function formatDateTime(d: Date) {
   }
 }
 
-/** ✅ Overlay moderno reusable (fade + scale + check anim) */
 function SuccessOverlay({
   visible,
   title,
@@ -62,8 +61,8 @@ function SuccessOverlay({
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.96)).current;
 
-  const ring = useRef(new Animated.Value(0)).current; // check anim
-  const dots = useRef(new Animated.Value(0)).current; // sending anim
+  const ring = useRef(new Animated.Value(0)).current; 
+  const dots = useRef(new Animated.Value(0)).current; 
 
   React.useEffect(() => {
     if (!visible) {
@@ -164,11 +163,10 @@ export default function CreateRequest({ navigation, route }: Props) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showPicker, setShowPicker] = useState(false);
 
-  // ✅ UX overlay
   const [sending, setSending] = useState(false);
   const [sentOk, setSentOk] = useState(false);
 
-  // ✅ Para bloquear reservas a uno mismo
+  //  Para bloquear reservas a uno mismo
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const services = useMemo(() => profile?.services ?? [], [profile?.services]);
@@ -183,18 +181,18 @@ export default function CreateRequest({ navigation, route }: Props) {
     try {
       setLoading(true);
 
-      // 1) Intento leer userId desde storage (si lo guardás)
+      // se intenta leer userId desde storage (si lo guardás)
       const storedUserId = await AsyncStorage.getItem('@userId');
       if (storedUserId) setCurrentUserId(storedUserId);
 
-      // 2) Fallback: pedirlo al backend (si no está guardado)
+      // pedirlo al backend (si no está guardado)
       if (!storedUserId) {
         try {
           const me = await api.get<any>('/private/currentUser');
           const id = String(me?.id ?? '');
           if (id) setCurrentUserId(id);
         } catch {
-          // si falla, no pasa nada; solo no bloquearemos por id
+
         }
       }
 
@@ -230,7 +228,7 @@ export default function CreateRequest({ navigation, route }: Props) {
       return;
     }
 
-    // ✅ Bloqueo: no enviar a uno mismo
+    // Bloqueo: no enviar a uno mismo
     if (currentUserId && profesionalId && String(currentUserId) === String(profesionalId)) {
       Alert.alert('No permitido', 'No podés enviarte una solicitud a vos mismo.');
       return;
@@ -249,7 +247,6 @@ export default function CreateRequest({ navigation, route }: Props) {
       setSending(false);
       setSentOk(true);
 
-      // auto-navega, pero dejando tiempo a que se vea el éxito
       setTimeout(() => {
         setSentOk(false);
         navigation.navigate('Requests');
@@ -270,7 +267,7 @@ export default function CreateRequest({ navigation, route }: Props) {
     <Screen>
       <TopBar title="Solicitar servicio" />
 
-      {/* ✅ Overlay “enviando” + “enviado” */}
+     
       <SuccessOverlay
         visible={sending}
         type="sending"
@@ -301,7 +298,6 @@ export default function CreateRequest({ navigation, route }: Props) {
               {!!profile.specialty && <Text style={styles.muted}>{profile.specialty}</Text>}
               {!!profile.location && <Text style={styles.muted}>{profile.location}</Text>}
 
-              {/* ✅ Mensaje sutil si intenta reservarse */}
               {currentUserId && profesionalId && String(currentUserId) === String(profesionalId) ? (
                 <Text style={styles.selfWarn}>
                   Estás viendo tu propio perfil. No podés enviarte solicitudes.

@@ -9,20 +9,17 @@ export type GeoPoint = {
 export type LocationDto = {
   id: number;
 
-  // owner (en general no lo necesitás en FE, pero lo dejamos opcional)
   usuario_id?: string;
 
   nombre_ubicacion: string | null;
   ciudad: string | null;
   direccion: string | null;
 
-  // DB fields / compat
   coordenadas?: GeoPoint | null;
   tipo?: string | null;
   activa?: boolean;
   fecha_registro?: string | null;
 
-  // ✅ GENERATED ALWAYS (solo lectura, pero la API puede devolverlas)
   lat: number | null;
   lng: number | null;
 
@@ -30,15 +27,11 @@ export type LocationDto = {
 };
 
 // ---------- Payloads ----------
-// Permitimos null en UI, pero lo limpiamos antes de mandar.
 export type CreateLocationPayload = {
   nombre_ubicacion?: string | null;
   ciudad?: string | null;
   direccion?: string | null;
 
-  // Podés mandar una u otra:
-  // - lat/lng (lo convierte backend a coordenadas)
-  // - coordenadas (GeoJSON) directo
   lat?: number | null;
   lng?: number | null;
   coordenadas?: GeoPoint | null;
@@ -58,7 +51,6 @@ function toGeoPoint(lng: number, lat: number): GeoPoint {
 function buildBody(payload: CreateLocationPayload | UpdateLocationPayload) {
   const body: any = {};
 
-  // strings: si viene null o '' => no mandamos (o podés mandar null si preferís)
   if (typeof payload.nombre_ubicacion === 'string') body.nombre_ubicacion = payload.nombre_ubicacion;
   if (payload.nombre_ubicacion === null) body.nombre_ubicacion = null;
 
@@ -76,15 +68,7 @@ function buildBody(payload: CreateLocationPayload | UpdateLocationPayload) {
   if (typeof payload.tipo === 'string') body.tipo = payload.tipo;
   if (payload.tipo === null) body.tipo = null;
 
-  /**
-   * ✅ Coordenadas:
-   * - Si viene payload.coordenadas => mandamos coordenadas
-   * - Sino, si vienen lat/lng numéricos => mandamos lat/lng (backend lo convierte)
-   *
-   * Importante:
-   * - como en tu DB lat/lng son GENERATED, NO conviene que el backend intente insertarlos.
-   *   Pero el FE sí puede mandarlos, porque el backend los convertirá a "coordenadas".
-   */
+  /* Coordenadas */
   if (payload.coordenadas && payload.coordenadas.type === 'Point') {
     body.coordenadas = payload.coordenadas;
   } else {
@@ -93,11 +77,8 @@ function buildBody(payload: CreateLocationPayload | UpdateLocationPayload) {
 
     if (lat != null && lng != null) {
       // Podés mandar lat/lng o mandar coordenadas directamente.
-      // Yo prefiero mandar coordenadas, así el backend no depende de lat/lng.
+
       body.coordenadas = toGeoPoint(lng, lat);
-      // Si preferís mandar lat/lng, reemplazá por:
-      // body.lat = lat;
-      // body.lng = lng;
     }
   }
 

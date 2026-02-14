@@ -200,7 +200,6 @@ export default function MyServicesManager({ navigation, route }: Props) {
         precio_base,
       };
 
-      // ✅ CLAVE: con tu http.ts, SIEMPRE mandamos objetos en body
       await api.patch(`${base}/${editId}`, { body: payload });
 
       setOk(true);
@@ -248,7 +247,6 @@ export default function MyServicesManager({ navigation, route }: Props) {
               } catch (e: any) {
                 console.log('❌ delete service error', e);
 
-                // ✅ Si el backend devuelve 409 (tiene reservas), ofrecemos DESACTIVAR
                 const status = e?.status;
                 const code = e?.data?.code;
 
@@ -267,8 +265,6 @@ export default function MyServicesManager({ navigation, route }: Props) {
                           setOk(false);
 
                           try {
-                            // ✅ endpoint sugerido: PATCH /private/services/:id/deactivate
-                            // OJO: tu http() ya hace JSON.stringify(body), así que body debe ser objeto, NO string.
                             await api.patch(`/private/services/${serviceId}/deactivate`, {
                               body: {},
                             });
@@ -288,7 +284,7 @@ export default function MyServicesManager({ navigation, route }: Props) {
                     ],
                   );
 
-                  return; // 👈 importante para no pisar el mensaje con el genérico
+                  return;
                 }
 
                 setOk(false);

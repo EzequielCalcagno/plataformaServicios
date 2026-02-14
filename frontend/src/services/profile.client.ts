@@ -13,7 +13,7 @@ export type ProfileResponse = {
 export type UpdateProfessionalProfilePayload = {
   especialidad: string;
   descripcion: string;
-  experiencia?: string; // opcional si querés mantener compatibilidad
+  experiencia?: string; 
 };
 
 export type ProfessionalProfileResponse = {
@@ -22,31 +22,17 @@ export type ProfessionalProfileResponse = {
   experiencia?: string | null;
 };
 
-/**
- * Perfil profesional "completo" del usuario autenticado
- * Backend: GET /api/v1/private/profile (requireAuth + requireRole('PROFESIONAL'))
- *
- * ⚠️ Importante:
- * - Si el usuario NO es profesional, este endpoint puede dar 403/404.
- * - Para un perfil "compacto" válido para cualquier rol, usá getMyAppProfile().
- */
+/*Perfil profesional "completo" del usuario autenticado*/
 export async function getMyProfessionalProfile() {
   return await api.get<any>('/private/profile');
 }
 
-/**
- * Perfil compacto para la app (Home / MyAccount) — sirve para cualquier rol.
- * Backend: GET /api/v1/private/app/me (requireAuth)
- */
+/* Perfil compacto para la app (Home / MyAccount) — sirve para cualquier rol.*/
 export async function getMyAppProfile() {
   return await api.get<ProfileResponse>('/private/app/me');
 }
 
-/**
- * Mantengo este nombre por compatibilidad si ya lo usabas en pantallas viejas.
- * ⚠️ OJO: esto NO es "mi perfil" para cualquier rol; es el perfil profesional.
- * Recomendación: migrar a getMyAppProfile() cuando sea "mi perfil" genérico.
- */
+
 export async function getMyProfile() {
   return await api.get<any>('/private/profile');
 }
@@ -75,10 +61,7 @@ export type ProfessionalPublicProfileResponse = {
   }[];
 };
 
-/**
- * Perfil público/visible de un profesional (para “Ver perfil” desde Search)
- * Backend: GET /api/v1/private/profile/:userId (requireAuth)
- */
+/* Perfil público/visible de un profesional (para “Ver perfil” desde Search)*/
 export async function getProfessionalProfileById(profesionalId: string) {
   if (!profesionalId) {
     throw new Error('profesionalId es requerido');
@@ -89,9 +72,6 @@ export async function getProfessionalProfileById(profesionalId: string) {
   );
 }
 
-/**
- * Alias opcional por consistencia semántica (a veces en UI lo llaman userId).
- */
 export async function getProfessionalProfileByUserId(userId: string) {
   return getProfessionalProfileById(userId);
 }

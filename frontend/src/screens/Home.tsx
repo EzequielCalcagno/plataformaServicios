@@ -217,7 +217,7 @@ export default function Home() {
     }
 
     try {
-      const data = await api.get<any>('/private/profile'); // MISMO endpoint que Profile.tsx
+      const data = await api.get<any>('/private/profile'); 
       setProfessionalProfile(normalizeProfessionalStats(data));
     } catch (e) {
       console.log('❌ loadProStats error', e);
@@ -309,7 +309,6 @@ export default function Home() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* HERO full width */}
         <ImageBackground source={HERO_IMG} style={styles.hero} imageStyle={styles.heroImage}>
           <View style={styles.heroOverlay} />
           <View style={styles.heroContent}>
@@ -335,7 +334,7 @@ export default function Home() {
           </View>
         </ImageBackground>
 
-        {/* Contenido con padding */}
+
         <View style={styles.inner}>
           {/* ===== Acciones rápidas ===== */}
           <View style={styles.quickGrid}>
@@ -454,7 +453,6 @@ export default function Home() {
             )}
           </View>
 
-          {/* ===== Profesional: resumen (placeholder serio) ===== */}
           {isProfessional && (
             <View style={{ marginTop: SPACING.lg }}>
               <SectionTitle>Resumen rápido</SectionTitle>
@@ -563,7 +561,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
   },
 
-  /* Quick actions */
   quickGrid: {
     flexDirection: 'row',
     gap: 12,

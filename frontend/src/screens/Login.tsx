@@ -27,7 +27,6 @@ const emailLooksOk = (s: string) => {
   return v.includes('@') && v.includes('.') && v.length >= 6;
 };
 
-// 🔥 igual que en Register (podés moverlo a /components/FormField)
 function InputRow({
   label,
   error,
@@ -167,7 +166,6 @@ const Login = ({ navigation }: any) => {
             <Text style={styles.forgot}>¿Olvidaste tu contraseña?</Text>
           </TouchableOpacity>
 
-          {/* Divider + Social adentro del card (mismo bloque visual) */}
           <View style={styles.divider}>
             <View style={styles.line} />
             <Text style={styles.or}>o</Text>

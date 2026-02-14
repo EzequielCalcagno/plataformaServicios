@@ -50,7 +50,7 @@ export default function BecomePro({ navigation, route }: Props) {
         return;
       }
 
-      // 1) Perfil profesional existe?
+      // Perfil profesional existe?
       const proProfileRes = await fetch(`${API_URL}/private/pro-onboarding/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -58,8 +58,8 @@ export default function BecomePro({ navigation, route }: Props) {
       const hasProProfile =
         !!String(proData?.especialidad || '').trim() && !!String(proData?.descripcion || '').trim();
 
-      // 2) Tiene servicios?
-      // Ideal: endpoint "mis servicios". Si no existe, mirá el fallback abajo.
+      //  Tiene servicios?
+
       let hasService = false;
       try {
         const servicesRes = await fetch(`${API_URL}/private/pro-onboarding/services`, {
@@ -68,11 +68,10 @@ export default function BecomePro({ navigation, route }: Props) {
         const list = servicesRes.ok ? await servicesRes.json() : [];
         hasService = Array.isArray(list) && list.length > 0;
       } catch {
-        // si no existe el endpoint, lo dejamos false y lo resolvés con el fallback
         hasService = false;
       }
 
-      // 3) Tiene ubicación principal (o follow live)?
+      // Tiene ubicación principal (o activo el sueguir)?
       let hasLocation = false;
       try {
         const follow = await AsyncStorage.getItem('@app_follow_live_enabled');
@@ -121,7 +120,6 @@ export default function BecomePro({ navigation, route }: Props) {
       setAlertMsg(null);
       setOk(false);
 
-      // Validación final dura
       if (!canActivate) {
         setAlertMsg(
           'Completá el perfil, agregá un servicio y configurá una ubicación principal (o activá “Seguir mi ubicación”).',

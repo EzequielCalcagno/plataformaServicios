@@ -17,8 +17,8 @@ import { Button } from './Button';
 type Props = {
   visible: boolean;
   loading?: boolean;
-  titleTop?: string; // "Califica al profesional"
-  title?: string; // "Como fue tu experiencia con X?"
+  titleTop?: string; 
+  title?: string; 
   placeholder?: string;
   onClose: () => void;
   onSubmit: (data: { puntaje: number; comentario?: string }) => void;

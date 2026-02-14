@@ -66,14 +66,10 @@ function initials(name: string) {
   return (a + b).toUpperCase();
 }
 
-// Ajustá acá si tus estados reales cambian
 function statusUI(estado?: string | null) {
   const e = String(estado ?? '').toUpperCase();
 
-  // tonos
-  // - pending: amarillo
-  // - active: azul
-  // - done/closed: verde
+
   if (e === 'PENDIENTE' || e === 'WAITING') {
     return { label: 'Pendiente', tone: 'warn' as const, icon: 'time-outline' as const };
   }

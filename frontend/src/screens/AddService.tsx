@@ -210,13 +210,9 @@ export default function AddService({ navigation, route }: Props) {
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
 
-  // =========================
-  // Derivados: modo (pro u onboarding)
-  // =========================
   const isPro = role === 'professional';
   const isOnboarding = !isPro && fromBecomePro;
 
-  // Endpoints según modo
   const endpoints = useMemo(() => {
     if (isPro) {
       return {
@@ -225,7 +221,6 @@ export default function AddService({ navigation, route }: Props) {
         upload: '/private/uploads/work-image',
       };
     }
-    // onboarding
     return {
       suggestions: '/private/pro-onboarding/services/suggestions',
       create: '/private/pro-onboarding/services',
@@ -233,9 +228,6 @@ export default function AddService({ navigation, route }: Props) {
     };
   }, [isPro]);
 
-  // =========================
-  // Load role
-  // =========================
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -254,9 +246,9 @@ export default function AddService({ navigation, route }: Props) {
     };
   }, []);
 
-  // =========================
+
   // Suggestions
-  // =========================
+
   const fetchSuggestions = useCallback(
     async (cat: string) => {
       try {
@@ -275,7 +267,6 @@ export default function AddService({ navigation, route }: Props) {
   );
 
   useEffect(() => {
-    // Si no tiene permiso, ni intentes pegarle a sugerencias pro
     if (!isPro && !isOnboarding) return;
     fetchSuggestions(category);
   }, [category, fetchSuggestions, isPro, isOnboarding]);
@@ -287,9 +278,9 @@ export default function AddService({ navigation, route }: Props) {
     return base.filter((s) => s.toLowerCase().includes(q)).slice(0, 10);
   }, [suggestions, title, category]);
 
-  // =========================
+
   // Pick image
-  // =========================
+
   const pickImage = useCallback(async () => {
     try {
       setAlertMsg(null);
@@ -320,9 +311,9 @@ export default function AddService({ navigation, route }: Props) {
     }
   }, []);
 
-  // =========================
-  // Upload image (wrapper)
-  // =========================
+
+  // Upload image
+
   const uploadImage = useCallback(async (): Promise<string | null> => {
     if (!localImageUri) return null;
 
@@ -338,7 +329,6 @@ export default function AddService({ navigation, route }: Props) {
 
       const data = await api.post<{ url: string }>(endpoints.upload, {
         body: formData,
-        // NO Content-Type => fetch lo setea para multipart boundary
       });
 
       if (!data?.url) {
@@ -358,9 +348,9 @@ export default function AddService({ navigation, route }: Props) {
     }
   }, [localImageUri, endpoints.upload]);
 
-  // =========================
+
   // Save
-  // =========================
+
   const canAccess = isPro || isOnboarding;
 
   const canSave = useMemo(() => {
@@ -397,7 +387,7 @@ export default function AddService({ navigation, route }: Props) {
       let finalImageUrl: string | null = null;
       if (localImageUri) {
         finalImageUrl = await uploadImage();
-        if (!finalImageUrl) return; // el upload ya setea msg
+        if (!finalImageUrl) return; 
       }
 
       const priceNum = priceBase.trim() === '' ? null : Number(String(priceBase).replace(',', '.'));
@@ -410,7 +400,6 @@ export default function AddService({ navigation, route }: Props) {
         imageUrl: finalImageUrl ?? null,
       };
 
-      // ✅ usar postJson para que el body salga bien sí o sí
       const created = await api.postJson<any>(endpoints.create, body);
       console.log('✅ created service', created);
 
@@ -431,7 +420,6 @@ export default function AddService({ navigation, route }: Props) {
     } catch (e: any) {
       console.log('❌ Error AddService save', e);
 
-      // mensaje más útil para 403 onboarding
       if (e instanceof ApiError && e.status === 403) {
         setAlertMsg(
           'No tenés permiso para agregar servicios todavía. Terminá el onboarding y activá tu cuenta profesional.',
@@ -459,9 +447,8 @@ export default function AddService({ navigation, route }: Props) {
     endpoints.create,
   ]);
 
-  // =========================
   // Render guards
-  // =========================
+
   if (loadingRole) {
     return (
       <Screen>
